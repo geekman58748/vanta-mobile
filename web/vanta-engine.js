@@ -294,4 +294,8 @@
   }
 
   root.VantaEngine = { VantaSessionEngine, VantaError, STATE, b58encode, b58decode };
+  // Bare globals too, so the page's inline script can use them directly
+  // (window.VantaEngine.VantaSessionEngine is the namespaced path).
+  root.VantaSessionEngine = VantaSessionEngine;
+  root.VantaError = VantaError;
 })(typeof window !== 'undefined' ? window : globalThis);

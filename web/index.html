@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VANTA — Session Privacy</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%231FAE7A' d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm4.2 7.3l-5 5a1 1 0 0 1-1.4 0l-2-2a1 1 0 1 1 1.4-1.4l1.3 1.29 4.3-4.3a1 1 0 0 1 1.4 1.41z'/%3E%3C/svg%3E" />
   
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -630,7 +631,15 @@
   <script>
     // App State Management — the engine is the source of truth; isConnected
     // only mirrors engine.state for the UI branches below.
-    const engine = new VantaSessionEngine();
+    let engine = null;
+    try {
+      engine = new VantaSessionEngine();
+    } catch (err) {
+      // vanta-engine.js missing or failed: keep the page alive and report it
+      // from the toggle instead of dying mid-block (which would leave every
+      // handler's lets in the temporal dead zone and the whole UI dead).
+      console.error('Vanta engine init failed:', err);
+    }
     let isConnected = false;
     let statusPoll = null;
 
@@ -797,6 +806,11 @@
     let toggling = false;
     async function toggleVPN() {
       if (toggling) return;
+      if (!engine) {
+        setBadge('error', 'Engine not loaded', 'vanta-engine.js failed to load — hard refresh (Cmd+Shift+R)');
+        setTimeout(() => { if (!isConnected) setBadge('off', 'Exposed'); }, 3000);
+        return;
+      }
       toggling = true;
       try {
         if (isConnected) {
