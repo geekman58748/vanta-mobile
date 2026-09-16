@@ -1,0 +1,14 @@
+{
+  "name": "vanta-relayer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "VANTA relayer: session verification, hard-capped fee-payer co-signing. Server-side only.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

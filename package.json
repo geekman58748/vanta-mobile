@@ -1,0 +1,28 @@
+{
+  "name": "vanta-mobile",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "@noble/ed25519": "^3.2.0",
+    "@solana-mobile/mobile-wallet-adapter-protocol": "^2.3.0",
+    "@solana/web3.js": "^1.99.0",
+    "bs58": "^6.0.0",
+    "buffer": "^6.0.3",
+    "expo": "~57.0.22",
+    "expo-asset": "~57.0.17",
+    "expo-dev-client": "~57.0.19",
+    "expo-linear-gradient": "~57.0.2",
+    "expo-standard-web-crypto": "^57.0.2",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-webview": "13.16.1"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web"
+  },
+  "private": true
+}

@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Vanta Privacy Protocol",
+    "slug": "vanta-privacy-protocol",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#000000",
+    "android": {
+      "package": "protocol.vanta.mobile",
+      "softwareKeyboardLayoutMode": "pan"
+    },
+    "androidStatusBar": {
+      "barStyle": "light-content",
+      "backgroundColor": "#000000",
+      "translucent": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-asset"
+    ]
+  }
+}

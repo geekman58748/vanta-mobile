@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#07090E] text-white antialiased">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VANTA — Session Privacy</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Orbitron:wght@600;700;800&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            tech: ['"Orbitron"', 'sans-serif'],
+          },
+          colors: {
+            mvpn: {
+              bg: '#080A0F',
+              card: '#11141D',
+              purple: '#7B61FF',
+              'purple-dark': '#5534EA',
+              teal: '#1FAE7A',
+              'teal-dark': '#12633F',
+              red: '#FF4D4D',
+              gold: '#D9B36A',
+              'gold-light': '#F3D9A6',
+              'gold-dark': '#8A6A2F',
+              graphite: '#211D30',
+              'graphite-deep': '#121020',
+            }
+          },
+          boxShadow: {
+            'power-glow': '0 0 2px 1px rgba(160, 140, 210, 0.18), 0 12px 34px 4px rgba(20, 14, 40, 0.55), inset 0 1.5px 1.5px rgba(255,255,255,0.16), inset 0 -14px 22px rgba(0,0,0,0.5)',
+            'teal-glow': '0 0 20px 2px rgba(31, 174, 122, 0.30)',
+            'flag-glow': '0 0 18px 3px rgba(238, 220, 185, 0.30)',
+            'gold-glow': '0 0 22px 3px rgba(217, 179, 106, 0.38)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Background Teal Wave & Matrix Overlay */
+    .bg-matrix {
+      background-image: radial-gradient(rgba(31, 174, 122, 0.14) 1.2px, transparent 1.2px);
+      background-size: 20px 20px;
+    }
+
+    .teal-wave-bg {
+      background: radial-gradient(circle at 50% 63%, rgba(235, 208, 156, 0.10) 0%, rgba(31, 174, 122, 0.20) 16%, rgba(18, 99, 63, 0.09) 36%, rgba(8, 10, 15, 0) 70%);
+    }
+
+    .power-btn-gradient {
+      background: linear-gradient(155deg, #423C63 0%, #241F38 55%, #131120 100%);
+      position: relative;
+      isolation: isolate;
+    }
+    .power-btn-gradient::before {
+      content: '';
+      position: absolute;
+      inset: 1.5px;
+      border-radius: inherit;
+      background: linear-gradient(160deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.03) 32%, rgba(255,255,255,0) 55%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .power-btn-gradient > * {
+      position: relative;
+      z-index: 1;
+    }
+    .icon-glow-on {
+      filter: drop-shadow(0 0 5px rgba(255,255,255,0.75)) drop-shadow(0 0 12px rgba(255,255,255,0.35));
+    }
+
+    /* Soft dark recessed squircle sitting behind the power button, matching reference */
+    .halo-effect {
+      background: rgba(9, 8, 14, 0.62);
+      filter: blur(14px);
+      transition: opacity 0.3s ease;
+    }
+
+    .premium-badge-gradient {
+      background: linear-gradient(135deg, #F3D9A6 0%, #D9B36A 45%, #96742F 100%);
+      position: relative;
+      overflow: hidden;
+    }
+    .premium-badge-gradient::after {
+      content: '';
+      position: absolute;
+      top: 0; left: -60%;
+      width: 35%; height: 100%;
+      background: linear-gradient(115deg, transparent 0%, rgba(255,255,255,0.65) 50%, transparent 100%);
+      transform: skewX(-20deg);
+      animation: premium-shimmer 5.5s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes premium-shimmer {
+      0%   { left: -60%; }
+      30%  { left: 130%; }
+      100% { left: 130%; }
+    }
+
+    /* Pulse animation for connected state */
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.18); opacity: 0.2; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+
+    .pulse-effect {
+      animation: pulse-ring 3s infinite ease-in-out;
+    }
+
+    /* Custom scrollbar for game/stream view */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #080A0F;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1F2432;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #2D3448;
+    }
+
+    /* Smooth Tab Transitions */
+    .view-panel {
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+  </style>
+</head>
+<body class="h-full w-full flex flex-col bg-[#07090E] overflow-x-hidden select-none">
+
+  <!-- Grain + vignette: the difference between "dark UI" and "expensive dark UI" is
+       usually this layer -- flat black reads cheap, a faint texture and uneven
+       light falloff reads like a physical, considered surface. -->
+  <div class="pointer-events-none fixed inset-0 z-[60]" style="opacity:0.05; mix-blend-mode:overlay; background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22140%22 height=%22140%22><filter id=%22n%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%220.85%22 numOctaves=%222%22 stitchTiles=%22stitch%22/></filter><rect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/></svg>'); background-size:140px 140px;"></div>
+  <div class="pointer-events-none fixed inset-0 z-[59]" style="background: radial-gradient(130% 85% at 50% 18%, transparent 55%, rgba(0,0,0,0.45) 100%);"></div>
+
+  <header class="w-full max-w-5xl mx-auto px-4 sm:px-8 pt-6 pb-2 flex items-center justify-between z-20">
+    <!-- Brand Mark (icon only -- the wordmark read as generic template branding) -->
+    <div class="flex items-center cursor-pointer group" onclick="switchTab('main')">
+      <div class="relative w-9 h-9 flex items-center justify-center">
+        <svg width="36" height="36" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" class="transform transition-transform group-hover:scale-105">
+          <!-- Polygon 1 -->
+          <path d="M4 8L16 2L16 16L4 22V8Z" fill="#7B61FF" />
+          <!-- Polygon 2 -->
+          <path d="M16 16L28 10V24L16 30V16Z" fill="#5B38FD" />
+        </svg>
+      </div>
+    </div>
+
+    <!-- Center Navigation Switches (Desktop/Tablet) -->
+    <div class="hidden sm:flex items-center bg-[#121622] border border-[#1E2538] p-1 rounded-full">
+      <button id="nav-btn-main" onclick="switchTab('main')" class="px-5 py-2 text-xs font-bold rounded-full transition-all duration-200 bg-[#7B61FF] text-white shadow-md">
+        Main Console
+      </button>
+      <button id="nav-btn-stream" onclick="switchTab('stream')" class="px-5 py-2 text-xs font-semibold rounded-full text-gray-400 hover:text-white transition-all duration-200">
+        Sessions
+      </button>
+    </div>
+
+    <!-- Right Top Badge: SKR Tier -->
+    <button class="premium-badge-gradient hover:brightness-105 transition-all px-4 py-2 rounded-full flex items-center space-x-2 shadow-gold-glow">
+      <svg class="w-4 h-4 text-[#3A2A12] fill-current" viewBox="0 0 24 24">
+        <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/>
+      </svg>
+      <span class="text-xs font-bold tracking-wide text-[#3A2A12]">SKR Tier</span>
+    </button>
+  </header>
+
+  <!-- Mobile Screen Navigation Tabs -->
+  <div class="flex sm:hidden justify-center my-3 px-4 z-20">
+    <div class="flex w-full bg-[#121622] border border-[#1E2538] p-1 rounded-xl">
+      <button id="mobile-btn-main" onclick="switchTab('main')" class="flex-1 py-2 text-xs font-bold rounded-lg bg-[#7B61FF] text-white transition-all">
+        Shield
+      </button>
+      <button id="mobile-btn-stream" onclick="switchTab('stream')" class="flex-1 py-2 text-xs font-semibold text-gray-400 hover:text-white transition-all">
+        Sessions
+      </button>
+    </div>
+  </div>
+
+  <main class="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 relative flex flex-col justify-between py-2">
+
+    <!-- ================= VIEW 1: MAIN SHIELD INTERFACE ================= -->
+    <div id="view-main" class="view-panel w-full flex-1 flex flex-col justify-between items-center relative z-10 py-4">
+      
+      <!-- Background Ambient Dot Matrix & Glow Effect -->
+      <div class="absolute inset-0 bg-matrix opacity-40 pointer-events-none rounded-3xl"></div>
+      <div class="absolute inset-0 teal-wave-bg pointer-events-none"></div>
+      <div id="worldmap3d" class="absolute left-0 right-0 pointer-events-none overflow-hidden" style="top: 22%; height: 46%;"></div>
+
+      <!-- Curved black cutout: path is computed in JS from the power button's real
+           size/position so the bowl stays proportional to the button at every
+           breakpoint instead of a fixed viewBox percentage. -->
+      <div id="wave-cut" class="absolute inset-x-0 bottom-0 flex flex-col pointer-events-none" style="z-index:5;">
+        <svg id="wave-svg" class="w-full shrink-0 block" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="flex-1 bg-[#07090E]"></div>
+      </div>
+
+      <!-- Top Shield Status Badge -->
+      <div class="mt-2 sm:mt-4 z-10">
+        <button id="status-badge" onclick="toggleVPN()" class="flex items-center space-x-2 bg-white/[0.03] backdrop-blur-sm border border-[#1FAE7A]/50 text-[#4FD69C] px-5 py-1.5 rounded-full font-bold text-xs tracking-[0.1em] uppercase shadow-teal-glow transition-all duration-300 hover:scale-105">
+          <svg id="status-icon" class="w-3.5 h-3.5 fill-current" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 1.944A11.954 11.954 0 012.166 5C2.056 5.649 2 6.319 2 7c0 5.225 3.34 9.67 8 11.317C14.66 16.67 18 12.225 18 7c0-.682-.057-1.35-.166-2.001A11.954 11.954 0 0110 1.944zM13.707 8.707a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+          </svg>
+          <span id="status-text">Shielded</span>
+        </button>
+      </div>
+
+      <div class="w-full max-w-md grid grid-cols-3 gap-2 my-6 sm:my-8 text-center z-10">
+        <!-- Tx Routed -->
+        <div class="flex flex-col items-center">
+          <div class="flex items-center space-x-1.5 text-[#1FAE7A] mb-1">
+            <svg class="w-4 h-4 stroke-current stroke-2" fill="none" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+            </svg>
+          </div>
+          <div class="text-2xl sm:text-3xl font-semibold tracking-tight font-tech text-white" id="stat-download">50</div>
+          <div class="text-[10px] font-semibold text-gray-500 mt-0.5 uppercase tracking-[0.15em]">txs routed</div>
+        </div>
+
+        <!-- SOL Shielded -->
+        <div class="flex flex-col items-center">
+          <div class="flex items-center space-x-1.5 text-[#9B9689] mb-1">
+            <svg class="w-4 h-4 stroke-current stroke-2" fill="none" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+            </svg>
+          </div>
+          <div class="text-2xl sm:text-3xl font-semibold tracking-tight font-tech text-white" id="stat-upload">32</div>
+          <div class="text-[10px] font-semibold text-gray-500 mt-0.5 uppercase tracking-[0.15em]">sol shielded</div>
+        </div>
+
+        <!-- Spend Cap -->
+        <div class="flex flex-col items-center">
+          <div class="flex items-center space-x-1.5 text-[#B8AD8A] mb-1">
+            <!-- Signal Bars Icon -->
+            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+              <rect x="2" y="16" width="3" height="5" rx="1"/>
+              <rect x="7" y="12" width="3" height="9" rx="1"/>
+              <rect x="12" y="8" width="3" height="13" rx="1"/>
+              <rect x="17" y="4" width="3" height="17" rx="1"/>
+            </svg>
+          </div>
+          <div class="text-2xl sm:text-3xl font-semibold tracking-tight font-tech text-white" id="stat-ping">80</div>
+          <div class="text-[10px] font-semibold text-gray-500 mt-0.5 uppercase tracking-[0.15em]">spend cap</div>
+        </div>
+      </div>
+
+      <div class="relative my-4 sm:my-8 flex items-center justify-center z-10">
+        <!-- Soft Recessed Squircle Halo (button sits inset within it) -->
+        <div id="power-pulse" class="absolute w-56 h-56 sm:w-64 sm:h-64 rounded-[3.75rem] halo-effect pointer-events-none"></div>
+
+        <!-- Power Button Container -->
+        <button id="power-btn" onclick="toggleVPN()" class="relative w-36 h-36 sm:w-40 sm:h-40 rounded-[2.2rem] power-btn-gradient shadow-power-glow flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 group cursor-pointer focus:outline-none">
+          <!-- Power Icon -->
+          <svg id="power-icon" class="w-14 h-14 text-white stroke-[2.5] transition-transform duration-300 group-hover:scale-110 icon-glow-on" style="transition: transform 0.3s, filter 0.3s ease;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="w-full max-w-lg flex flex-col items-center mt-6 z-10">
+        <!-- Wallet Circle Carousel -->
+        <div class="flex items-center justify-center space-x-3 sm:space-x-5 my-4 overflow-x-auto py-2 w-full px-2 no-scrollbar">
+
+          <!-- Backpack -->
+          <div onclick="selectServer('Backpack', 'BP', 110)" class="flag-item cursor-pointer transform hover:scale-110 transition-all opacity-50 hover:opacity-100 flex-shrink-0">
+            <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border border-gray-700 flex items-center justify-center bg-[#1B1A20] shadow">
+              <svg class="w-5 h-5" viewBox="0 0 21 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M0 10.5907C0 10.5907 0 0 9.81681 0C20.3109 0 20.3109 10.5907 20.3109 10.5907V28H0V10.5907Z" fill="url(#bp-grad)"/>
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M8.41764 10.3004H4.35547V23.6476H8.41764V10.3004ZM15.9613 13.202C15.9613 14.8045 14.6622 16.1035 13.0598 16.1035C11.4573 16.1035 10.1582 14.8045 10.1582 13.202C10.1582 11.5995 11.4573 10.3004 13.0598 10.3004C14.6622 10.3004 15.9613 11.5995 15.9613 13.202ZM15.9613 20.7459C15.9613 22.3484 14.6622 23.6475 13.0598 23.6475C11.4573 23.6475 10.1582 22.3484 10.1582 20.7459C10.1582 19.1434 11.4573 17.8444 13.0598 17.8444C14.6622 17.8444 15.9613 19.1434 15.9613 20.7459Z" fill="white"/>
+                <defs>
+                  <linearGradient id="bp-grad" x1="20.3109" y1="0" x2="2.79233" y2="29.6498" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#A773F6"/>
+                    <stop offset="1" stop-color="#14B8A6"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Phantom -->
+          <div onclick="selectServer('Phantom', 'PH', 45)" class="flag-item cursor-pointer transform hover:scale-110 transition-all opacity-50 hover:opacity-100 flex-shrink-0">
+            <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border border-gray-700 flex items-center justify-center shadow">
+              <svg class="w-full h-full" viewBox="0 0 108 108" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="108" height="108" rx="54" fill="#AB9FF2"/>
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M46.5267 69.9229C42.0054 76.8509 34.4292 85.6182 24.348 85.6182C19.5824 85.6182 15 83.6563 15 75.1342C15 53.4305 44.6326 19.8327 72.1268 19.8327C87.768 19.8327 94 30.6846 94 43.0079C94 58.8258 83.7355 76.9122 73.5321 76.9122C70.2939 76.9122 68.7053 75.1342 68.7053 72.314C68.7053 71.5783 68.8275 70.7812 69.0719 69.9229C65.5893 75.8699 58.8685 81.3878 52.5754 81.3878C47.993 81.3878 45.6713 78.5063 45.6713 74.4598C45.6713 72.9884 45.9768 71.4556 46.5267 69.9229ZM83.6761 42.5794C83.6761 46.1704 81.5575 47.9658 79.1875 47.9658C76.7816 47.9658 74.6989 46.1704 74.6989 42.5794C74.6989 38.9885 76.7816 37.1931 79.1875 37.1931C81.5575 37.1931 83.6761 38.9885 83.6761 42.5794ZM70.2103 42.5795C70.2103 46.1704 68.0916 47.9658 65.7216 47.9658C63.3157 47.9658 61.233 46.1704 61.233 42.5795C61.233 38.9885 63.3157 37.1931 65.7216 37.1931C68.0916 37.1931 70.2103 38.9885 70.2103 42.5795Z" fill="#FFFDf8"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Solflare -->
+          <div onclick="selectServer('Solflare', 'SF', 92)" class="flag-item cursor-pointer transform hover:scale-110 transition-all opacity-50 hover:opacity-100 flex-shrink-0">
+            <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border border-gray-700 flex items-center justify-center shadow">
+              <svg class="w-full h-full" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
+                <rect x="0" y="0" width="50" height="50" rx="25" fill="#ffef46"/>
+                <path d="M24.23,26.42l2.46-2.38,4.59,1.5c3.01,1,4.51,2.84,4.51,5.43,0,1.96-.75,3.26-2.25,4.93l-.46,.5,.17-1.17c.67-4.26-.58-6.09-4.72-7.43l-4.3-1.38h0ZM18.05,11.85l12.52,4.17-2.71,2.59-6.51-2.17c-2.25-.75-3.01-1.96-3.3-4.51v-.08h0ZM17.3,33.06l2.84-2.71,5.34,1.75c2.8,.92,3.76,2.13,3.46,5.18l-11.65-4.22h0ZM13.71,20.95c0-.79,.42-1.54,1.13-2.17,.75,1.09,2.05,2.05,4.09,2.71l4.42,1.46-2.46,2.38-4.34-1.42c-2-.67-2.84-1.67-2.84-2.96M26.82,42.87c9.18-6.09,14.11-10.23,14.11-15.32,0-3.38-2-5.26-6.43-6.72l-3.34-1.13,9.14-8.77-1.84-1.96-2.71,2.38-12.81-4.22c-3.97,1.29-8.97,5.09-8.97,8.89,0,.42,.04,.83,.17,1.29-3.3,1.88-4.63,3.63-4.63,5.8,0,2.05,1.09,4.09,4.55,5.22l2.75,.92-9.52,9.14,1.84,1.96,2.96-2.71,14.73,5.22h0Z" stroke="#02050a" stroke-miterlimit="10" stroke-width="0.5"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Seed Vault (Selected Default in Center) -->
+          <div id="selected-flag-container" onclick="selectServer('Seed Vault', 'SV', 80)" class="flag-item cursor-pointer transform hover:scale-110 transition-all flex-shrink-0 relative">
+            <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-full p-1 bg-gradient-to-b from-gray-200 to-gray-500 shadow-flag-glow flex items-center justify-center">
+              <div class="w-full h-full rounded-full overflow-hidden border-2 border-black flex items-center justify-center bg-[#0B0F1A]">
+                <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="5" y="10.5" width="14" height="10" rx="2.5" stroke="#14F195" stroke-width="1.8"/>
+                  <path d="M8 10.5V7.5C8 5 9.5 3.5 12 3.5C14.5 3.5 16 5 16 7.5V10.5" stroke="#14F195" stroke-width="1.8" stroke-linecap="round"/>
+                  <circle cx="12" cy="15.5" r="1.6" fill="#14F195"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- Jupiter -->
+          <div onclick="selectServer('Jupiter', 'JU', 142)" class="flag-item cursor-pointer transform hover:scale-110 transition-all opacity-50 hover:opacity-100 flex-shrink-0">
+            <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border border-gray-700 flex items-center justify-center bg-[#C7C3D9] shadow">
+              <svg class="w-6 h-6" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6.5 24.5L14.5 8.5C15.1 7.3 16.9 7.3 17.5 8.5L25.5 24.5" stroke="#0B0F1A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M10 24.5L16 12.5L22 24.5" stroke="#0B0F1A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Coinbase Wallet -->
+          <div onclick="selectServer('Coinbase Wallet', 'CB', 55)" class="flag-item cursor-pointer transform hover:scale-110 transition-all opacity-50 hover:opacity-100 flex-shrink-0">
+            <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border border-gray-700 flex items-center justify-center bg-[#0052FF] shadow">
+              <svg class="w-6 h-6" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="16" cy="16" r="16" fill="#0052FF"/>
+                <path d="M16 6.5C10.75 6.5 6.5 10.75 6.5 16C6.5 21.25 10.75 25.5 16 25.5C21.25 25.5 25.5 21.25 25.5 16C25.5 10.75 21.25 6.5 16 6.5ZM16.4 20.9C13.6 20.9 11.4 18.7 11.4 16C11.4 13.3 13.6 11.1 16.4 11.1C18.9 11.1 20.9 12.8 21.3 15.1H18.3C18 14.4 17.2 13.9 16.4 13.9C15.2 13.9 14.2 14.9 14.2 16C14.2 17.2 15.2 18.1 16.4 18.1C17.3 18.1 18.1 17.6 18.3 16.9H21.3C20.9 19.2 18.9 20.9 16.4 20.9Z" fill="white"/>
+              </svg>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Wallet Dropdown Pill -->
+        <button onclick="toggleServerModal()" class="mt-2 flex items-center space-x-2 bg-[#121622] hover:bg-[#1A2030] border border-[#232B3F] text-white px-5 py-2 rounded-full font-semibold text-xs tracking-wide transition-all shadow-md">
+          <span id="current-server-name">Seed Vault</span>
+          <svg class="w-4 h-4 text-gray-400 fill-current" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+
+    <!-- ================= VIEW 2: STREAM & GAME SCREEN ================= -->
+    <div id="view-stream" class="view-panel w-full flex-1 flex-col hidden relative z-10 py-2">
+      <div class="w-full max-w-xl mx-auto flex flex-col h-full bg-[#0D0F16] border border-[#192030] rounded-3xl p-4 sm:p-6 shadow-2xl">
+        
+        <!-- Search Bar -->
+        <div class="relative w-full mb-4">
+          <svg class="w-4 h-4 absolute left-4 top-3.5 text-gray-400 fill-current" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/>
+          </svg>
+          <input type="text" placeholder="Search dApps, merchants..." class="w-full bg-[#141824] border border-[#202738] rounded-full py-2.5 pl-11 pr-4 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#7B61FF]" />
+        </div>
+
+        <!-- Segmented Tab Control -->
+        <div class="flex bg-[#141824] p-1 rounded-full mb-6">
+          <button class="flex-1 py-2 text-xs font-bold rounded-full bg-gradient-to-r from-[#7B61FF] to-[#635BFF] text-white shadow">
+            All
+          </button>
+          <button class="flex-1 py-2 text-xs font-medium rounded-full text-gray-400 hover:text-white">
+            dApps
+          </button>
+        </div>
+
+        <!-- Scrollable Servers Container -->
+        <div class="flex-1 overflow-y-auto space-y-6 pr-1">
+          
+          <!-- STREAM SECTION -->
+          <div>
+            <h3 class="text-[11px] font-bold tracking-[0.2em] text-gray-500 uppercase mb-3 px-1">dApps</h3>
+            <div class="space-y-2.5">
+              
+              <!-- Jupiter -->
+              <div onclick="selectDedicatedServer('Jupiter', 'Token Swap', '96ms')" class="flex items-center justify-between p-3.5 bg-[#121520] hover:bg-[#181D2C] border border-[#1E2536] rounded-2xl cursor-pointer transition-all">
+                <div class="flex items-center space-x-3.5">
+                  <div class="w-10 h-10 rounded-xl bg-[#7B61FF] flex items-center justify-center font-bold text-white text-xl font-tech">
+                    J
+                  </div>
+                  <div>
+                    <div class="text-sm font-bold text-white">Jupiter</div>
+                    <div class="text-xs text-gray-400">Token Swap</div>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                  <span class="text-xs font-tech text-gray-300">96ms</span>
+                  <div class="flex items-end space-x-0.5 h-3">
+                    <span class="w-1 h-1.5 bg-emerald-400 rounded-sm"></span>
+                    <span class="w-1 h-2.5 bg-emerald-400 rounded-sm"></span>
+                    <span class="w-1 h-3.5 bg-emerald-400 rounded-sm"></span>
+                  </div>
+                  <svg class="w-4 h-4 text-gray-500 hover:text-red-500 fill-current" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"/>
+                  </svg>
+                </div>
+              </div>
+
+              <!-- Magic Eden -->
+              <div onclick="selectDedicatedServer('Magic Eden', 'NFT Marketplace', '115ms')" class="flex items-center justify-between p-3.5 bg-[#121520] hover:bg-[#181D2C] border border-[#1E2536] rounded-2xl cursor-pointer transition-all">
+                <div class="flex items-center space-x-3.5">
+                  <div class="w-10 h-10 rounded-xl bg-[#5B38FD] flex items-center justify-center font-bold text-white text-xl font-tech">
+                    M
+                  </div>
+                  <div>
+                    <div class="text-sm font-bold text-white">Magic Eden</div>
+                    <div class="text-xs text-gray-400">NFT Marketplace</div>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                  <span class="text-xs font-tech text-gray-300">115ms</span>
+                  <div class="flex items-end space-x-0.5 h-3">
+                    <span class="w-1 h-1.5 bg-emerald-400 rounded-sm"></span>
+                    <span class="w-1 h-2.5 bg-emerald-400 rounded-sm"></span>
+                    <span class="w-1 h-3.5 bg-emerald-400 rounded-sm"></span>
+                  </div>
+                  <svg class="w-4 h-4 text-gray-500 hover:text-red-500 fill-current" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"/>
+                  </svg>
+                </div>
+              </div>
+
+              <!-- Solana Pay Merchant -->
+              <div onclick="selectDedicatedServer('Solana Pay', 'Merchant Checkout', '40ms')" class="flex items-center justify-between p-3.5 bg-[#121520] hover:bg-[#181D2C] border border-[#1E2536] rounded-2xl cursor-pointer transition-all">
+                <div class="flex items-center space-x-3.5">
+                  <div class="w-10 h-10 rounded-xl bg-[#1CE783]/10 border border-[#1CE783]/30 flex items-center justify-center font-bold text-[#1CE783] text-xs font-tech">
+                    SOL
+                  </div>
+                  <div>
+                    <div class="text-sm font-bold text-white">Solana Pay</div>
+                    <div class="text-xs text-gray-400">Merchant Checkout</div>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                  <svg class="w-4 h-4 text-gray-400 fill-current" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                  </svg>
+                  <span class="text-xs font-tech text-gray-300">40ms</span>
+                  <div class="flex items-end space-x-0.5 h-3">
+                    <span class="w-1 h-1.5 bg-emerald-400 rounded-sm"></span>
+                    <span class="w-1 h-2.5 bg-emerald-400 rounded-sm"></span>
+                    <span class="w-1 h-3.5 bg-emerald-400 rounded-sm"></span>
+                  </div>
+                  <svg class="w-4 h-4 text-gray-500 hover:text-red-500 fill-current" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"/>
+                  </svg>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- GAME SECTION -->
+          <div>
+            <h3 class="text-[11px] font-bold tracking-[0.2em] text-gray-500 uppercase mb-3 px-1">Merchants</h3>
+            <div class="space-y-2.5">
+              
+              <!-- Orca -->
+              <div onclick="selectDedicatedServer('Orca', 'Liquidity Pools', '96ms')" class="flex items-center justify-between p-3.5 bg-[#121520] hover:bg-[#181D2C] border border-[#1E2536] rounded-2xl cursor-pointer transition-all">
+                <div class="flex items-center space-x-3.5">
+                  <div class="w-10 h-10 rounded-xl bg-[#FFD53D] flex items-center justify-center font-bold text-[#1A1A1A] text-xl font-tech">
+                    O
+                  </div>
+                  <div>
+                    <div class="text-sm font-bold text-white">Orca</div>
+                    <div class="text-xs text-gray-400">Liquidity Pools</div>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                  <span class="text-xs font-tech text-gray-300">96ms</span>
+                  <div class="flex items-end space-x-0.5 h-3">
+                    <span class="w-1 h-1.5 bg-emerald-400 rounded-sm"></span>
+                    <span class="w-1 h-2.5 bg-emerald-400 rounded-sm"></span>
+                    <span class="w-1 h-3.5 bg-emerald-400 rounded-sm"></span>
+                  </div>
+                  <svg class="w-4 h-4 text-gray-500 hover:text-red-500 fill-current" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"/>
+                  </svg>
+                </div>
+              </div>
+
+              <!-- Streamflow -->
+              <div onclick="selectDedicatedServer('Streamflow', 'Token Streams', '40ms')" class="flex items-center justify-between p-3.5 bg-[#121520] hover:bg-[#181D2C] border border-[#1E2536] rounded-2xl cursor-pointer transition-all">
+                <div class="flex items-center space-x-3.5">
+                  <div class="w-10 h-10 rounded-xl bg-[#1FAE7A] flex items-center justify-center font-bold text-white text-xl font-tech">
+                    S
+                  </div>
+                  <div>
+                    <div class="text-sm font-bold text-white">Streamflow</div>
+                    <div class="text-xs text-gray-400">Token Streams</div>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                  <svg class="w-4 h-4 text-gray-400 fill-current" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                  </svg>
+                  <span class="text-xs font-tech text-gray-300">40ms</span>
+                  <div class="flex items-end space-x-0.5 h-3">
+                    <span class="w-1 h-1.5 bg-emerald-400 rounded-sm"></span>
+                    <span class="w-1 h-2.5 bg-emerald-400 rounded-sm"></span>
+                    <span class="w-1 h-3.5 bg-emerald-400 rounded-sm"></span>
+                  </div>
+                  <svg class="w-4 h-4 text-gray-500 hover:text-red-500 fill-current" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"/>
+                  </svg>
+                </div>
+              </div>
+
+              <!-- Zeta Markets (Favorited) -->
+              <div onclick="selectDedicatedServer('Zeta Markets', 'Perps Trading', '96ms')" class="flex items-center justify-between p-3.5 bg-[#121520] hover:bg-[#181D2C] border border-[#1E2536] rounded-2xl cursor-pointer transition-all">
+                <div class="flex items-center space-x-3.5">
+                  <div class="w-10 h-10 rounded-xl bg-[#14F195] flex items-center justify-center font-bold text-[#052C20] text-xl font-tech">
+                    Z
+                  </div>
+                  <div>
+                    <div class="text-sm font-bold text-white">Zeta Markets</div>
+                    <div class="text-xs text-gray-400">Perps Trading</div>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                  <svg class="w-4 h-4 text-gray-400 fill-current" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                  </svg>
+                  <span class="text-xs font-tech text-gray-300">96ms</span>
+                  <div class="flex items-end space-x-0.5 h-3">
+                    <span class="w-1 h-1.5 bg-emerald-400 rounded-sm"></span>
+                    <span class="w-1 h-2.5 bg-emerald-400 rounded-sm"></span>
+                    <span class="w-1 h-3.5 bg-emerald-400 rounded-sm"></span>
+                  </div>
+                  <svg class="w-4 h-4 text-[#7B61FF] fill-current" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"/>
+                  </svg>
+                </div>
+              </div>
+
+              <!-- Phoenix -->
+              <div onclick="selectDedicatedServer('Phoenix', 'Spot Trading', '40ms')" class="flex items-center justify-between p-3.5 bg-[#121520] hover:bg-[#181D2C] border border-[#1E2536] rounded-2xl cursor-pointer transition-all">
+                <div class="flex items-center space-x-3.5">
+                  <div class="w-10 h-10 rounded-xl bg-[#F5575C] flex items-center justify-center font-bold text-white text-xl font-tech">
+                    P
+                  </div>
+                  <div>
+                    <div class="text-sm font-bold text-white">Phoenix</div>
+                    <div class="text-xs text-gray-400">Spot Trading</div>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                  <svg class="w-4 h-4 text-gray-400 fill-current" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                  </svg>
+                  <span class="text-xs font-tech text-gray-300">40ms</span>
+                  <div class="flex items-end space-x-0.5 h-3">
+                    <span class="w-1 h-1.5 bg-emerald-400 rounded-sm"></span>
+                    <span class="w-1 h-2.5 bg-emerald-400 rounded-sm"></span>
+                    <span class="w-1 h-3.5 bg-emerald-400 rounded-sm"></span>
+                  </div>
+                  <svg class="w-4 h-4 text-gray-500 hover:text-red-500 fill-current" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"/>
+                  </svg>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Bottom Tab Bar (mobile) -->
+  <nav class="flex sm:hidden items-center justify-around px-4 pt-3 border-t border-[#161B26] bg-[#07090E] z-20" style="padding-bottom: max(0.85rem, env(safe-area-inset-bottom));">
+    <button class="flex flex-col items-center gap-1 text-[#7B61FF]">
+      <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M11.47 3.841a.75.75 0 0 1 1.06 0l8.69 8.69a.75.75 0 1 0 1.06-1.061l-8.689-8.69a2.25 2.25 0 0 0-3.182 0l-8.69 8.69a.75.75 0 1 0 1.061 1.06l8.69-8.689Z" />
+        <path d="m12 5.432 8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 0-.75-.75h-3a.75.75 0 0 0-.75.75V21a.75.75 0 0 1-.75.75H5.625a1.875 1.875 0 0 1-1.875-1.875v-6.198a2.29 2.29 0 0 0 .091-.086L12 5.432Z" />
+      </svg>
+      <span class="text-[11px] font-semibold tracking-wide">Home</span>
+    </button>
+    <button class="flex flex-col items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors">
+      <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+      </svg>
+      <span class="text-[11px] font-semibold tracking-wide">Sessions</span>
+    </button>
+    <button class="flex flex-col items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors">
+      <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 0 1 0 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 0 1 0-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+      </svg>
+      <span class="text-[11px] font-semibold tracking-wide">Staking</span>
+    </button>
+    <button class="flex flex-col items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors">
+      <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+      </svg>
+      <span class="text-[11px] font-semibold tracking-wide">Activity</span>
+    </button>
+  </nav>
+
+  <script>
+    // App State Management
+    let isConnected = true;
+    let liveStatsInterval = null;
+
+    // Toggle active screen tab
+    let isSwitching = false;
+    function switchTab(tab) {
+      const viewMain = document.getElementById('view-main');
+      const viewStream = document.getElementById('view-stream');
+      
+      const navMain = document.getElementById('nav-btn-main');
+      const navStream = document.getElementById('nav-btn-stream');
+      const mobileMain = document.getElementById('mobile-btn-main');
+      const mobileStream = document.getElementById('mobile-btn-stream');
+
+      const showEl = tab === 'main' ? viewMain : viewStream;
+      const hideEl = tab === 'main' ? viewStream : viewMain;
+
+      if (isSwitching || showEl.classList.contains('flex')) return;
+      isSwitching = true;
+
+      if (tab === 'main') {
+        navMain.className = "px-5 py-2 text-xs font-bold rounded-full transition-all duration-200 bg-[#7B61FF] text-white shadow-md";
+        navStream.className = "px-5 py-2 text-xs font-semibold rounded-full text-gray-400 hover:text-white transition-all duration-200";
+        mobileMain.className = "flex-1 py-2 text-xs font-bold rounded-lg bg-[#7B61FF] text-white transition-all";
+        mobileStream.className = "flex-1 py-2 text-xs font-semibold text-gray-400 hover:text-white transition-all";
+      } else {
+        navStream.className = "px-5 py-2 text-xs font-bold rounded-full transition-all duration-200 bg-[#7B61FF] text-white shadow-md";
+        navMain.className = "px-5 py-2 text-xs font-semibold rounded-full text-gray-400 hover:text-white transition-all duration-200";
+        mobileStream.className = "flex-1 py-2 text-xs font-bold rounded-lg bg-[#7B61FF] text-white transition-all";
+        mobileMain.className = "flex-1 py-2 text-xs font-semibold text-gray-400 hover:text-white transition-all";
+      }
+
+      // smooth crossfade: ease the current panel out and down slightly, swap
+      // display once it's invisible, then ease the new panel in from the same
+      // offset -- a plain hidden/flex snap read cheap next to everything else
+      hideEl.style.transition = 'opacity 0.22s cubic-bezier(0.4,0,1,1), transform 0.22s cubic-bezier(0.4,0,1,1)';
+      hideEl.style.opacity = '0';
+      hideEl.style.transform = 'translateY(10px) scale(0.98)';
+
+      setTimeout(() => {
+        hideEl.classList.add('hidden');
+        hideEl.classList.remove('flex');
+        hideEl.style.transition = '';
+
+        showEl.classList.remove('hidden');
+        showEl.classList.add('flex');
+        showEl.style.transition = 'none';
+        showEl.style.opacity = '0';
+        showEl.style.transform = 'translateY(10px) scale(0.98)';
+
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            showEl.style.transition = 'opacity 0.32s cubic-bezier(0.16,1,0.3,1), transform 0.32s cubic-bezier(0.16,1,0.3,1)';
+            showEl.style.opacity = '1';
+            showEl.style.transform = 'translateY(0) scale(1)';
+            setTimeout(() => { isSwitching = false; }, 340);
+          });
+        });
+      }, 220);
+    }
+
+    // Smoothly tween a stat number from its current displayed value to a new
+    // one instead of snapping -- an instant text swap on live-updating numbers
+    // reads jittery/cheap next to everything else that eases.
+    const numberTweens = new WeakMap();
+    function animateNumber(el, to, duration = 450) {
+      if (!el) return;
+      const from = parseFloat(el.textContent) || 0;
+      to = parseFloat(to);
+      if (from === to) { el.textContent = to; return; }
+
+      if (numberTweens.has(el)) cancelAnimationFrame(numberTweens.get(el));
+
+      const start = performance.now();
+      const ease = t => 1 - Math.pow(1 - t, 3); // ease-out cubic
+      function tick(now) {
+        const t = Math.min(1, (now - start) / duration);
+        const val = from + (to - from) * ease(t);
+        el.textContent = Math.round(val);
+        if (t < 1) {
+          numberTweens.set(el, requestAnimationFrame(tick));
+        } else {
+          el.textContent = to;
+          numberTweens.delete(el);
+        }
+      }
+      numberTweens.set(el, requestAnimationFrame(tick));
+    }
+
+    // Toggle Shield Session State
+    function toggleVPN() {
+      const statusBadge = document.getElementById('status-badge');
+      const statusText = document.getElementById('status-text');
+      const statusIcon = document.getElementById('status-icon');
+      const powerPulse = document.getElementById('power-pulse');
+      const powerBtn = document.getElementById('power-btn');
+      const powerIcon = document.getElementById('power-icon');
+      const dlStat = document.getElementById('stat-download');
+      const ulStat = document.getElementById('stat-upload');
+
+      if (isConnected) {
+        // Switch to Disconnected state
+        isConnected = false;
+        statusBadge.className = "flex items-center space-x-2 bg-gray-800 text-gray-400 px-5 py-1.5 rounded-full font-bold text-xs tracking-wide transition-all duration-300 hover:scale-105";
+        statusText.textContent = "Exposed";
+        powerPulse.style.opacity = '0';
+        if (window.setWorldMapActive) window.setWorldMapActive(false);
+        powerBtn.className = "relative w-36 h-36 sm:w-40 sm:h-40 rounded-[2.2rem] bg-gray-800 shadow-none border border-gray-700 flex items-center justify-center transition-all duration-300 hover:scale-105 opacity-80 cursor-pointer";
+        powerIcon.classList.remove('icon-glow-on');
+        
+        animateNumber(dlStat, 0, 350);
+        animateNumber(ulStat, 0, 350);
+        clearInterval(liveStatsInterval);
+      } else {
+        // Connecting state animation
+        statusBadge.className = "flex items-center space-x-2 bg-amber-500/10 backdrop-blur-sm text-amber-300 border border-amber-400/40 px-5 py-1.5 rounded-full font-bold text-xs tracking-[0.1em] uppercase transition-all duration-300";
+        statusText.textContent = "Connecting...";
+
+        setTimeout(() => {
+          isConnected = true;
+          statusBadge.className = "flex items-center space-x-2 bg-white/[0.03] backdrop-blur-sm border border-[#1FAE7A]/50 text-[#4FD69C] px-5 py-1.5 rounded-full font-bold text-xs tracking-[0.1em] uppercase shadow-teal-glow transition-all duration-300 hover:scale-105";
+          statusText.textContent = "Shielded";
+          powerPulse.style.opacity = '1';
+          if (window.setWorldMapActive) window.setWorldMapActive(true);
+          powerBtn.className = "relative w-36 h-36 sm:w-40 sm:h-40 rounded-[2.2rem] power-btn-gradient shadow-power-glow flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 group cursor-pointer";
+          powerIcon.classList.add('icon-glow-on');
+          
+          animateNumber(dlStat, 50, 550);
+          animateNumber(ulStat, 32, 550);
+          startLiveMetrics();
+        }, 1200);
+      }
+    }
+
+    // Select Session Target (which wallet the session key fronts)
+    function selectServer(name, code, ping) {
+      document.getElementById('current-server-name').textContent = name;
+      animateNumber(document.getElementById('stat-ping'), ping, 400);
+      
+      if (!isConnected) {
+        toggleVPN();
+      }
+    }
+
+    // Select Dedicated Streaming/Gaming server
+    function selectDedicatedServer(service, location, ping) {
+      const cleanPing = ping.replace('ms', '');
+      selectServer(`${service} (${location})`, '', cleanPing);
+      switchTab('main');
+    }
+
+    // Simulate real-time session metric fluctuations
+    function startLiveMetrics() {
+      clearInterval(liveStatsInterval);
+      liveStatsInterval = setInterval(() => {
+        if (isConnected) {
+          const dl = Math.floor(48 + Math.random() * 8);
+          const ul = Math.floor(30 + Math.random() * 5);
+          animateNumber(document.getElementById('stat-download'), dl, 700);
+          animateNumber(document.getElementById('stat-upload'), ul, 700);
+        }
+      }, 2500);
+    }
+
+    // Initialize metrics loop on load
+    startLiveMetrics();
+  </script>
+  <script>
+  /* The curve's proportions are derived from the power button itself (not a
+     fixed % of screen width), so the bowl stays a graceful, wide "flowing"
+     arc that hugs the button at any viewport - the earlier fixed-percentage
+     version pinched narrow on small screens because the button doesn't
+     shrink at the same rate as the container.
+
+     Ratios below were measured directly off the reference screenshot:
+       - total dip span  = 2.15x button width, centered on the button
+       - max depth       = 0.162x dip span
+       - flat shoulder above the dip sits ~6% of button width above the button's
+         own baseline, giving the curve a touch of room to breathe before it
+         starts easing downward (matches the reference's soft entry, not a hard L). */
+  (function () {
+    var wave = document.getElementById('wave-cut');
+    var svg = document.getElementById('wave-svg');
+    var btn = document.getElementById('power-btn');
+    var host = document.getElementById('view-main');
+    if (!wave || !svg || !btn || !host) return;
+
+    var DIP_RATIO = 2.15;
+    var DEPTH_RATIO = 0.162;
+    var SHOULDER_PAD_RATIO = 0.05;
+    var BOTTOM_PAD = 40; // extra flat black margin under the deepest point
+
+    function build() {
+      var hostRect = host.getBoundingClientRect();
+      var btnRect = btn.getBoundingClientRect();
+      if (!hostRect.width || !btnRect.width) return;
+
+      var W = hostRect.width;
+      var buttonWidth = btnRect.width;
+      var centerX = (btnRect.left + btnRect.width / 2) - hostRect.left;
+
+      var halfSpan = (buttonWidth * DIP_RATIO) / 2;
+      var depth = halfSpan * 2 * DEPTH_RATIO;
+      var flatY = Math.max(6, buttonWidth * SHOULDER_PAD_RATIO);
+      var H = flatY + depth + BOTTOM_PAD;
+
+      var leftX = Math.max(0, centerX - halfSpan);
+      var rightX = Math.min(W, centerX + halfSpan);
+
+      // symmetric ease in/out control points -- equal offsets on both ends of
+      // each bezier segment is what actually keeps the curve a smooth bowl;
+      // uneven offsets (my first attempt) made it flat-then-plunge, i.e. pointy
+      var ease = halfSpan * 0.42;
+
+      var d = [
+        'M0,' + flatY,
+        'L' + leftX + ',' + flatY,
+        'C' + (leftX + ease) + ',' + flatY + ' ' + (centerX - ease) + ',' + (flatY + depth) + ' ' + centerX + ',' + (flatY + depth),
+        'C' + (centerX + ease) + ',' + (flatY + depth) + ' ' + (rightX - ease) + ',' + flatY + ' ' + rightX + ',' + flatY,
+        'L' + W + ',' + flatY,
+        'L' + W + ',' + H,
+        'L0,' + H,
+        'Z'
+      ].join(' ');
+
+      svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+      svg.setAttribute('preserveAspectRatio', 'none');
+      svg.style.height = H + 'px';
+      svg.innerHTML = '<path d="' + d + '" fill="#07090E"></path>';
+
+      // position the whole cutout so its flat line sits at the button's baseline
+      var flatScreenTop = (btnRect.bottom - hostRect.top) - flatY;
+      wave.style.top = Math.max(0, flatScreenTop) + 'px';
+    }
+
+    build();
+    if (window.ResizeObserver) {
+      new ResizeObserver(build).observe(host);
+      new ResizeObserver(build).observe(btn);
+    } else {
+      window.addEventListener('resize', build);
+    }
+    window.addEventListener('load', build);
+    setTimeout(build, 120);
+    setTimeout(build, 400); // catch late web-font/layout shifts
+    window.placeWaveCut = build;
+  })();
+  </script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+/* ===== Dotted World Map (three.js) =====
+   Dot positions generated offline from Natural Earth 110m land polygons
+   (world-atlas), sampled on a 2.2 x 2.0 degree lon/lat grid with 3x3
+   supersampling per cell. Third value per dot = coastline coverage 0-10,
+   used as an opacity weight so edges fade instead of aliasing. */
+(function () {
+  var FLAT = [128,0,4,134,0,3,140,0,7,147,0,7,153,0,6,159,0,6,166,0,4,172,0,1,185,0,4,191,0,7,198,0,2,204,0,6,210,0,9,217,0,6,223,0,7,230,0,7,236,0,7,242,0,7,249,0,3,274,0,2,281,0,3,287,0,3,293,0,3,300,0,3,306,0,7,313,0,10,319,0,10,325,0,10,332,0,10,338,0,10,344,0,10,351,0,10,357,0,10,364,0,10,370,0,10,376,0,10,383,0,10,389,0,10,395,0,10,402,0,10,408,0,10,415,0,9,421,0,3,644,0,2,650,0,4,657,0,6,663,0,3,670,0,4,676,0,2,740,0,3,746,0,3,753,0,7,759,0,6,765,0,7,772,0,9,778,0,10,784,0,10,791,0,9,797,0,10,804,0,7,810,0,2,874,0,1,880,0,7,886,0,7,893,0,3,899,0,1,906,0,3,121,7,7,128,7,7,134,7,7,140,7,3,147,7,1,153,7,3,172,7,3,185,7,2,191,7,3,198,7,1,204,7,8,210,7,7,217,7,3,223,7,7,230,7,4,236,7,7,242,7,6,249,7,3,255,7,1,313,7,3,319,7,10,325,7,10,332,7,10,338,7,10,344,7,10,351,7,10,357,7,10,364,7,10,370,7,10,376,7,10,383,7,10,389,7,10,395,7,10,402,7,10,408,7,10,415,7,9,421,7,1,638,7,7,644,7,8,650,7,2,714,7,3,721,7,3,727,7,4,733,7,10,740,7,10,746,7,10,753,7,10,759,7,10,765,7,10,772,7,10,778,7,10,784,7,10,791,7,10,797,7,10,804,7,3,810,7,3,816,7,3,823,7,2,835,7,1,842,7,3,848,7,2,886,7,3,893,7,2,115,13,3,121,13,9,128,13,9,134,13,4,140,13,10,147,13,10,153,13,9,159,13,9,166,13,8,172,13,8,185,13,4,191,13,9,198,13,4,204,13,7,210,13,1,217,13,3,223,13,10,230,13,9,236,13,10,242,13,10,249,13,7,255,13,8,261,13,4,268,13,2,319,13,3,325,13,9,332,13,10,338,13,10,344,13,10,351,13,10,357,13,10,364,13,10,370,13,10,376,13,10,383,13,10,389,13,10,395,13,10,402,13,10,408,13,10,415,13,2,631,13,8,638,13,9,676,13,4,682,13,10,689,13,6,695,13,6,701,13,6,708,13,7,714,13,10,721,13,10,727,13,10,733,13,10,740,13,10,746,13,10,753,13,10,759,13,10,765,13,10,772,13,10,778,13,10,784,13,10,791,13,10,797,13,10,804,13,10,810,13,10,816,13,10,823,13,10,829,13,10,835,13,10,842,13,10,848,13,10,855,13,1,861,13,2,867,13,3,874,13,3,880,13,3,886,13,10,893,13,10,899,13,7,906,13,7,912,13,6,918,13,1,6,20,3,13,20,8,19,20,10,26,20,10,32,20,10,38,20,8,45,20,7,51,20,7,57,20,7,64,20,6,70,20,3,77,20,1,89,20,3,96,20,3,102,20,6,108,20,7,115,20,4,121,20,3,128,20,3,134,20,1,140,20,7,147,20,10,153,20,10,159,20,10,166,20,10,172,20,10,179,20,9,185,20,2,191,20,3,198,20,6,204,20,9,210,20,8,217,20,1,223,20,3,230,20,6,236,20,10,242,20,8,249,20,6,255,20,8,261,20,10,268,20,10,274,20,10,281,20,6,319,20,2,325,20,7,332,20,9,338,20,10,344,20,10,351,20,10,357,20,10,364,20,10,370,20,10,376,20,10,383,20,10,389,20,10,395,20,10,402,20,10,408,20,6,415,20,2,529,20,1,536,20,4,542,20,7,548,20,9,555,20,10,561,20,10,568,20,6,574,20,2,644,20,1,657,20,3,663,20,2,676,20,9,682,20,10,689,20,7,695,20,9,701,20,10,708,20,10,714,20,10,721,20,10,727,20,10,733,20,10,740,20,10,746,20,10,753,20,10,759,20,10,765,20,10,772,20,10,778,20,10,784,20,10,791,20,10,797,20,10,804,20,10,810,20,10,816,20,10,823,20,10,829,20,10,835,20,10,842,20,10,848,20,10,855,20,10,861,20,10,867,20,10,874,20,10,880,20,10,886,20,10,893,20,10,899,20,10,906,20,10,912,20,10,918,20,10,925,20,10,931,20,10,937,20,10,944,20,3,950,20,3,957,20,3,963,20,3,976,20,6,982,20,3,988,20,3,995,20,2,0,26,6,6,26,10,13,26,10,19,26,10,26,26,10,32,26,10,38,26,10,45,26,10,51,26,10,57,26,10,64,26,10,70,26,10,77,26,10,83,26,10,89,26,10,96,26,10,102,26,10,108,26,10,115,26,10,121,26,10,128,26,10,134,26,10,140,26,10,147,26,6,153,26,7,159,26,3,166,26,8,172,26,8,179,26,6,185,26,3,191,26,4,198,26,6,204,26,8,210,26,10,217,26,10,223,26,4,230,26,7,236,26,10,242,26,6,255,26,3,261,26,4,268,26,8,274,26,10,281,26,8,287,26,6,293,26,1,325,26,6,332,26,10,338,26,10,344,26,10,351,26,10,357,26,10,364,26,10,370,26,10,376,26,10,383,26,8,389,26,3,395,26,3,402,26,1,523,26,6,529,26,10,536,26,10,542,26,10,548,26,10,555,26,10,561,26,10,568,26,10,574,26,10,580,26,10,587,26,9,593,26,6,599,26,1,606,26,3,612,26,3,619,26,2,625,26,6,631,26,8,638,26,7,644,26,7,650,26,8,657,26,10,663,26,10,670,26,10,676,26,7,682,26,10,689,26,8,695,26,6,701,26,10,708,26,10,714,26,10,721,26,10,727,26,10,733,26,10,740,26,10,746,26,10,753,26,10,759,26,10,765,26,10,772,26,10,778,26,10,784,26,10,791,26,10,797,26,10,804,26,10,810,26,10,816,26,10,823,26,10,829,26,10,835,26,10,842,26,10,848,26,10,855,26,10,861,26,10,867,26,10,874,26,10,880,26,10,886,26,10,893,26,10,899,26,10,906,26,10,912,26,10,918,26,10,925,26,10,931,26,10,937,26,10,944,26,10,950,26,10,957,26,10,963,26,10,969,26,10,976,26,10,982,26,10,988,26,10,995,26,10,0,33,7,6,33,8,13,33,10,19,33,10,26,33,10,32,33,10,38,33,10,45,33,10,51,33,10,57,33,10,64,33,10,70,33,10,77,33,10,83,33,10,89,33,10,96,33,10,102,33,10,108,33,10,115,33,10,121,33,10,128,33,10,134,33,10,140,33,10,147,33,10,153,33,10,159,33,10,166,33,10,172,33,10,179,33,10,185,33,10,191,33,10,198,33,10,204,33,10,210,33,10,217,33,10,223,33,10,230,33,7,236,33,3,261,33,4,268,33,10,274,33,10,281,33,8,287,33,6,293,33,9,300,33,1,325,33,6,332,33,10,338,33,10,344,33,10,351,33,10,357,33,10,364,33,8,370,33,7,376,33,3,408,33,1,415,33,6,421,33,6,427,33,7,434,33,6,510,33,1,517,33,7,523,33,10,529,33,10,536,33,10,542,33,8,548,33,7,555,33,10,561,33,10,568,33,10,574,33,9,580,33,4,587,33,3,593,33,4,599,33,7,606,33,8,612,33,10,619,33,10,625,33,10,631,33,10,638,33,10,644,33,10,650,33,10,657,33,10,663,33,10,670,33,10,676,33,10,682,33,10,689,33,7,695,33,10,701,33,10,708,33,10,714,33,10,721,33,10,727,33,10,733,33,10,740,33,10,746,33,10,753,33,10,759,33,10,765,33,10,772,33,10,778,33,10,784,33,10,791,33,10,797,33,10,804,33,10,810,33,10,816,33,10,823,33,10,829,33,10,835,33,10,842,33,10,848,33,10,855,33,10,861,33,10,867,33,10,874,33,10,880,33,10,886,33,10,893,33,10,899,33,10,906,33,10,912,33,10,918,33,10,925,33,10,931,33,10,937,33,10,944,33,10,950,33,10,957,33,10,963,33,10,969,33,10,976,33,10,982,33,10,988,33,10,995,33,10,0,39,3,6,39,4,13,39,8,19,39,10,26,39,10,32,39,10,38,39,10,45,39,10,51,39,10,57,39,10,64,39,10,70,39,10,77,39,10,83,39,10,89,39,10,96,39,10,102,39,10,108,39,10,115,39,10,121,39,10,128,39,10,134,39,10,140,39,10,147,39,10,153,39,10,159,39,10,166,39,10,172,39,10,179,39,10,185,39,10,191,39,10,198,39,10,204,39,10,210,39,10,217,39,7,223,39,2,230,39,6,236,39,7,242,39,1,249,39,1,255,39,3,261,39,2,268,39,7,274,39,10,281,39,9,287,39,9,325,39,1,332,39,9,338,39,10,344,39,10,351,39,10,357,39,9,415,39,6,421,39,7,427,39,7,434,39,3,504,39,2,510,39,9,517,39,10,523,39,10,529,39,10,536,39,8,542,39,3,548,39,8,555,39,10,561,39,10,568,39,10,574,39,10,580,39,8,587,39,8,593,39,9,599,39,10,606,39,10,612,39,10,619,39,10,625,39,10,631,39,10,638,39,10,644,39,10,650,39,10,657,39,10,663,39,10,670,39,10,676,39,10,682,39,10,689,39,10,695,39,10,701,39,10,708,39,10,714,39,10,721,39,10,727,39,10,733,39,10,740,39,10,746,39,10,753,39,10,759,39,10,765,39,10,772,39,10,778,39,10,784,39,10,791,39,10,797,39,10,804,39,10,810,39,10,816,39,10,823,39,10,829,39,10,835,39,10,842,39,10,848,39,10,855,39,10,861,39,10,867,39,10,874,39,10,880,39,10,886,39,10,893,39,10,899,39,10,906,39,10,912,39,10,918,39,10,925,39,10,931,39,10,937,39,10,944,39,10,950,39,10,957,39,10,963,39,10,969,39,10,976,39,10,982,39,10,988,39,10,995,39,8,0,46,8,6,46,10,13,46,10,19,46,10,26,46,10,32,46,10,38,46,10,45,46,10,51,46,10,57,46,10,64,46,10,70,46,10,77,46,10,83,46,10,89,46,10,96,46,10,102,46,10,108,46,10,115,46,10,121,46,10,128,46,10,134,46,10,140,46,10,147,46,10,153,46,10,159,46,10,166,46,10,172,46,10,179,46,10,185,46,10,191,46,10,198,46,10,204,46,10,210,46,2,236,46,2,242,46,1,249,46,1,255,46,7,261,46,7,268,46,4,274,46,1,281,46,3,332,46,1,338,46,9,344,46,10,351,46,10,357,46,1,491,46,2,497,46,9,504,46,10,510,46,10,517,46,10,523,46,10,529,46,4,542,46,8,548,46,10,555,46,10,561,46,10,568,46,10,574,46,10,580,46,10,587,46,10,593,46,10,599,46,10,606,46,10,612,46,10,619,46,10,625,46,10,631,46,10,638,46,10,644,46,10,650,46,10,657,46,10,663,46,10,670,46,10,676,46,10,682,46,10,689,46,10,695,46,10,701,46,10,708,46,10,714,46,10,721,46,10,727,46,10,733,46,10,740,46,10,746,46,10,753,46,10,759,46,10,765,46,10,772,46,10,778,46,10,784,46,10,791,46,10,797,46,10,804,46,10,810,46,10,816,46,10,823,46,10,829,46,10,835,46,10,842,46,10,848,46,10,855,46,10,861,46,10,867,46,10,874,46,10,880,46,10,886,46,10,893,46,10,899,46,10,906,46,10,912,46,10,918,46,10,925,46,10,931,46,9,937,46,7,944,46,10,950,46,6,957,46,10,963,46,10,969,46,10,976,46,10,982,46,7,988,46,4,995,46,3,0,53,3,6,53,7,13,53,10,19,53,10,26,53,10,32,53,9,38,53,4,45,53,7,51,53,1,57,53,3,64,53,3,70,53,7,77,53,10,83,53,10,89,53,10,96,53,10,102,53,10,108,53,10,115,53,10,121,53,10,128,53,10,134,53,10,140,53,10,147,53,10,153,53,10,159,53,10,166,53,10,172,53,10,179,53,10,185,53,10,191,53,10,198,53,10,204,53,4,255,53,8,261,53,10,268,53,10,274,53,10,287,53,1,293,53,3,344,53,1,351,53,3,497,53,10,504,53,10,510,53,9,517,53,10,523,53,10,529,53,8,542,53,3,548,53,7,555,53,7,561,53,8,568,53,10,574,53,10,580,53,10,587,53,10,593,53,10,599,53,10,606,53,10,612,53,10,619,53,10,625,53,10,631,53,10,638,53,10,644,53,10,650,53,10,657,53,10,663,53,10,670,53,10,676,53,10,682,53,10,689,53,10,695,53,10,701,53,10,708,53,10,714,53,10,721,53,10,727,53,10,733,53,10,740,53,10,746,53,10,753,53,10,759,53,10,765,53,10,772,53,10,778,53,10,784,53,10,791,53,10,797,53,10,804,53,10,810,53,10,816,53,10,823,53,10,829,53,10,835,53,10,842,53,10,848,53,10,855,53,10,861,53,10,867,53,10,874,53,10,880,53,10,886,53,10,893,53,10,899,53,10,906,53,10,912,53,8,918,53,9,925,53,9,931,53,1,944,53,3,950,53,8,957,53,6,963,53,4,969,53,4,976,53,1,19,59,2,26,59,8,32,59,6,77,59,1,83,59,3,89,59,6,96,59,10,102,59,10,108,59,10,115,59,10,121,59,10,128,59,10,134,59,10,140,59,10,147,59,10,153,59,10,159,59,10,166,59,10,172,59,10,179,59,10,185,59,10,191,59,10,198,59,10,204,59,10,210,59,2,255,59,7,261,59,10,268,59,10,274,59,10,281,59,8,287,59,9,293,59,10,300,59,1,459,59,1,466,59,7,472,59,2,497,59,3,504,59,2,510,59,3,517,59,10,523,59,10,542,59,2,548,59,7,555,59,10,561,59,10,568,59,10,574,59,10,580,59,10,587,59,10,593,59,10,599,59,10,606,59,10,612,59,10,619,59,10,625,59,10,631,59,10,638,59,10,644,59,10,650,59,10,657,59,10,663,59,10,670,59,10,676,59,10,682,59,10,689,59,10,695,59,10,701,59,10,708,59,10,714,59,10,721,59,10,727,59,10,733,59,10,740,59,10,746,59,10,753,59,10,759,59,10,765,59,10,772,59,10,778,59,10,784,59,10,791,59,10,797,59,10,804,59,10,810,59,10,816,59,10,823,59,10,829,59,10,835,59,10,842,59,10,848,59,10,855,59,10,861,59,10,867,59,10,874,59,10,880,59,10,886,59,4,931,59,1,937,59,6,944,59,10,950,59,3,6,66,2,13,66,3,19,66,4,96,66,6,102,66,10,108,66,10,115,66,10,121,66,10,128,66,10,134,66,10,140,66,10,147,66,10,153,66,10,159,66,10,166,66,10,172,66,10,179,66,10,185,66,10,191,66,10,198,66,10,204,66,10,210,66,10,217,66,10,223,66,7,230,66,2,255,66,6,261,66,10,268,66,10,274,66,10,281,66,10,287,66,10,293,66,10,300,66,8,306,66,1,459,66,1,466,66,9,472,66,3,504,66,7,510,66,2,517,66,7,523,66,3,542,66,10,548,66,10,555,66,10,561,66,10,568,66,10,574,66,10,580,66,10,587,66,10,593,66,10,599,66,10,606,66,10,612,66,10,619,66,10,625,66,10,631,66,10,638,66,10,644,66,10,650,66,10,657,66,10,663,66,10,670,66,10,676,66,10,682,66,10,689,66,10,695,66,10,701,66,10,708,66,10,714,66,10,721,66,10,727,66,10,733,66,10,740,66,10,746,66,10,753,66,10,759,66,10,765,66,10,772,66,10,778,66,10,784,66,10,791,66,10,797,66,10,804,66,10,810,66,10,816,66,10,823,66,10,829,66,10,835,66,10,842,66,10,848,66,10,855,66,10,861,66,10,867,66,10,874,66,7,880,66,1,931,66,8,937,66,10,944,66,10,950,66,2,0,72,1,6,72,1,96,72,4,102,72,6,108,72,10,115,72,10,121,72,10,128,72,10,134,72,10,140,72,10,147,72,10,153,72,10,159,72,10,166,72,10,172,72,10,179,72,10,185,72,10,191,72,10,198,72,10,204,72,10,210,72,10,217,72,10,223,72,10,230,72,10,236,72,10,249,72,4,255,72,10,261,72,10,268,72,10,274,72,10,281,72,10,287,72,10,293,72,10,300,72,10,306,72,10,313,72,7,453,72,6,459,72,8,466,72,3,472,72,10,478,72,3,497,72,3,504,72,8,510,72,7,517,72,6,523,72,6,529,72,9,536,72,9,542,72,10,548,72,10,555,72,10,561,72,10,568,72,10,574,72,10,580,72,10,587,72,10,593,72,10,599,72,10,606,72,10,612,72,10,619,72,10,625,72,10,631,72,10,638,72,10,644,72,10,650,72,10,657,72,10,663,72,10,670,72,10,676,72,10,682,72,10,689,72,10,695,72,10,701,72,10,708,72,10,714,72,10,721,72,10,727,72,10,733,72,10,740,72,10,746,72,10,753,72,10,759,72,10,765,72,10,772,72,10,778,72,10,784,72,10,791,72,10,797,72,10,804,72,10,810,72,10,816,72,10,823,72,10,829,72,10,835,72,10,842,72,10,848,72,10,855,72,10,861,72,10,867,72,10,874,72,8,880,72,6,886,72,3,893,72,2,931,72,7,937,72,10,944,72,6,96,79,1,108,79,8,115,79,10,121,79,10,128,79,10,134,79,10,140,79,10,147,79,10,153,79,10,159,79,10,166,79,10,172,79,10,179,79,10,185,79,10,191,79,10,198,79,10,204,79,10,210,79,10,217,79,10,223,79,10,230,79,10,236,79,10,242,79,7,249,79,4,255,79,10,261,79,10,268,79,10,274,79,10,281,79,10,287,79,10,293,79,10,300,79,10,306,79,10,313,79,9,319,79,2,453,79,6,459,79,2,466,79,7,472,79,10,478,79,10,485,79,1,491,79,7,497,79,10,504,79,10,510,79,10,517,79,10,523,79,10,529,79,10,536,79,10,542,79,10,548,79,10,555,79,10,561,79,10,568,79,10,574,79,10,580,79,10,587,79,10,593,79,10,599,79,10,606,79,10,612,79,10,619,79,10,625,79,10,631,79,10,638,79,10,644,79,10,650,79,10,657,79,10,663,79,10,670,79,10,676,79,10,682,79,10,689,79,10,695,79,10,701,79,10,708,79,10,714,79,10,721,79,10,727,79,10,733,79,10,740,79,10,746,79,10,753,79,10,759,79,10,765,79,10,772,79,10,778,79,10,784,79,10,791,79,10,797,79,10,804,79,10,810,79,10,816,79,10,823,79,10,829,79,10,835,79,10,842,79,10,848,79,10,855,79,10,861,79,10,867,79,10,874,79,10,880,79,10,886,79,6,893,79,7,931,79,4,937,79,3,108,85,3,115,85,9,121,85,9,128,85,10,134,85,10,140,85,10,147,85,10,153,85,10,159,85,10,166,85,10,172,85,10,179,85,10,185,85,10,191,85,10,198,85,10,204,85,10,210,85,10,217,85,10,223,85,10,230,85,10,236,85,10,242,85,10,249,85,10,255,85,10,261,85,10,268,85,10,274,85,10,281,85,9,287,85,4,293,85,4,300,85,4,306,85,2,313,85,7,319,85,4,466,85,2,472,85,2,478,85,3,485,85,9,491,85,10,497,85,10,504,85,10,510,85,10,517,85,10,523,85,10,529,85,10,536,85,10,542,85,10,548,85,10,555,85,10,561,85,10,568,85,10,574,85,10,580,85,10,587,85,10,593,85,10,599,85,10,606,85,10,612,85,10,619,85,10,625,85,10,631,85,10,638,85,10,644,85,10,650,85,10,657,85,10,663,85,10,670,85,10,676,85,10,682,85,10,689,85,10,695,85,10,701,85,10,708,85,10,714,85,10,721,85,10,727,85,10,733,85,10,740,85,10,746,85,10,753,85,10,759,85,10,765,85,10,772,85,10,778,85,10,784,85,10,791,85,10,797,85,10,804,85,10,810,85,10,816,85,10,823,85,10,829,85,10,835,85,10,842,85,10,848,85,10,855,85,10,861,85,10,867,85,10,874,85,10,880,85,10,886,85,3,893,85,9,115,92,1,121,92,7,128,92,10,134,92,10,140,92,10,147,92,10,153,92,10,159,92,10,166,92,10,172,92,10,179,92,10,185,92,10,191,92,10,198,92,10,204,92,10,210,92,10,217,92,10,223,92,10,230,92,10,236,92,10,242,92,10,249,92,10,255,92,10,261,92,10,268,92,10,274,92,8,281,92,8,287,92,10,293,92,1,306,92,2,313,92,7,319,92,8,325,92,3,466,92,4,472,92,9,478,92,10,485,92,10,491,92,10,497,92,10,504,92,10,510,92,10,517,92,10,523,92,10,529,92,10,536,92,10,542,92,10,548,92,10,555,92,10,561,92,10,568,92,10,574,92,10,580,92,10,587,92,10,593,92,10,599,92,10,606,92,10,612,92,10,619,92,10,625,92,10,631,92,10,638,92,10,644,92,10,650,92,10,657,92,10,663,92,10,670,92,10,676,92,10,682,92,10,689,92,10,695,92,10,701,92,10,708,92,10,714,92,10,721,92,10,727,92,10,733,92,10,740,92,10,746,92,10,753,92,10,759,92,10,765,92,10,772,92,10,778,92,10,784,92,10,791,92,10,797,92,10,804,92,10,810,92,10,816,92,10,823,92,10,829,92,10,835,92,10,842,92,10,848,92,10,855,92,10,861,92,10,867,92,10,874,92,10,880,92,9,886,92,1,893,92,4,121,99,9,128,99,10,134,99,10,140,99,10,147,99,10,153,99,10,159,99,10,166,99,10,172,99,10,179,99,10,185,99,10,191,99,10,198,99,10,204,99,10,210,99,10,217,99,10,223,99,10,230,99,10,236,99,10,242,99,10,249,99,10,255,99,10,261,99,10,268,99,10,274,99,10,281,99,10,287,99,10,293,99,6,300,99,3,306,99,1,325,99,1,472,99,1,478,99,10,485,99,10,491,99,10,497,99,10,504,99,10,510,99,10,517,99,8,523,99,10,529,99,10,536,99,10,542,99,10,548,99,10,555,99,10,561,99,10,568,99,3,574,99,7,580,99,8,587,99,4,593,99,10,599,99,10,606,99,10,612,99,10,619,99,6,625,99,1,631,99,4,638,99,10,644,99,10,650,99,10,657,99,10,663,99,10,670,99,10,676,99,10,682,99,10,689,99,10,695,99,10,701,99,10,708,99,10,714,99,10,721,99,10,727,99,10,733,99,10,740,99,10,746,99,10,753,99,10,759,99,10,765,99,10,772,99,10,778,99,10,784,99,10,791,99,10,797,99,10,804,99,10,810,99,10,816,99,10,823,99,10,829,99,10,835,99,10,842,99,10,848,99,10,855,99,10,861,99,10,867,99,10,874,99,9,880,99,1,893,99,2,121,105,10,128,105,10,134,105,10,140,105,10,147,105,10,153,105,10,159,105,10,166,105,10,172,105,10,179,105,10,185,105,10,191,105,10,198,105,10,204,105,10,210,105,10,217,105,10,223,105,10,230,105,10,236,105,10,242,105,10,249,105,10,255,105,10,261,105,10,268,105,10,274,105,8,281,105,3,287,105,3,293,105,2,453,105,2,459,105,3,466,105,3,472,105,3,478,105,10,485,105,10,491,105,9,497,105,9,504,105,4,510,105,9,517,105,3,523,105,3,529,105,10,536,105,10,542,105,10,548,105,10,555,105,10,561,105,6,574,105,1,580,105,1,587,105,1,593,105,7,599,105,10,606,105,10,612,105,9,625,105,3,631,105,10,638,105,10,644,105,10,650,105,10,657,105,10,663,105,10,670,105,10,676,105,10,682,105,10,689,105,10,695,105,10,701,105,10,708,105,10,714,105,10,721,105,10,727,105,10,733,105,10,740,105,10,746,105,10,753,105,10,759,105,10,765,105,10,772,105,10,778,105,10,784,105,10,791,105,10,797,105,10,804,105,10,810,105,10,816,105,10,823,105,10,829,105,10,835,105,10,842,105,10,848,105,10,855,105,10,861,105,10,867,105,9,874,105,1,886,105,3,893,105,8,899,105,4,121,112,10,128,112,10,134,112,10,140,112,10,147,112,10,153,112,10,159,112,10,166,112,10,172,112,10,179,112,10,185,112,10,191,112,10,198,112,10,204,112,10,210,112,10,217,112,10,223,112,10,230,112,10,236,112,10,242,112,10,249,112,10,255,112,10,261,112,10,268,112,10,274,112,2,453,112,7,459,112,10,466,112,10,472,112,10,478,112,10,485,112,9,504,112,1,510,112,3,517,112,9,523,112,4,529,112,1,536,112,8,542,112,10,548,112,10,555,112,10,561,112,3,574,112,4,580,112,6,587,112,1,599,112,7,606,112,10,612,112,10,619,112,6,631,112,4,638,112,9,644,112,10,650,112,10,657,112,10,663,112,10,670,112,10,676,112,10,682,112,10,689,112,10,695,112,10,701,112,10,708,112,10,714,112,10,721,112,10,727,112,10,733,112,10,740,112,10,746,112,10,753,112,10,759,112,10,765,112,10,772,112,10,778,112,10,784,112,10,791,112,10,797,112,10,804,112,10,810,112,10,816,112,10,823,112,10,829,112,10,835,112,10,842,112,10,848,112,10,855,112,7,886,112,6,893,112,3,121,118,9,128,118,10,134,118,10,140,118,10,147,118,10,153,118,10,159,118,10,166,118,10,172,118,10,179,118,10,185,118,10,191,118,10,198,118,10,204,118,10,210,118,10,217,118,10,223,118,10,230,118,10,236,118,10,242,118,10,249,118,10,255,118,10,261,118,8,268,118,1,453,118,7,459,118,10,466,118,10,472,118,10,478,118,6,504,118,7,523,118,6,529,118,4,536,118,4,542,118,9,548,118,2,555,118,6,561,118,8,568,118,10,574,118,10,580,118,10,587,118,10,593,118,10,599,118,10,606,118,10,612,118,10,619,118,10,631,118,3,638,118,10,644,118,10,650,118,10,657,118,10,663,118,10,670,118,10,676,118,10,682,118,10,689,118,10,695,118,10,701,118,10,708,118,10,714,118,10,721,118,10,727,118,10,733,118,10,740,118,10,746,118,10,753,118,10,759,118,10,765,118,10,772,118,10,778,118,10,784,118,10,791,118,10,797,118,10,804,118,10,810,118,10,816,118,10,823,118,9,829,118,3,835,118,7,842,118,9,848,118,7,855,118,1,886,118,10,121,125,3,128,125,10,134,125,10,140,125,10,147,125,10,153,125,10,159,125,10,166,125,10,172,125,10,179,125,10,185,125,10,191,125,10,198,125,10,204,125,10,210,125,10,217,125,10,223,125,10,230,125,10,236,125,10,242,125,10,249,125,10,255,125,8,261,125,2,453,125,6,459,125,10,466,125,10,472,125,9,478,125,3,504,125,1,517,125,3,523,125,4,542,125,9,548,125,1,555,125,2,561,125,10,568,125,10,574,125,10,580,125,10,587,125,10,593,125,10,599,125,10,606,125,10,612,125,10,619,125,8,625,125,1,638,125,10,644,125,10,650,125,10,657,125,10,663,125,10,670,125,10,676,125,10,682,125,10,689,125,10,695,125,10,701,125,10,708,125,10,714,125,10,721,125,10,727,125,10,733,125,10,740,125,10,746,125,10,753,125,10,759,125,10,765,125,10,772,125,10,778,125,10,784,125,10,791,125,10,797,125,10,804,125,10,810,125,10,816,125,10,823,125,3,829,125,3,842,125,4,848,125,9,855,125,1,880,125,3,886,125,7,128,131,7,134,131,10,140,131,10,147,131,10,153,131,10,159,131,10,166,131,10,172,131,10,179,131,10,185,131,10,191,131,10,198,131,10,204,131,10,210,131,10,217,131,10,223,131,10,230,131,10,236,131,10,242,131,10,249,131,10,255,131,10,459,131,2,466,131,7,472,131,2,478,131,4,485,131,9,491,131,10,497,131,10,504,131,10,510,131,3,542,131,1,548,131,2,555,131,1,561,131,2,568,131,2,574,131,6,580,131,4,587,131,10,593,131,10,599,131,10,606,131,10,612,131,10,619,131,10,625,131,10,631,131,10,638,131,10,644,131,10,650,131,10,657,131,10,663,131,10,670,131,10,676,131,10,682,131,10,689,131,10,695,131,10,701,131,10,708,131,10,714,131,10,721,131,10,727,131,10,733,131,10,740,131,10,746,131,10,753,131,10,759,131,10,765,131,10,772,131,10,778,131,10,784,131,10,791,131,10,797,131,10,804,131,10,810,131,10,816,131,10,823,131,9,829,131,3,848,131,10,855,131,3,861,131,1,867,131,3,874,131,8,880,131,10,886,131,3,128,138,1,134,138,4,140,138,10,147,138,10,153,138,10,159,138,10,166,138,10,172,138,10,179,138,10,185,138,10,191,138,10,198,138,10,204,138,10,210,138,10,217,138,10,223,138,10,230,138,10,236,138,10,242,138,10,249,138,9,255,138,2,453,138,1,459,138,7,466,138,10,472,138,10,478,138,10,485,138,10,491,138,10,497,138,10,504,138,10,510,138,3,574,138,1,580,138,2,587,138,10,593,138,10,599,138,10,606,138,10,612,138,10,619,138,10,625,138,10,631,138,10,638,138,10,644,138,10,650,138,10,657,138,10,663,138,10,670,138,10,676,138,10,682,138,10,689,138,10,695,138,10,701,138,10,708,138,10,714,138,10,721,138,10,727,138,10,733,138,10,740,138,10,746,138,10,753,138,10,759,138,10,765,138,10,772,138,10,778,138,10,784,138,10,791,138,10,797,138,10,804,138,10,810,138,10,816,138,10,823,138,10,829,138,2,848,138,2,855,138,2,861,138,7,867,138,6,874,138,6,880,138,2,140,144,6,147,144,8,153,144,10,159,144,10,166,144,10,172,144,10,179,144,10,185,144,10,191,144,10,198,144,10,204,144,10,210,144,10,217,144,10,223,144,10,230,144,10,236,144,10,242,144,8,453,144,8,459,144,10,466,144,10,472,144,10,478,144,10,485,144,10,491,144,10,497,144,10,504,144,10,510,144,10,517,144,10,523,144,3,536,144,2,542,144,9,548,144,4,555,144,3,568,144,3,580,144,8,587,144,10,593,144,10,599,144,10,606,144,10,612,144,10,619,144,10,625,144,10,631,144,10,638,144,10,644,144,10,650,144,10,657,144,10,663,144,10,670,144,10,676,144,10,682,144,10,689,144,10,695,144,10,701,144,10,708,144,10,714,144,10,721,144,10,727,144,10,733,144,10,740,144,10,746,144,10,753,144,10,759,144,10,765,144,10,772,144,10,778,144,10,784,144,10,791,144,10,797,144,10,804,144,10,810,144,10,816,144,10,823,144,10,829,144,8,855,144,4,861,144,2,140,151,1,147,151,3,153,151,8,159,151,10,166,151,10,172,151,10,179,151,10,185,151,10,191,151,10,198,151,10,204,151,8,210,151,7,217,151,9,223,151,3,230,151,4,236,151,8,242,151,6,453,151,10,459,151,10,466,151,10,472,151,10,478,151,10,485,151,10,491,151,10,497,151,10,504,151,10,510,151,10,517,151,10,523,151,10,529,151,9,536,151,9,542,151,10,548,151,10,555,151,10,561,151,10,568,151,10,574,151,10,580,151,10,587,151,10,593,151,10,599,151,10,606,151,10,612,151,10,619,151,7,625,151,8,631,151,10,638,151,10,644,151,10,650,151,10,657,151,10,663,151,10,670,151,10,676,151,10,682,151,10,689,151,10,695,151,10,701,151,10,708,151,10,714,151,10,721,151,10,727,151,10,733,151,10,740,151,10,746,151,10,753,151,10,759,151,10,765,151,10,772,151,10,778,151,10,784,151,10,791,151,10,797,151,10,804,151,10,810,151,10,816,151,10,823,151,10,829,151,9,147,158,4,153,158,3,159,158,9,166,158,10,172,158,10,179,158,10,185,158,10,191,158,10,198,158,6,242,158,10,440,158,3,446,158,9,453,158,10,459,158,10,466,158,10,472,158,10,478,158,10,485,158,10,491,158,10,497,158,10,504,158,10,510,158,10,517,158,10,523,158,10,529,158,10,536,158,10,542,158,10,548,158,10,555,158,10,561,158,10,568,158,10,574,158,8,580,158,7,587,158,10,593,158,10,599,158,10,606,158,10,612,158,10,619,158,7,625,158,1,631,158,8,638,158,10,644,158,10,650,158,10,657,158,10,663,158,10,670,158,10,676,158,10,682,158,10,689,158,10,695,158,10,701,158,10,708,158,10,714,158,10,721,158,10,727,158,10,733,158,10,740,158,10,746,158,10,753,158,10,759,158,10,765,158,10,772,158,10,778,158,10,784,158,10,791,158,10,797,158,10,804,158,10,810,158,10,816,158,10,823,158,10,829,158,7,153,164,6,159,164,2,166,164,10,172,164,10,179,164,10,185,164,10,191,164,10,198,164,3,242,164,7,249,164,1,434,164,1,440,164,9,446,164,10,453,164,10,459,164,10,466,164,10,472,164,10,478,164,10,485,164,10,491,164,10,497,164,10,504,164,10,510,164,10,517,164,10,523,164,10,529,164,10,536,164,10,542,164,10,548,164,10,555,164,10,561,164,10,568,164,10,574,164,10,580,164,1,587,164,9,593,164,10,599,164,10,606,164,10,612,164,10,619,164,10,625,164,6,638,164,3,644,164,3,650,164,8,657,164,10,663,164,10,670,164,9,676,164,10,682,164,10,689,164,10,695,164,10,701,164,10,708,164,10,714,164,10,721,164,10,727,164,10,733,164,10,740,164,10,746,164,10,753,164,10,759,164,10,765,164,10,772,164,10,778,164,10,784,164,10,791,164,10,797,164,10,804,164,10,810,164,10,816,164,10,823,164,9,153,171,1,159,171,4,166,171,3,172,171,10,179,171,10,185,171,10,191,171,10,255,171,2,434,171,7,440,171,10,446,171,10,453,171,10,459,171,10,466,171,10,472,171,10,478,171,10,485,171,10,491,171,10,497,171,10,504,171,10,510,171,10,517,171,10,523,171,10,529,171,10,536,171,10,542,171,10,548,171,10,555,171,10,561,171,10,568,171,10,574,171,10,580,171,6,587,171,3,593,171,10,599,171,10,606,171,10,612,171,10,619,171,10,625,171,10,631,171,7,638,171,9,644,171,7,650,171,1,676,171,8,682,171,10,689,171,10,695,171,10,701,171,10,708,171,10,714,171,10,721,171,10,727,171,10,733,171,10,740,171,10,746,171,10,753,171,10,759,171,10,765,171,10,772,171,10,778,171,10,784,171,10,791,171,10,797,171,10,804,171,10,810,171,10,816,171,9,823,171,1,829,171,6,19,177,1,172,177,6,179,177,10,185,177,10,191,177,10,198,177,1,223,177,3,236,177,3,242,177,3,249,177,6,255,177,3,427,177,1,434,177,10,440,177,10,446,177,10,453,177,10,459,177,10,466,177,10,472,177,10,478,177,10,485,177,10,491,177,10,497,177,10,504,177,10,510,177,10,517,177,10,523,177,10,529,177,10,536,177,10,542,177,10,548,177,10,555,177,10,561,177,10,568,177,10,574,177,10,580,177,10,587,177,2,593,177,7,599,177,10,606,177,10,612,177,10,619,177,10,625,177,10,631,177,10,638,177,10,644,177,10,650,177,6,682,177,9,689,177,9,695,177,10,701,177,10,708,177,10,714,177,10,721,177,10,727,177,10,733,177,7,740,177,4,746,177,8,753,177,10,759,177,10,765,177,10,772,177,10,778,177,10,784,177,10,791,177,8,797,177,9,804,177,7,810,177,2,829,177,1,26,184,3,172,184,3,179,184,10,185,184,10,191,184,10,198,184,6,217,184,7,223,184,8,255,184,4,261,184,3,268,184,2,274,184,2,434,184,10,440,184,10,446,184,10,453,184,10,459,184,10,466,184,10,472,184,10,478,184,10,485,184,10,491,184,10,497,184,10,504,184,10,510,184,10,517,184,10,523,184,10,529,184,10,536,184,10,542,184,10,548,184,10,555,184,10,561,184,10,568,184,10,574,184,10,580,184,10,587,184,3,593,184,2,599,184,10,606,184,10,612,184,10,619,184,10,625,184,10,631,184,10,638,184,10,644,184,8,689,184,3,695,184,10,701,184,10,708,184,10,714,184,10,721,184,10,727,184,6,746,184,3,753,184,10,759,184,10,765,184,10,772,184,10,778,184,10,784,184,8,797,184,6,179,190,2,185,190,8,191,190,10,198,190,10,204,190,8,210,190,8,217,190,10,223,190,4,255,190,2,268,190,1,274,190,3,281,190,1,287,190,2,434,190,10,440,190,10,446,190,10,453,190,10,459,190,10,466,190,10,472,190,10,478,190,10,485,190,10,491,190,10,497,190,10,504,190,10,510,190,10,517,190,10,523,190,10,529,190,10,536,190,10,542,190,10,548,190,10,555,190,10,561,190,10,568,190,10,574,190,10,580,190,10,587,190,9,599,190,6,606,190,10,612,190,10,619,190,10,625,190,10,631,190,10,638,190,9,644,190,1,689,190,3,695,190,10,701,190,10,708,190,10,714,190,10,721,190,3,753,190,7,759,190,10,765,190,10,772,190,10,778,190,10,784,190,9,797,190,2,829,190,4,191,197,2,198,197,7,204,197,4,210,197,9,217,197,10,223,197,4,230,197,3,236,197,2,427,197,1,434,197,10,440,197,10,446,197,10,453,197,10,459,197,10,466,197,10,472,197,10,478,197,10,485,197,10,491,197,10,497,197,10,504,197,10,510,197,10,517,197,10,523,197,10,529,197,10,536,197,10,542,197,10,548,197,10,555,197,10,561,197,10,568,197,10,574,197,10,580,197,10,587,197,10,593,197,4,606,197,10,612,197,10,619,197,10,625,197,10,631,197,3,695,197,10,701,197,10,708,197,10,714,197,4,753,197,4,759,197,3,765,197,10,772,197,10,778,197,10,784,197,10,791,197,7,829,197,8,210,204,1,217,204,7,223,204,10,230,204,10,236,204,7,427,204,2,434,204,10,440,204,10,446,204,10,453,204,10,459,204,10,466,204,10,472,204,10,478,204,10,485,204,10,491,204,10,497,204,10,504,204,10,510,204,10,517,204,10,523,204,10,529,204,10,536,204,10,542,204,10,548,204,10,555,204,10,561,204,10,568,204,10,574,204,10,580,204,10,587,204,10,593,204,10,599,204,3,606,204,10,612,204,8,619,204,6,695,204,7,701,204,10,708,204,10,765,204,9,772,204,9,778,204,10,784,204,10,791,204,10,797,204,1,829,204,4,835,204,3,223,210,1,230,210,9,236,210,4,268,210,2,274,210,1,281,210,1,434,210,9,440,210,10,446,210,10,453,210,10,459,210,10,466,210,10,472,210,10,478,210,10,485,210,10,491,210,10,497,210,10,504,210,10,510,210,10,517,210,10,523,210,10,529,210,10,536,210,10,542,210,10,548,210,10,555,210,10,561,210,10,568,210,10,574,210,10,580,210,10,587,210,10,593,210,10,599,210,10,606,210,3,619,210,2,625,210,2,695,210,2,701,210,10,708,210,8,765,210,6,772,210,2,778,210,8,784,210,10,791,210,10,797,210,1,829,210,1,835,210,2,842,210,3,230,217,2,236,217,7,249,217,2,261,217,9,268,217,9,274,217,10,281,217,8,287,217,7,293,217,9,300,217,6,434,217,1,440,217,9,446,217,10,453,217,10,459,217,10,466,217,10,472,217,10,478,217,10,485,217,10,491,217,10,497,217,10,504,217,10,510,217,10,517,217,10,523,217,10,529,217,10,536,217,10,542,217,10,548,217,10,555,217,10,561,217,10,568,217,10,574,217,10,580,217,10,587,217,10,593,217,10,599,217,10,606,217,8,612,217,10,619,217,10,625,217,6,701,217,9,708,217,4,714,217,1,765,217,3,778,217,1,784,217,8,791,217,1,823,217,3,835,217,6,842,217,1,236,223,2,242,223,7,249,223,2,255,223,9,261,223,10,268,223,10,274,223,10,281,223,10,287,223,10,293,223,10,300,223,10,306,223,6,440,223,4,446,223,10,453,223,10,459,223,10,466,223,10,472,223,10,478,223,10,485,223,10,491,223,10,497,223,10,504,223,10,510,223,10,517,223,10,523,223,10,529,223,10,536,223,10,542,223,10,548,223,10,555,223,10,561,223,10,568,223,10,574,223,10,580,223,10,587,223,10,593,223,10,599,223,10,606,223,10,612,223,10,619,223,10,625,223,2,701,223,2,708,223,3,714,223,6,765,223,7,772,223,1,835,223,4,842,223,10,255,230,7,261,230,10,268,230,10,274,230,10,281,230,10,287,230,10,293,230,10,300,230,10,306,230,10,313,230,7,319,230,4,325,230,2,446,230,3,453,230,10,459,230,10,466,230,10,472,230,10,478,230,8,485,230,3,491,230,4,497,230,10,504,230,10,510,230,10,517,230,10,523,230,10,529,230,10,536,230,10,542,230,10,548,230,10,555,230,10,561,230,10,568,230,10,574,230,10,580,230,10,587,230,10,593,230,10,599,230,10,606,230,10,612,230,10,619,230,8,708,230,1,714,230,2,753,230,1,759,230,1,772,230,9,778,230,1,816,230,8,823,230,2,842,230,6,255,236,7,261,236,10,268,236,10,274,236,10,281,236,10,287,236,10,293,236,10,300,236,10,306,236,10,313,236,10,319,236,10,325,236,10,332,236,2,453,236,1,459,236,1,497,236,3,504,236,4,510,236,10,517,236,10,523,236,10,529,236,10,536,236,10,542,236,10,548,236,10,555,236,10,561,236,10,568,236,10,574,236,10,580,236,10,587,236,10,593,236,10,599,236,10,606,236,10,612,236,10,619,236,1,759,236,7,765,236,3,772,236,6,778,236,4,810,236,8,816,236,10,823,236,1,249,243,2,255,243,10,261,243,10,268,243,10,274,243,10,281,243,10,287,243,10,293,243,10,300,243,10,306,243,10,313,243,10,319,243,10,325,243,10,332,243,6,504,243,1,510,243,10,517,243,10,523,243,10,529,243,10,536,243,10,542,243,10,548,243,10,555,243,10,561,243,10,568,243,10,574,243,10,580,243,10,587,243,10,593,243,10,599,243,10,606,243,9,612,243,3,765,243,8,772,243,7,778,243,7,797,243,3,804,243,10,810,243,10,816,243,10,823,243,1,842,243,1,848,243,2,249,250,10,255,250,10,261,250,10,268,250,10,274,250,10,281,250,10,287,250,10,293,250,10,300,250,10,306,250,10,313,250,10,319,250,10,325,250,10,332,250,8,338,250,2,504,250,3,510,250,10,517,250,10,523,250,10,529,250,10,536,250,10,542,250,10,548,250,10,555,250,10,561,250,10,568,250,10,574,250,10,580,250,10,587,250,10,593,250,10,599,250,9,606,250,1,765,250,2,772,250,10,778,250,6,797,250,10,804,250,10,810,250,10,816,250,10,829,250,3,835,250,4,848,250,2,861,250,2,867,250,1,242,256,2,249,256,9,255,256,10,261,256,10,268,256,10,274,256,10,281,256,10,287,256,10,293,256,10,300,256,10,306,256,10,313,256,10,319,256,10,325,256,10,332,256,10,338,256,10,344,256,9,351,256,4,357,256,1,504,256,2,510,256,10,517,256,10,523,256,10,529,256,10,536,256,10,542,256,10,548,256,10,555,256,10,561,256,10,568,256,10,574,256,10,580,256,10,587,256,10,593,256,9,599,256,2,772,256,6,778,256,10,784,256,2,797,256,4,804,256,10,810,256,10,816,256,4,823,256,3,829,256,8,835,256,1,861,256,6,867,256,6,874,256,3,880,256,6,886,256,2,918,256,1,242,263,2,249,263,10,255,263,10,261,263,10,268,263,10,274,263,10,281,263,10,287,263,10,293,263,10,300,263,10,306,263,10,313,263,10,319,263,10,325,263,10,332,263,10,338,263,10,344,263,10,351,263,10,357,263,10,364,263,9,370,263,2,510,263,4,517,263,10,523,263,10,529,263,10,536,263,10,542,263,10,548,263,10,555,263,10,561,263,10,568,263,10,574,263,10,580,263,10,587,263,10,593,263,6,772,263,1,778,263,9,784,263,7,804,263,1,810,263,4,816,263,1,823,263,1,829,263,8,835,263,1,842,263,1,848,263,2,855,263,3,867,263,4,874,263,9,880,263,10,886,263,10,893,263,8,899,263,3,918,263,3,242,269,2,249,269,10,255,269,10,261,269,10,268,269,10,274,269,10,281,269,10,287,269,10,293,269,10,300,269,10,306,269,10,313,269,10,319,269,10,325,269,10,332,269,10,338,269,10,344,269,10,351,269,10,357,269,10,364,269,10,370,269,10,376,269,6,517,269,9,523,269,10,529,269,10,536,269,10,542,269,10,548,269,10,555,269,10,561,269,10,568,269,10,574,269,10,580,269,10,587,269,10,593,269,2,784,269,6,791,269,4,797,269,1,804,269,1,823,269,1,829,269,1,835,269,1,867,269,2,880,269,8,886,269,10,893,269,10,899,269,10,906,269,4,912,269,3,918,269,2,925,269,1,931,269,1,249,276,6,255,276,10,261,276,10,268,276,10,274,276,10,281,276,10,287,276,10,293,276,10,300,276,10,306,276,10,313,276,10,319,276,10,325,276,10,332,276,10,338,276,10,344,276,10,351,276,10,357,276,10,364,276,10,370,276,10,376,276,7,517,276,7,523,276,10,529,276,10,536,276,10,542,276,10,548,276,10,555,276,10,561,276,10,568,276,10,574,276,10,580,276,10,587,276,10,593,276,3,791,276,3,797,276,4,804,276,6,810,276,3,816,276,1,823,276,2,829,276,3,835,276,1,842,276,2,848,276,1,880,276,4,886,276,9,893,276,9,899,276,4,906,276,7,937,276,1,249,282,1,255,282,10,261,282,10,268,282,10,274,282,10,281,282,10,287,282,10,293,282,10,300,282,10,306,282,10,313,282,10,319,282,10,325,282,10,332,282,10,338,282,10,344,282,10,351,282,10,357,282,10,364,282,10,370,282,10,376,282,1,517,282,4,523,282,10,529,282,10,536,282,10,542,282,10,548,282,10,555,282,10,561,282,10,568,282,10,574,282,10,580,282,10,587,282,10,593,282,8,829,282,1,835,282,1,842,282,1,906,282,3,912,282,3,944,282,2,950,282,1,255,289,6,261,289,10,268,289,10,274,289,10,281,289,10,287,289,10,293,289,10,300,289,10,306,289,10,313,289,10,319,289,10,325,289,10,332,289,10,338,289,10,344,289,10,351,289,10,357,289,10,364,289,10,370,289,4,517,289,4,523,289,10,529,289,10,536,289,10,542,289,10,548,289,10,555,289,10,561,289,10,568,289,10,574,289,10,580,289,10,587,289,10,593,289,10,619,289,1,855,289,1,861,289,7,867,289,6,874,289,3,893,289,6,255,295,2,261,295,10,268,295,10,274,295,10,281,295,10,287,295,10,293,295,10,300,295,10,306,295,10,313,295,10,319,295,10,325,295,10,332,295,10,338,295,10,344,295,10,351,295,10,357,295,10,364,295,8,517,295,9,523,295,10,529,295,10,536,295,10,542,295,10,548,295,10,555,295,10,561,295,10,568,295,10,574,295,10,580,295,10,587,295,10,593,295,10,619,295,7,625,295,3,842,295,2,848,295,3,855,295,6,861,295,10,867,295,10,874,295,2,893,295,8,899,295,1,261,302,2,268,302,9,274,302,10,281,302,10,287,302,10,293,302,10,300,302,10,306,302,10,313,302,10,319,302,10,325,302,10,332,302,10,338,302,10,344,302,10,351,302,10,357,302,10,364,302,7,510,302,1,517,302,10,523,302,10,529,302,10,536,302,10,542,302,10,548,302,10,555,302,10,561,302,10,568,302,10,574,302,10,580,302,10,587,302,10,593,302,7,606,302,1,612,302,8,619,302,10,625,302,1,835,302,1,842,302,10,848,302,10,855,302,10,861,302,10,867,302,10,874,302,8,880,302,1,886,302,2,893,302,10,899,302,7,995,302,1,274,309,7,281,309,10,287,309,10,293,309,10,300,309,10,306,309,10,313,309,10,319,309,10,325,309,10,332,309,10,338,309,10,344,309,10,351,309,10,357,309,10,364,309,6,517,309,10,523,309,10,529,309,10,536,309,10,542,309,10,548,309,10,555,309,10,561,309,10,568,309,10,574,309,10,580,309,10,587,309,3,606,309,3,612,309,10,619,309,10,829,309,1,835,309,10,842,309,10,848,309,10,855,309,10,861,309,10,867,309,10,874,309,10,880,309,9,886,309,8,893,309,10,899,309,10,995,309,2,274,315,3,281,315,10,287,315,10,293,315,10,300,315,10,306,315,10,313,315,10,319,315,10,325,315,10,332,315,10,338,315,10,344,315,10,351,315,10,357,315,10,364,315,2,517,315,6,523,315,10,529,315,10,536,315,10,542,315,10,548,315,10,555,315,10,561,315,10,568,315,10,574,315,10,580,315,4,606,315,3,612,315,10,619,315,7,823,315,4,829,315,8,835,315,10,842,315,10,848,315,10,855,315,10,861,315,10,867,315,10,874,315,10,880,315,10,886,315,10,893,315,10,899,315,10,906,315,8,957,315,1,274,322,3,281,322,10,287,322,10,293,322,10,300,322,10,306,322,10,313,322,10,319,322,10,325,322,10,332,322,10,338,322,10,344,322,10,351,322,10,357,322,8,517,322,1,523,322,10,529,322,10,536,322,10,542,322,10,548,322,10,555,322,10,561,322,10,568,322,10,574,322,10,580,322,7,606,322,7,612,322,10,619,322,3,810,322,3,816,322,10,823,322,10,829,322,10,835,322,10,842,322,10,848,322,10,855,322,10,861,322,10,867,322,10,874,322,10,880,322,10,886,322,10,893,322,10,899,322,10,906,322,10,912,322,6,957,322,1,963,322,1,274,328,6,281,328,10,287,328,10,293,328,10,300,328,10,306,328,10,313,328,10,319,328,10,325,328,10,332,328,10,338,328,10,344,328,6,351,328,1,523,328,10,529,328,10,536,328,10,542,328,10,548,328,10,555,328,10,561,328,10,568,328,10,574,328,10,580,328,6,606,328,7,612,328,10,619,328,1,810,328,9,816,328,10,823,328,10,829,328,10,835,328,10,842,328,10,848,328,10,855,328,10,861,328,10,867,328,10,874,328,10,880,328,10,886,328,10,893,328,10,899,328,10,906,328,10,912,328,10,918,328,3,274,335,7,281,335,10,287,335,10,293,335,10,300,335,10,306,335,10,313,335,10,319,335,10,325,335,10,332,335,10,338,335,4,523,335,7,529,335,10,536,335,10,542,335,10,548,335,10,555,335,10,561,335,10,568,335,10,574,335,4,612,335,1,810,335,9,816,335,10,823,335,10,829,335,10,835,335,10,842,335,10,848,335,10,855,335,10,861,335,10,867,335,10,874,335,10,880,335,10,886,335,10,893,335,10,899,335,10,906,335,10,912,335,10,918,335,10,274,341,8,281,341,10,287,341,10,293,341,10,300,341,10,306,341,10,313,341,10,319,341,10,325,341,10,332,341,10,338,341,3,523,341,3,529,341,10,536,341,10,542,341,10,548,341,10,555,341,10,561,341,10,568,341,10,574,341,2,810,341,6,816,341,10,823,341,10,829,341,10,835,341,10,842,341,10,848,341,10,855,341,10,861,341,10,867,341,10,874,341,10,880,341,10,886,341,10,893,341,10,899,341,10,906,341,10,912,341,10,918,341,10,925,341,2,274,348,10,281,348,10,287,348,10,293,348,10,300,348,10,306,348,10,313,348,10,319,348,10,325,348,10,332,348,8,529,348,8,536,348,10,542,348,10,548,348,10,555,348,10,561,348,10,568,348,6,810,348,2,816,348,10,823,348,10,829,348,10,835,348,10,842,348,10,848,348,10,855,348,10,861,348,10,867,348,10,874,348,10,880,348,10,886,348,10,893,348,10,899,348,10,906,348,10,912,348,10,918,348,10,925,348,1,274,355,10,281,355,10,287,355,10,293,355,10,300,355,10,306,355,10,313,355,10,319,355,10,325,355,9,332,355,1,529,355,3,536,355,10,542,355,10,548,355,10,555,355,10,561,355,7,816,355,10,823,355,10,829,355,10,835,355,10,842,355,8,848,355,6,855,355,3,861,355,4,867,355,8,874,355,10,880,355,10,886,355,10,893,355,10,899,355,10,906,355,10,912,355,10,918,355,9,268,361,2,274,361,10,281,361,10,287,361,10,293,361,10,300,361,10,306,361,10,313,361,8,319,361,9,325,361,2,529,361,2,536,361,8,542,361,6,548,361,3,555,361,3,810,361,1,816,361,9,823,361,8,829,361,3,835,361,3,867,361,1,874,361,7,880,361,10,886,361,10,893,361,10,899,361,10,906,361,10,912,361,10,918,361,2,982,361,1,268,368,6,274,368,10,281,368,10,287,368,10,293,368,10,300,368,10,306,368,10,313,368,4,880,368,2,886,368,10,893,368,10,899,368,10,906,368,10,912,368,8,982,368,4,268,374,10,274,374,10,281,374,10,287,374,10,293,374,10,300,374,10,306,374,9,313,374,3,886,374,6,893,374,8,899,374,8,906,374,7,912,374,2,988,374,8,995,374,4,268,381,9,274,381,10,281,381,10,287,381,10,293,381,10,300,381,3,982,381,1,988,381,9,261,387,1,268,387,9,274,387,10,281,387,10,287,387,10,293,387,2,899,387,4,906,387,9,976,387,6,982,387,6,988,387,1,261,394,1,268,394,8,274,394,10,281,394,10,287,394,9,899,394,1,906,394,1,963,394,1,969,394,7,976,394,7,261,401,7,268,401,10,274,401,10,281,401,10,963,401,4,969,401,7,976,401,1,261,407,7,268,407,10,274,407,10,281,407,10,287,407,4,676,407,1,261,414,8,268,414,10,274,414,10,281,414,4,676,414,1,682,414,2,261,420,6,268,420,10,274,420,10,281,420,2,300,420,1,306,420,6,268,427,7,274,427,9,281,427,9,287,427,3];
+  var MAP_W = 1000, MAP_H = 430;
+
+  var host = document.getElementById('worldmap3d');
+  if (!host || typeof THREE === 'undefined') return;
+
+  var renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setClearColor(0x000000, 0);
+  host.appendChild(renderer.domElement);
+  renderer.domElement.style.width = '100%';
+  renderer.domElement.style.height = '100%';
+  renderer.domElement.style.display = 'block';
+
+  var scene = new THREE.Scene();
+  var camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, -100, 100);
+  camera.position.z = 10;
+
+  var count = FLAT.length / 3;
+  var pos = new Float32Array(count * 3);
+  var alpha = new Float32Array(count);
+  var seed = new Float32Array(count);
+
+  for (var i = 0; i < count; i++) {
+    var x = FLAT[i * 3];
+    var y = FLAT[i * 3 + 1];
+    var a = FLAT[i * 3 + 2] / 10;
+
+    // normalize into a -0.5..0.5 box, preserving map aspect
+    var nx = (x / MAP_W) - 0.5;
+    var ny = 0.5 - (y / MAP_H);
+
+    pos[i * 3] = nx;
+    pos[i * 3 + 1] = ny * (MAP_H / MAP_W);
+    pos[i * 3 + 2] = 0;
+    alpha[i] = a;
+    seed[i] = Math.random() * 6.283;
+  }
+
+  var geo = new THREE.BufferGeometry();
+  geo.addAttribute
+    ? geo.addAttribute('position', new THREE.BufferAttribute(pos, 3))
+    : geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  (geo.setAttribute || geo.addAttribute).call(geo, 'aAlpha', new THREE.BufferAttribute(alpha, 1));
+  (geo.setAttribute || geo.addAttribute).call(geo, 'aSeed', new THREE.BufferAttribute(seed, 1));
+
+  var mat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: {
+      uTime: { value: 0 },
+      uSize: { value: 2.0 },
+      uGlow: { value: new THREE.Vector2(0.02, -0.16) }, // teal glow origin, behind power button
+      uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) }
+    },
+    vertexShader: [
+      'attribute float aAlpha;',
+      'attribute float aSeed;',
+      'uniform float uTime;',
+      'uniform float uSize;',
+      'uniform float uPixelRatio;',
+      'uniform vec2 uGlow;',
+      'varying float vAlpha;',
+      'varying float vGlow;',
+      'void main() {',
+      '  vec3 p = position;',
+      // very slow breathing drift so the grain feels alive, not animated
+      '  p.z += sin(uTime * 0.35 + aSeed) * 0.004;',
+      '  float d = distance(p.xy, uGlow);',
+      '  vGlow = smoothstep(0.42, 0.0, d);',
+      '  vAlpha = aAlpha * (0.55 + 1.25 * vGlow);',
+      '  vAlpha *= 0.88 + 0.12 * sin(uTime * 0.5 + aSeed);',
+      '  vec4 mv = modelViewMatrix * vec4(p, 1.0);',
+      '  gl_PointSize = uSize * uPixelRatio * (1.0 + vGlow * 0.35);',
+      '  gl_Position = projectionMatrix * mv;',
+      '}'
+    ].join('\n'),
+    fragmentShader: [
+      'varying float vAlpha;',
+      'varying float vGlow;',
+      'void main() {',
+      '  vec2 uv = gl_PointCoord - 0.5;',
+      '  float r = length(uv);',
+      '  float mask = smoothstep(0.5, 0.15, r);',
+      '  if (mask <= 0.001) discard;',
+      // pale slate dots far out, warm teal near the glow -- matches reference
+      '  vec3 cold = vec3(0.55, 0.58, 0.58);',
+      '  vec3 warm = vec3(0.28, 0.72, 0.62);',
+      '  vec3 gold = vec3(0.86, 0.74, 0.49);',
+      '  vec3 col = mix(cold, warm, vGlow);',
+      '  col = mix(col, gold, smoothstep(0.72, 1.0, vGlow) * 0.45);',
+      '  gl_FragColor = vec4(col, mask * vAlpha * 1.15);',
+      '}'
+    ].join('\n')
+  });
+
+  var points = new THREE.Points(geo, mat);
+  scene.add(points);
+
+  function resize() {
+    var w = host.clientWidth || 1;
+    var h = host.clientHeight || 1;
+    renderer.setSize(w, h, false);
+
+    // cover-fit the map box into the host, biased so Americas->Asia span the width
+    var hostAspect = w / h;
+    var mapAspect = MAP_W / MAP_H;
+    var viewW, viewH;
+    if (hostAspect > mapAspect) {
+      viewW = 1.0;
+      viewH = 1.0 / hostAspect;
+    } else {
+      viewH = (MAP_H / MAP_W);
+      viewW = viewH * hostAspect;
+    }
+    // zoom in slightly so the map bleeds past the edges like the reference
+    var zoom = 0.82;
+    camera.left = -viewW * zoom;
+    camera.right = viewW * zoom;
+    camera.top = viewH * zoom;
+    camera.bottom = -viewH * zoom;
+    camera.updateProjectionMatrix();
+
+    mat.uniforms.uSize.value = Math.max(1.9, Math.min(3.4, w / 165));
+  }
+
+  var ro = window.ResizeObserver ? new ResizeObserver(resize) : null;
+  if (ro) ro.observe(host); else window.addEventListener('resize', resize);
+  resize();
+
+  var start = performance.now();
+  var running = true;
+  document.addEventListener('visibilitychange', function () {
+    running = !document.hidden;
+    if (running) loop();
+  });
+
+  function loop() {
+    if (!running) return;
+    mat.uniforms.uTime.value = (performance.now() - start) / 1000;
+    renderer.render(scene, camera);
+    requestAnimationFrame(loop);
+  }
+  loop();
+
+  // dim the whole field when the VPN is toggled off
+  window.setWorldMapActive = function (active) {
+    host.style.transition = 'opacity 0.45s ease';
+    host.style.opacity = active ? '1' : '0.35';
+  };
+})();
+
+  </script>
+</body>
+</html>
