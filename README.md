@@ -41,9 +41,10 @@ table (per-session spend, per-tx, global, per-IP rate limits, TTL).
 
 ### Web UI
 
-Open `web/vanta-main.html` in a browser, or serve it statically. The toggle
-currently drives the UI state machine; wiring it to the engine's
-`shieldOn`/`shieldOff` against a running relayer is the next integration step.
+Served from `web/index.html` (also deployed as a static site — see
+`render.yaml`). The toggle currently drives the UI state machine; wiring it
+to the engine's `shieldOn`/`shieldOff` against a running relayer is the next
+integration step.
 
 ### Mobile shell
 

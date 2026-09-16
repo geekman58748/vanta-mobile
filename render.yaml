@@ -1,0 +1,43 @@
+# Render Blueprint — deploys both halves of VANTA from one file.
+# Docs: https://docs.render.com/blueprint-spec
+#
+# 1. Relayer  — long-running Node service (stateful: in-memory session store,
+#    so serverless is NOT an option for this — sessions must survive requests).
+# 2. Web      — static site served from web/ (index.html, no build step).
+
+services:
+  # ---- Relayer API -------------------------------------------------------
+  - type: web
+    name: vanta-relayer
+    runtime: node
+    rootDir: relayer
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    plan: free
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Comma-separated origin allowlist for the browser frontend.
+      # Example: https://vanta-web.onrender.com
+      - key: VANTA_CORS_ORIGIN
+        sync: false
+      # Leave unset to run in DRY RUN mode (caps enforced, co-sign refuses).
+      # Point at a keypair JSON only when you accept real fee-payer liability.
+      - key: VANTA_HOT_WALLET_KEYPAIR_PATH
+        sync: false
+      - key: VANTA_PUBLIC_BASE_URL
+        sync: false
+
+  # ---- Web frontend (static, no build) ------------------------------------
+  - type: web
+    name: vanta-web
+    runtime: static
+    rootDir: web
+    staticPublishPath: .
+    buildCommand: echo "static site - no build step"
+    headers:
+      # MWA/wallet-adapter needs a secure context (HTTPS) — Render provides it.
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
