@@ -153,10 +153,15 @@ class VantaSessionEngine {
 
     try {
       if (sessionId) {
-        const res = await this._post(`/v1/session/${encodeURIComponent(sessionId)}/revoke`, {});
-        if (res.ok) {
-          revoked = true;
-          unspentLamports = typeof res.unspentLamports === 'number' ? res.unspentLamports : null;
+        try {
+          const res = await this._post(`/v1/session/${encodeURIComponent(sessionId)}/revoke`, {});
+          if (res.ok) {
+            revoked = true;
+            unspentLamports = typeof res.unspentLamports === 'number' ? res.unspentLamports : null;
+          }
+        } catch {
+          // Relayer unreachable: NOT an error. The local wipe below is what
+          // matters; the relayer's TTL reclaims the server-side session.
         }
       }
     } finally {

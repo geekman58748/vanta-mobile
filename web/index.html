@@ -210,11 +210,11 @@
 
       <!-- Top Shield Status Badge -->
       <div class="mt-2 sm:mt-4 z-10">
-        <button id="status-badge" onclick="toggleVPN()" class="flex items-center space-x-2 bg-white/[0.03] backdrop-blur-sm border border-[#1FAE7A]/50 text-[#4FD69C] px-5 py-1.5 rounded-full font-bold text-xs tracking-[0.1em] uppercase shadow-teal-glow transition-all duration-300 hover:scale-105">
+        <button id="status-badge" onclick="toggleVPN()" class="flex items-center space-x-2 bg-gray-800 text-gray-400 px-5 py-1.5 rounded-full font-bold text-xs tracking-wide transition-all duration-300 hover:scale-105">
           <svg id="status-icon" class="w-3.5 h-3.5 fill-current" viewBox="0 0 20 20">
             <path fill-rule="evenodd" d="M10 1.944A11.954 11.954 0 012.166 5C2.056 5.649 2 6.319 2 7c0 5.225 3.34 9.67 8 11.317C14.66 16.67 18 12.225 18 7c0-.682-.057-1.35-.166-2.001A11.954 11.954 0 0110 1.944zM13.707 8.707a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
           </svg>
-          <span id="status-text">Shielded</span>
+          <span id="status-text">Exposed</span>
         </button>
       </div>
 
@@ -226,7 +226,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
             </svg>
           </div>
-          <div class="text-2xl sm:text-3xl font-semibold tracking-tight font-tech text-white" id="stat-download">50</div>
+          <div class="text-2xl sm:text-3xl font-semibold tracking-tight font-tech text-white" id="stat-download">0</div>
           <div class="text-[10px] font-semibold text-gray-500 mt-0.5 uppercase tracking-[0.15em]">txs routed</div>
         </div>
 
@@ -237,7 +237,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
             </svg>
           </div>
-          <div class="text-2xl sm:text-3xl font-semibold tracking-tight font-tech text-white" id="stat-upload">32</div>
+          <div class="text-2xl sm:text-3xl font-semibold tracking-tight font-tech text-white" id="stat-upload">0.000</div>
           <div class="text-[10px] font-semibold text-gray-500 mt-0.5 uppercase tracking-[0.15em]">sol shielded</div>
         </div>
 
@@ -252,19 +252,19 @@
               <rect x="17" y="4" width="3" height="17" rx="1"/>
             </svg>
           </div>
-          <div class="text-2xl sm:text-3xl font-semibold tracking-tight font-tech text-white" id="stat-ping">80</div>
+          <div class="text-2xl sm:text-3xl font-semibold tracking-tight font-tech text-white" id="stat-ping">0.000</div>
           <div class="text-[10px] font-semibold text-gray-500 mt-0.5 uppercase tracking-[0.15em]">spend cap</div>
         </div>
       </div>
 
       <div class="relative my-4 sm:my-8 flex items-center justify-center z-10">
         <!-- Soft Recessed Squircle Halo (button sits inset within it) -->
-        <div id="power-pulse" class="absolute w-56 h-56 sm:w-64 sm:h-64 rounded-[3.75rem] halo-effect pointer-events-none"></div>
+        <div id="power-pulse" style="opacity:0" class="absolute w-56 h-56 sm:w-64 sm:h-64 rounded-[3.75rem] halo-effect pointer-events-none"></div>
 
         <!-- Power Button Container -->
-        <button id="power-btn" onclick="toggleVPN()" class="relative w-36 h-36 sm:w-40 sm:h-40 rounded-[2.2rem] power-btn-gradient shadow-power-glow flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 group cursor-pointer focus:outline-none">
+        <button id="power-btn" onclick="toggleVPN()" class="relative w-36 h-36 sm:w-40 sm:h-40 rounded-[2.2rem] bg-gray-800 shadow-none border border-gray-700 flex items-center justify-center transition-all duration-300 hover:scale-105 opacity-80 cursor-pointer focus:outline-none">
           <!-- Power Icon -->
-          <svg id="power-icon" class="w-14 h-14 text-white stroke-[2.5] transition-transform duration-300 group-hover:scale-110 icon-glow-on" style="transition: transform 0.3s, filter 0.3s ease;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg id="power-icon" class="w-14 h-14 text-white stroke-[2.5] transition-transform duration-300 group-hover:scale-110" style="transition: transform 0.3s, filter 0.3s ease;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9"/>
           </svg>
         </button>
@@ -615,9 +615,97 @@
   </nav>
 
   <script>
-    // App State Management
-    let isConnected = true;
-    let liveStatsInterval = null;
+    // Relayer endpoint resolution: ?relayer= query param wins (and sticks via
+    // localStorage), else localhost for dev. On the Render deployment, open
+    // the web URL once with ?relayer=https://<relayer-host> to bind them.
+    (function () {
+      const q = new URLSearchParams(location.search).get('relayer');
+      if (q) { try { localStorage.setItem('vanta_relayer', q); } catch (e) {} }
+      let stored = null;
+      try { stored = localStorage.getItem('vanta_relayer'); } catch (e) {}
+      window.VANTA_RELAYER_URL = q || stored || 'http://localhost:8787';
+    })();
+  </script>
+  <script src="vanta-engine.js"></script>
+  <script>
+    // App State Management — the engine is the source of truth; isConnected
+    // only mirrors engine.state for the UI branches below.
+    const engine = new VantaSessionEngine();
+    let isConnected = false;
+    let statusPoll = null;
+
+    // DEV STAND-IN for the main wallet pubkey. Replaced by the real
+    // MWA/Seed Vault connect flow (next integration step). The session key
+    // itself is real: generated in-memory, signed, verified by the relayer.
+    const DEV_MAIN_PUBKEY = VantaEngine.b58encode(
+      crypto.getRandomValues(new Uint8Array(32))
+    );
+
+    const fmtSOL = (lamports) => (lamports / 1e9).toFixed(3);
+
+    function setStat(id, text) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = text;
+    }
+
+    function setBadge(kind, label, title) {
+      const badge = document.getElementById('status-badge');
+      const text = document.getElementById('status-text');
+      if (title) badge.title = title; else badge.removeAttribute('title');
+      if (kind === 'on') {
+        badge.className = "flex items-center space-x-2 bg-white/[0.03] backdrop-blur-sm border border-[#1FAE7A]/50 text-[#4FD69C] px-5 py-1.5 rounded-full font-bold text-xs tracking-[0.1em] uppercase shadow-teal-glow transition-all duration-300 hover:scale-105";
+      } else if (kind === 'busy') {
+        badge.className = "flex items-center space-x-2 bg-amber-500/10 backdrop-blur-sm text-amber-300 border border-amber-400/40 px-5 py-1.5 rounded-full font-bold text-xs tracking-[0.1em] uppercase transition-all duration-300";
+      } else if (kind === 'error') {
+        badge.className = "flex items-center space-x-2 bg-red-500/10 backdrop-blur-sm text-red-300 border border-red-400/40 px-5 py-1.5 rounded-full font-bold text-xs tracking-[0.1em] uppercase transition-all duration-300";
+      } else {
+        badge.className = "flex items-center space-x-2 bg-gray-800 text-gray-400 px-5 py-1.5 rounded-full font-bold text-xs tracking-wide transition-all duration-300 hover:scale-105";
+      }
+      text.textContent = label;
+    }
+
+    function setPowerUi(on) {
+      const powerBtn = document.getElementById('power-btn');
+      const powerPulse = document.getElementById('power-pulse');
+      const powerIcon = document.getElementById('power-icon');
+      powerPulse.style.opacity = on ? '1' : '0';
+      if (window.setWorldMapActive) window.setWorldMapActive(on);
+      powerBtn.className = on
+        ? "relative w-36 h-36 sm:w-40 sm:h-40 rounded-[2.2rem] power-btn-gradient shadow-power-glow flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 group cursor-pointer"
+        : "relative w-36 h-36 sm:w-40 sm:h-40 rounded-[2.2rem] bg-gray-800 shadow-none border border-gray-700 flex items-center justify-center transition-all duration-300 hover:scale-105 opacity-80 cursor-pointer";
+      powerIcon.classList.toggle('icon-glow-on', on);
+    }
+
+    function setShieldedUi(on, stats) {
+      isConnected = on;
+      setPowerUi(on);
+      if (on) {
+        setBadge('on', 'Shielded');
+        setStat('stat-download', '0');
+        setStat('stat-upload', fmtSOL(stats.spentLamports || 0));
+        setStat('stat-ping', fmtSOL(stats.spendCapLamports || 0));
+        startStatusPoll();
+      } else {
+        setBadge('off', 'Exposed');
+        setStat('stat-download', '0');
+        setStat('stat-upload', '0.000');
+        setStat('stat-ping', '0.000');
+        stopStatusPoll();
+      }
+    }
+
+    // Real status from the relayer every 5s while a session is live.
+    function startStatusPoll() {
+      stopStatusPoll();
+      statusPoll = setInterval(async () => {
+        const s = await engine.status();
+        if (!s.active || !s.session) return;
+        setStat('stat-upload', fmtSOL(s.session.spentLamports || 0));
+      }, 5000);
+    }
+    function stopStatusPoll() {
+      if (statusPoll) { clearInterval(statusPoll); statusPoll = null; }
+    }
 
     // Toggle active screen tab
     let isSwitching = false;
@@ -705,59 +793,39 @@
       numberTweens.set(el, requestAnimationFrame(tick));
     }
 
-    // Toggle Shield Session State
-    function toggleVPN() {
-      const statusBadge = document.getElementById('status-badge');
-      const statusText = document.getElementById('status-text');
-      const statusIcon = document.getElementById('status-icon');
-      const powerPulse = document.getElementById('power-pulse');
-      const powerBtn = document.getElementById('power-btn');
-      const powerIcon = document.getElementById('power-icon');
-      const dlStat = document.getElementById('stat-download');
-      const ulStat = document.getElementById('stat-upload');
-
-      if (isConnected) {
-        // Switch to Disconnected state
-        isConnected = false;
-        statusBadge.className = "flex items-center space-x-2 bg-gray-800 text-gray-400 px-5 py-1.5 rounded-full font-bold text-xs tracking-wide transition-all duration-300 hover:scale-105";
-        statusText.textContent = "Exposed";
-        powerPulse.style.opacity = '0';
-        if (window.setWorldMapActive) window.setWorldMapActive(false);
-        powerBtn.className = "relative w-36 h-36 sm:w-40 sm:h-40 rounded-[2.2rem] bg-gray-800 shadow-none border border-gray-700 flex items-center justify-center transition-all duration-300 hover:scale-105 opacity-80 cursor-pointer";
-        powerIcon.classList.remove('icon-glow-on');
-        
-        animateNumber(dlStat, 0, 350);
-        animateNumber(ulStat, 0, 350);
-        clearInterval(liveStatsInterval);
-      } else {
-        // Connecting state animation
-        statusBadge.className = "flex items-center space-x-2 bg-amber-500/10 backdrop-blur-sm text-amber-300 border border-amber-400/40 px-5 py-1.5 rounded-full font-bold text-xs tracking-[0.1em] uppercase transition-all duration-300";
-        statusText.textContent = "Connecting...";
-
-        setTimeout(() => {
-          isConnected = true;
-          statusBadge.className = "flex items-center space-x-2 bg-white/[0.03] backdrop-blur-sm border border-[#1FAE7A]/50 text-[#4FD69C] px-5 py-1.5 rounded-full font-bold text-xs tracking-[0.1em] uppercase shadow-teal-glow transition-all duration-300 hover:scale-105";
-          statusText.textContent = "Shielded";
-          powerPulse.style.opacity = '1';
-          if (window.setWorldMapActive) window.setWorldMapActive(true);
-          powerBtn.className = "relative w-36 h-36 sm:w-40 sm:h-40 rounded-[2.2rem] power-btn-gradient shadow-power-glow flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 group cursor-pointer";
-          powerIcon.classList.add('icon-glow-on');
-          
-          animateNumber(dlStat, 50, 550);
-          animateNumber(ulStat, 32, 550);
-          startLiveMetrics();
-        }, 1200);
+    // Toggle Shield Session State — drives the REAL session engine.
+    let toggling = false;
+    async function toggleVPN() {
+      if (toggling) return;
+      toggling = true;
+      try {
+        if (isConnected) {
+          setBadge('busy', 'Revoking...');
+          const off = await engine.shieldOff();
+          setShieldedUi(false);
+          if (off.revoked && off.unspentLamports != null) {
+            // unspent headroom returned — surface it in the SOL stat for a beat
+            setStat('stat-upload', fmtSOL(off.unspentLamports));
+          }
+        } else {
+          setBadge('busy', 'Provisioning...');
+          const on = await engine.shieldOn(DEV_MAIN_PUBKEY);
+          setShieldedUi(true, { spentLamports: 0, spendCapLamports: on.spendCapLamports });
+        }
+      } catch (err) {
+        // Nothing was provisioned (engine wipes on failure) — show why, then
+        // settle back into the truthful Exposed state.
+        setBadge('error', 'Relayer unreachable', String(err && err.message || err));
+        setShieldedUi(false);
+        setTimeout(() => { if (!isConnected) setBadge('off', 'Exposed'); }, 2500);
+      } finally {
+        toggling = false;
       }
     }
 
     // Select Session Target (which wallet the session key fronts)
-    function selectServer(name, code, ping) {
+    function selectServer(name) {
       document.getElementById('current-server-name').textContent = name;
-      animateNumber(document.getElementById('stat-ping'), ping, 400);
-      
-      if (!isConnected) {
-        toggleVPN();
-      }
     }
 
     // Select Dedicated Streaming/Gaming server
@@ -767,21 +835,11 @@
       switchTab('main');
     }
 
-    // Simulate real-time session metric fluctuations
-    function startLiveMetrics() {
-      clearInterval(liveStatsInterval);
-      liveStatsInterval = setInterval(() => {
-        if (isConnected) {
-          const dl = Math.floor(48 + Math.random() * 8);
-          const ul = Math.floor(30 + Math.random() * 5);
-          animateNumber(document.getElementById('stat-download'), dl, 700);
-          animateNumber(document.getElementById('stat-upload'), ul, 700);
-        }
-      }, 2500);
-    }
-
-    // Initialize metrics loop on load
-    startLiveMetrics();
+    // Boot: the engine starts OFF, so the UI must too (no fake "Shielded" on
+    // load — the badge, glow and map all settle into the Exposed state).
+    // DOMContentLoaded: the Three.js map script (and its setWorldMapActive)
+    // loads after this block, and the boot pass needs to dim it.
+    document.addEventListener('DOMContentLoaded', () => setShieldedUi(false));
   </script>
   <script>
   /* The curve's proportions are derived from the power button itself (not a
