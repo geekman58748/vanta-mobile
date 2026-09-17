@@ -48,7 +48,10 @@ class VantaSessionEngine {
   constructor({ relayerUrl, signWithMainWallet, fetchImpl = globalThis.fetch } = {}) {
     if (!relayerUrl) throw new VantaError('relayerUrl is required', 'config');
     this.relayerUrl = relayerUrl.replace(/\/+$/, '');
-    this.signWithMainWallet = signWithMainWallet;
+    // Injected main-wallet signer (MWA / Seed Vault / wallet-standard).
+    // When absent, the engine runs in dev mode: no consent signature is
+    // requested or sent, and the relayer marks the session consent-unverified.
+    this.signWithMainWallet = signWithMainWallet || null;
     this.fetchImpl = fetchImpl;
 
     this.state = STATE.OFF;
@@ -67,7 +70,7 @@ class VantaSessionEngine {
    * @param {string} mainWalletPubkey base58 main wallet pubkey (Seed Vault)
    * @returns {Promise<{sessionPubkey: string, sessionId: string, expiresAt: number}>}
    */
-  async shieldOn(mainWalletPubkey) {
+  async shieldOn(mainWalletPubkey, opts = {}) {
     if (this.state !== STATE.OFF) {
       throw new VantaError(`Cannot shieldOn from state ${this.state}`, 'invalid_state');
     }
@@ -83,8 +86,26 @@ class VantaSessionEngine {
         format: 'der',
       }).subarray(-32))); // last 32 bytes of SPKI = raw ed25519 pubkey
 
-      // 2. Sign the create request with the SESSION key (not the main wallet).
+      // 2. MAIN-WALLET CONSENT (real wallets only): the injected signer signs
+      //    the consent message WITH the main wallet key — user approval in the
+      //    wallet UI, and server-side proof the main address opted in.
       const issuedAt = nowSeconds();
+      const consentSigner = opts.signWithMainWallet || this.signWithMainWallet;
+      let mainSignature = null;
+      if (consentSigner) {
+        const consentMsg = VantaSessionEngine.buildConsentMessage({
+          clientPubkey,
+          mainPubkey: mainWalletPubkey,
+          issuedAt,
+        });
+        const consentSig = await consentSigner(consentMsg, issuedAt);
+        if (!consentSig) {
+          throw new VantaError('Wallet declined the shielding consent request', 'consent_denied');
+        }
+        mainSignature = b58encode(new Uint8Array(consentSig));
+      }
+
+      // 3. Sign the create request with the SESSION key (not the main wallet).
       const message = VantaSessionEngine.buildCreateMessage({
         clientPubkey,
         mainPubkey: mainWalletPubkey,
@@ -94,12 +115,13 @@ class VantaSessionEngine {
         crypto.sign(null, message, this._keypair.privateKey)
       ));
 
-      // 3. Register with the relayer.
+      // 4. Register with the relayer.
       const res = await this._post('/v1/session', {
         clientPubkey,
         mainPubkey: mainWalletPubkey,
         issuedAt,
         createSignature,
+        mainSignature: mainSignature || undefined,
       });
       if (!res.ok) {
         throw new VantaError(res.error || 'Relayer refused session', res.code || 'relayer_error');
@@ -120,6 +142,7 @@ class VantaSessionEngine {
         sessionId: res.session.id,
         expiresAt: res.session.expiresAt,
         spendCapLamports: res.session.spendCapLamports,
+        consentVerified: !!res.session.consentVerified,
       };
     } catch (err) {
       // Provisioning failed: leave nothing behind.
@@ -214,6 +237,17 @@ class VantaSessionEngine {
       Buffer.from('vanta-session-create-v1\0'),
       b58decode(clientPubkey),
       b58decode(mainPubkey),
+      Buffer.from(String(issuedAt), 'ascii'),
+    ]);
+  }
+
+  // Consent message signed by the MAIN wallet: prefix || main || client || ts.
+  // (Order differs from buildCreateMessage deliberately — distinct roles.)
+  static buildConsentMessage({ clientPubkey, mainPubkey, issuedAt }) {
+    return Buffer.concat([
+      Buffer.from('vanta-session-consent-v1\0'),
+      b58decode(mainPubkey),
+      b58decode(clientPubkey),
       Buffer.from(String(issuedAt), 'ascii'),
     ]);
   }

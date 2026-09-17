@@ -109,6 +109,78 @@ test('browser engine kill-switch wipes locally even when relayer is unreachable'
   assert.equal(engine.state, STATE.OFF);
 });
 
+test('main-wallet consent signature round-trips end to end', async () => {
+  const { server, url } = await startServer();
+
+  // Stand-in for the main wallet (Seed Vault / MWA on device): a real keypair
+  // whose signature the relayer can verify against the claimed main pubkey.
+  const mainKp = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign']);
+  const rawMain = new Uint8Array(await crypto.subtle.exportKey('raw', mainKp.publicKey));
+  const mainPubkey = b58encode(rawMain);
+
+  const engine = new VantaSessionEngine({ relayerUrl: url });
+  const result = await engine.shieldOn(mainPubkey, {
+    // Mirror of the injected MWA signer: sign the exact consent bytes.
+    signWithMainWallet: async (msg) => new Uint8Array(
+      await crypto.subtle.sign('Ed25519', mainKp.privateKey, msg),
+    ),
+  });
+
+  assert.equal(engine.state, STATE.ACTIVE);
+  assert.equal(result.consentVerified, true, 'relayer must verify main-wallet consent');
+
+  await engine.shieldOff();
+  server.close();
+});
+
+test('forged main-wallet consent is rejected fail-closed', async () => {
+  const { server, url } = await startServer();
+
+  const mainKp = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign']);
+  const rawMain = new Uint8Array(await crypto.subtle.exportKey('raw', mainKp.publicKey));
+  const mainPubkey = b58encode(rawMain);
+
+  const engine = new VantaSessionEngine({ relayerUrl: url });
+  await assert.rejects(
+    () => engine.shieldOn(mainPubkey, {
+      // Signed by the WRONG key — must never open a session.
+      signWithMainWallet: async (msg) => new Uint8Array(
+        await crypto.subtle.sign('Ed25519', (await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign'])).privateKey, msg),
+      ),
+    }),
+    /mainSignature failed verification|relayer_error/i,
+  );
+  assert.equal(engine.state, STATE.OFF, 'engine wipes to OFF on failed provisioning');
+
+  server.close();
+});
+
+test('declined consent (signer returns null) aborts provisioning cleanly', async () => {
+  const { server, url } = await startServer();
+  const engine = new VantaSessionEngine({ relayerUrl: url });
+
+  await assert.rejects(
+    () => engine.shieldOn(randomPubkey(), { signWithMainWallet: async () => null }),
+    /declined/i,
+  );
+  assert.equal(engine.state, STATE.OFF);
+  assert.equal(engine.session, null, 'no session remains after a declined consent');
+
+  server.close();
+});
+
+test('no-signer dev mode still provisions (consent-unverified, wire-compatible)', async () => {
+  const { server, url } = await startServer();
+  const engine = new VantaSessionEngine({ relayerUrl: url });
+
+  const result = await engine.shieldOn(randomPubkey());
+  assert.equal(engine.state, STATE.ACTIVE);
+  assert.equal(result.consentVerified, false, 'dev mode marks consent unverified');
+
+  await engine.shieldOff();
+  server.close();
+});
+
 test('browser base58 matches the relayer implementation', () => {
   const { b58encode: browserEncode, b58decode: browserDecode } = globalThis.VantaEngine;
   const bytes = crypto.getRandomValues(new Uint8Array(32));
