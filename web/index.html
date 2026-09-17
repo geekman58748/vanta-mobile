@@ -656,6 +656,52 @@
       crypto.getRandomValues(new Uint8Array(32))
     );
 
+    // ── Main wallet connect ──────────────────────────────────────────────
+    // Dev-mode: on PC there is no wallet app to handshake with, so "connect"
+    // generates a throwaway keypair purely to produce a REAL main-wallet
+    // signature for the consent message (the relayer verifies it — a random
+    // hex string would be rejected). On device, this whole block is replaced
+    // by the MWA/wallet-standard connect, which supplies the pubkey and the
+    // signer natively. Dev mode is labeled as such everywhere it surfaces.
+    const WALLETS = {
+      'Seed Vault': { dev: false },
+      'Backpack': { dev: true },
+      'Phantom': { dev: true },
+      'Solflare': { dev: true },
+      'Jupiter': { dev: true },
+      'Coinbase Wallet': { dev: true },
+    };
+    let mainWallet = { name: 'Seed Vault', pubkey: null, signer: null, dev: true };
+
+    async function connectMainWallet(name) {
+      const info = WALLETS[name] || { dev: true };
+      // Real device path (MWA / Seed Vault / wallet-standard) plugs in here —
+      // see connect() below; everything in this file already consumes its
+      // output ({ pubkey, signer }).
+      if (window.VantaWalletConnect) {
+        const real = await window.VantaWalletConnect(name);
+        return { name, pubkey: real.pubkey, signer: real.signer, dev: false };
+      }
+      // Dev fallback: local consent keypair so the consent signature the
+      // relayer verifies is a REAL ed25519 signature by the claimed key.
+      const kp = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign']);
+      const rawPub = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey));
+      return {
+        name,
+        pubkey: VantaEngine.b58encode(rawPub),
+        signer: async (msg) => new Uint8Array(await crypto.subtle.sign('Ed25519', kp.privateKey, msg)),
+        dev: true,
+      };
+    }
+
+    async function connectWalletIfNeeded() {
+      if (mainWallet.pubkey) return mainWallet;
+      const name = document.getElementById('current-server-name').textContent.trim() || 'Seed Vault';
+      setBadge('busy', 'Connecting ' + name + '...');
+      mainWallet = await connectMainWallet(name);
+      return mainWallet;
+    }
+
     const fmtSOL = (lamports) => (lamports / 1e9).toFixed(3);
 
     function setStat(id, text) {
@@ -828,14 +874,33 @@
             setStat('stat-upload', fmtSOL(off.unspentLamports));
           }
         } else {
+          setBadge('busy', 'Connecting...');
+          let wallet;
+          try {
+            wallet = await connectWalletIfNeeded();
+          } catch (connectErr) {
+            setBadge('error', String((connectErr && connectErr.message) || connectErr).slice(0, 60));
+            setTimeout(() => { if (!isConnected) setBadge('off', 'Exposed'); }, 2500);
+            return; // finally still resets `toggling`
+          }
+
           setBadge('busy', 'Provisioning...');
-          const on = await engine.shieldOn(DEV_MAIN_PUBKEY);
+          const on = await engine.shieldOn(wallet.pubkey, {
+            signWithMainWallet: wallet.signer,
+          });
           setShieldedUi(true, { spentLamports: 0, spendCapLamports: on.spendCapLamports });
         }
       } catch (err) {
         // Nothing was provisioned (engine wipes on failure) — show why, then
         // settle back into the truthful Exposed state.
-        setBadge('error', 'Relayer unreachable', String(err && err.message || err));
+        if (err && err.code === 'consent_denied') {
+          // User rejected the consent prompt in the wallet: reset connect so
+          // the next attempt asks again, and stay truthfully Exposed.
+          mainWallet = { name: mainWallet.name, pubkey: null, signer: null, dev: true };
+          setBadge('error', 'Consent declined in wallet');
+        } else {
+          setBadge('error', 'Relayer unreachable', String(err && err.message || err));
+        }
         setShieldedUi(false);
         setTimeout(() => { if (!isConnected) setBadge('off', 'Exposed'); }, 2500);
       } finally {
@@ -846,6 +911,21 @@
     // Select Session Target (which wallet the session key fronts)
     function selectServer(name) {
       document.getElementById('current-server-name').textContent = name;
+
+      // Move the selection ring to the tapped wallet and un-dim it.
+      document.querySelectorAll('#selected-flag-container').forEach((el) => {
+        el.removeAttribute('id');
+        el.classList.remove('ring-2', 'ring-[#14F195]', 'ring-offset-2', 'ring-offset-[#07090E]', 'rounded-full');
+      });
+      const picked = event && event.currentTarget;
+      if (picked) {
+        picked.id = 'selected-flag-container';
+        picked.classList.add('ring-2', 'ring-[#14F195]', 'ring-offset-2', 'ring-offset-[#07090E]', 'rounded-full');
+        picked.classList.remove('opacity-50');
+        // Scroll the chosen wallet into view (smooth) — the strip is the
+        // horizontal scroller behind the carousel.
+        picked.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }
     }
 
     // Select Dedicated Streaming/Gaming server

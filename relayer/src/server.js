@@ -54,6 +54,19 @@ function createMessageBytes({ clientPubkey, mainPubkey, issuedAt }) {
   ]);
 }
 
+// Main-wallet CONSENT message. When the client supplies mainSignature, the
+// claimed main wallet must have signed exactly these bytes — proof that the
+// owner of the main address opted into shielding. Message is minimal and
+// canonical: prefix || mainPubkey || clientPubkey || issuedAt.
+function consentMessageBytes({ clientPubkey, mainPubkey, issuedAt }) {
+  return Buffer.concat([
+    Buffer.from('vanta-session-consent-v1\0'),
+    Buffer.from(b58decode(mainPubkey)),
+    Buffer.from(b58decode(clientPubkey)),
+    Buffer.from(issuedAt.toString(10), 'ascii'),
+  ]);
+}
+
 function json(res, status, body) {
   const buf = Buffer.from(JSON.stringify(body));
   res.writeHead(status, {
@@ -175,6 +188,21 @@ function createRelayer({ store, signer, config: cfg = config, logger = console }
           return json(res, 401, { ok: false, error: 'createSignature failed verification' });
         }
 
+        // Optional main-wallet consent: when mainSignature is present, the
+        // MAIN wallet itself must have signed the consent message. Fail-closed
+        // on a bad signature — a wrong mainSignature never opens a session.
+        let consentVerified = false;
+        if (body.mainSignature !== undefined) {
+          if (typeof body.issuedAt !== 'number') {
+            return json(res, 400, { ok: false, error: 'issuedAt is required with mainSignature' });
+          }
+          const consent = consentMessageBytes({ clientPubkey, mainPubkey, issuedAt: body.issuedAt });
+          if (!verifyEd25519(mainPubkey, body.mainSignature, consent)) {
+            return json(res, 401, { ok: false, code: 'bad_main_signature', error: 'mainSignature failed verification' });
+          }
+          consentVerified = true;
+        }
+
         const out = theStore.createSession({ clientPubkey, mainPubkey, ip, createSignature, createMessage: msgWithClientTs });
         if (!out.ok) {
           const status = out.code === 'rate_limited' ? 429 : 403;
@@ -189,6 +217,7 @@ function createRelayer({ store, signer, config: cfg = config, logger = console }
             expiresAt: out.session.expiresAt,
             spendCapLamports: cfg.MAX_SESSION_SPEND_LAMPORTS,
             txCapLamports: cfg.MAX_TX_LAMPORTS,
+            consentVerified,
           },
         });
       }
