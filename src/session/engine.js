@@ -241,15 +241,19 @@ class VantaSessionEngine {
     ]);
   }
 
-  // Consent message signed by the MAIN wallet: prefix || main || client || ts.
-  // (Order differs from buildCreateMessage deliberately — distinct roles.)
+  // Consent message signed by the MAIN wallet. Human-readable ON PURPOSE:
+  // wallet UIs display these bytes as text — this IS the approval prompt the
+  // user sees. Must stay byte-identical to consentMessageBytes in
+  // relayer/src/server.js and to buildConsentMessage in web/vanta-engine.js.
   static buildConsentMessage({ clientPubkey, mainPubkey, issuedAt }) {
-    return Buffer.concat([
-      Buffer.from('vanta-session-consent-v1\0'),
-      b58decode(mainPubkey),
-      b58decode(clientPubkey),
-      Buffer.from(String(issuedAt), 'ascii'),
-    ]);
+    return Buffer.from(
+      'VANTA session consent v1\n' +
+      `Shield wallet (disposable): ${clientPubkey}\n` +
+      `Main wallet: ${mainPubkey}\n` +
+      `Issued at: ${issuedAt}\n` +
+      'By signing, the main wallet approves VANTA shielding transactions for this session key only.',
+      'utf8',
+    );
   }
 
   _localView() {
