@@ -288,6 +288,53 @@
         </div>
       </div>
 
+      <!-- VANTA transfer panel — visible while a session is ACTIVE.
+           Everything here talks directly to Solana through the session key:
+           the recipient sees ONLY the session pubkey on-chain. -->
+      <div id="vanta-transfer-panel" class="hidden w-full max-w-lg mx-auto px-4 z-10">
+        <div class="bg-[#0D0F16] border border-[#192030] rounded-3xl p-4 sm:p-5 shadow-2xl space-y-3">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="text-[10px] font-bold tracking-[0.2em] text-gray-500 uppercase mb-0.5">Session wallet</div>
+              <a id="vanta-session-pubkey" href="#" target="_blank" rel="noopener"
+                 class="text-xs font-tech text-[#1FAE7A] hover:underline break-all"></a>
+            </div>
+            <div class="text-right flex-shrink-0">
+              <div class="text-[10px] font-bold tracking-[0.2em] text-gray-500 uppercase mb-0.5">Balances</div>
+              <div class="text-xs font-tech text-white"><span id="vanta-bal-sol">0.000</span> SOL · <span id="vanta-bal-usdc">0.00</span> USDC</div>
+            </div>
+          </div>
+
+          <div class="flex space-x-2">
+            <input id="vanta-dest" type="text" placeholder="Destination address" spellcheck="false"
+                   class="flex-1 min-w-0 bg-[#141824] border border-[#202738] rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#1FAE7A]" />
+            <input id="vanta-amount" type="text" inputmode="decimal" placeholder="0.05"
+                   class="w-20 sm:w-24 bg-[#141824] border border-[#202738] rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#1FAE7A]" />
+            <select id="vanta-asset"
+                    class="bg-[#141824] border border-[#202738] rounded-xl px-2 py-2 text-xs text-white focus:outline-none focus:border-[#1FAE7A]">
+              <option value="SOL">SOL</option>
+              <option value="USDC">USDC</option>
+            </select>
+          </div>
+
+          <div class="flex space-x-2">
+            <button id="vanta-send-btn" onclick="vantaSend()"
+                    class="flex-1 py-2 rounded-xl bg-gradient-to-r from-[#1FAE7A] to-[#178A63] text-white text-xs font-bold tracking-wide hover:opacity-90 transition-all disabled:opacity-50">
+              Shielded send
+            </button>
+            <button id="vanta-topup-btn" onclick="vantaTopUp()" title="Fund the session wallet from your main wallet (extension-signed)"
+                    class="px-3 sm:px-4 py-2 rounded-xl bg-[#121520] border border-[#232B3F] text-gray-300 text-xs font-semibold hover:bg-[#181D2C] transition-all disabled:opacity-50">
+              Top up 0.5
+            </button>
+            <button id="vanta-airdrop-btn" onclick="vantaAirdrop()" title="Devnet faucet — funds the session wallet directly"
+                    class="px-3 sm:px-4 py-2 rounded-xl bg-[#121520] border border-[#232B3F] text-gray-300 text-xs font-semibold hover:bg-[#181D2C] transition-all disabled:opacity-50">
+              Faucet
+            </button>
+          </div>
+          <div id="vanta-tx-status" class="hidden text-xs font-tech break-all"></div>
+        </div>
+      </div>
+
       <div class="relative my-4 sm:my-8 flex items-center justify-center z-10">
         <!-- Soft Recessed Squircle Halo (button sits inset within it) -->
         <div id="power-pulse" style="opacity:0" class="absolute w-56 h-56 sm:w-64 sm:h-64 rounded-[3.75rem] halo-effect pointer-events-none"></div>
@@ -669,6 +716,7 @@
     })();
   </script>
   <script src="vanta-engine.js"></script>
+  <script src="vanta-chain.js"></script>
   <script>
     // App State Management — the engine is the source of truth; isConnected
     // only mirrors engine.state for the UI branches below.
@@ -698,7 +746,7 @@
     // the consent message with the user's actual wallet key; (3) dev
     // fallback — throwaway keypair, still a REAL verified ed25519 signature,
     // labeled dev everywhere it surfaces.
-    let mainWallet = { name: 'Seed Vault', pubkey: null, signer: null, dev: true };
+    let mainWallet = { name: 'Seed Vault', pubkey: null, signer: null, dev: true, provider: null };
 
     // Resolve the REAL provider for the named wallet. Brand flags are checked
     // because several extensions co-inject on window.solana — without the
@@ -776,7 +824,7 @@
       // 1. Device path (Android Chrome / MWA / Seed Vault on Seeker).
       if (window.VantaWalletConnect) {
         const real = await window.VantaWalletConnect(name);
-        return { name, pubkey: real.pubkey, signer: real.signer, dev: false };
+        return { name, pubkey: real.pubkey, signer: real.signer, dev: false, provider: real.provider || null };
       }
       // 2. Desktop extension path — the installed extension (Phantom,
       //    Backpack, Solflare) shows its real connect + sign prompts.
@@ -806,7 +854,7 @@
           }
           return sig;
         };
-        return { name, pubkey, signer, dev: false };
+        return { name, pubkey, signer, dev: false, provider };
       }
       // 3. Dev fallback: local consent keypair so the consent signature the
       // relayer verifies is a REAL ed25519 signature by the claimed key.
@@ -817,6 +865,7 @@
         pubkey: VantaEngine.b58encode(rawPub),
         signer: async (msg) => new Uint8Array(await crypto.subtle.sign('Ed25519', kp.privateKey, msg)),
         dev: true,
+        provider: null,
       };
     }
 
@@ -870,18 +919,35 @@
     function setShieldedUi(on, stats) {
       isConnected = on;
       setPowerUi(on);
+      const panel = document.getElementById('vanta-transfer-panel');
       if (on) {
         setBadge('on', 'Shielded');
         setStat('stat-download', '0');
         setStat('stat-upload', fmtSOL(stats.spentLamports || 0));
         setStat('stat-ping', fmtSOL(stats.spendCapLamports || 0));
         startStatusPoll();
+        // Session wallet card: link + live balances.
+        if (panel && engine.session) {
+          panel.classList.remove('hidden');
+          const pk = engine.session.clientPubkey;
+          const link = document.getElementById('vanta-session-pubkey');
+          if (link) {
+            link.textContent = pk.slice(0, 4) + '…' + pk.slice(-4);
+            link.href = 'https://explorer.solana.com/address/' + pk + '?cluster=devnet';
+            link.title = pk;
+          }
+          setTxStatus('ok', 'Session live — sends are signed by the session key only');
+          refreshBalances();
+          startBalancePoll();
+        }
       } else {
         setBadge('off', 'Exposed');
         setStat('stat-download', '0');
         setStat('stat-upload', '0.000');
         setStat('stat-ping', '0.000');
         stopStatusPoll();
+        if (panel) panel.classList.add('hidden');
+        stopBalancePoll();
       }
     }
 
@@ -896,6 +962,124 @@
     }
     function stopStatusPoll() {
       if (statusPoll) { clearInterval(statusPoll); statusPoll = null; }
+    }
+
+    // ---- Vanta chain ops: the session wallet's real money pipeline ----
+    // sendSol/sendSpl are signed by the SESSION key via engine.signSessionBytes;
+    // topUp is signed by the MAIN wallet via its extension provider; sweepBack
+    // (on kill-switch) returns leftover balance to the main wallet before wipe.
+    let balancePoll = null;
+    function startBalancePoll() {
+      stopBalancePoll();
+      balancePoll = setInterval(refreshBalances, 10000);
+    }
+    function stopBalancePoll() {
+      if (balancePoll) { clearInterval(balancePoll); balancePoll = null; }
+    }
+
+    function setTxStatus(kind, text, href) {
+      const el = document.getElementById('vanta-tx-status');
+      if (!el) return;
+      el.classList.remove('hidden', 'text-red-400', 'text-[#1FAE7A]', 'text-amber-300');
+      el.classList.add(kind === 'error' ? 'text-red-400' : kind === 'busy' ? 'text-amber-300' : 'text-[#1FAE7A]');
+      if (href) {
+        el.textContent = '';
+        const a = document.createElement('a');
+        a.href = href; a.target = '_blank'; a.rel = 'noopener';
+        a.className = 'hover:underline';
+        a.textContent = text;
+        el.appendChild(a);
+      } else {
+        el.textContent = text;
+      }
+    }
+
+    async function refreshBalances() {
+      if (!isConnected || !engine.session || !window.VantaChain) return;
+      const pk = engine.session.clientPubkey;
+      try {
+        const sol = await window.VantaChain.getSolBalance(pk);
+        setStat('vanta-bal-sol', sol.toFixed(3));
+      } catch { /* rpc hiccup — keep last value */ }
+      try {
+        const usdc = await window.VantaChain.getUsdcBalance(pk);
+        setStat('vanta-bal-usdc', usdc.toFixed(2));
+      } catch { /* no ATA yet */ }
+    }
+
+    function vantaBusy(on) {
+      ['vanta-send-btn', 'vanta-topup-btn', 'vanta-airdrop-btn'].forEach((id) => {
+        const b = document.getElementById(id);
+        if (b) b.disabled = on;
+      });
+    }
+
+    function bumpTxCount() {
+      const el = document.getElementById('stat-download');
+      if (el) el.textContent = String((parseInt(el.textContent, 10) || 0) + 1);
+    }
+
+    async function vantaSend() {
+      if (!isConnected || !engine.session || !window.VantaChain) return;
+      const dest = document.getElementById('vanta-dest').value.trim();
+      const amount = parseFloat(document.getElementById('vanta-amount').value);
+      const asset = document.getElementById('vanta-asset').value;
+      if (!dest) return setTxStatus('error', 'Enter a destination address');
+      if (!(amount > 0)) return setTxStatus('error', 'Enter an amount');
+      vantaBusy(true);
+      setTxStatus('busy', 'Signing with session key…');
+      try {
+        const signer = (bytes) => engine.signSessionBytes(bytes);
+        const sig = asset === 'USDC'
+          ? await window.VantaChain.sendSpl({ sessionSigner: signer, sessionPubkey: engine.session.clientPubkey, to: dest, amount })
+          : await window.VantaChain.sendSol({ sessionSigner: signer, sessionPubkey: engine.session.clientPubkey, to: dest, amountSol: amount });
+        setTxStatus('ok', 'Sent · ' + sig.slice(0, 8) + '…' + sig.slice(-8), 'https://explorer.solana.com/tx/' + sig + '?cluster=devnet');
+        bumpTxCount();
+        refreshBalances();
+      } catch (e) {
+        setTxStatus('error', String((e && e.message) || e).slice(0, 90));
+      } finally {
+        vantaBusy(false);
+      }
+    }
+
+    async function vantaTopUp() {
+      if (!isConnected || !engine.session || !window.VantaChain) return;
+      if (!mainWallet.provider) {
+        setTxStatus('error', 'Top-up needs the connected extension — use Faucet on devnet');
+        return;
+      }
+      vantaBusy(true);
+      setTxStatus('busy', 'Awaiting ' + mainWallet.name + ' approval…');
+      try {
+        const sig = await window.VantaChain.topUp({
+          mainProvider: mainWallet.provider,
+          mainPubkey: mainWallet.pubkey,
+          sessionPubkey: engine.session.clientPubkey,
+          amountSol: 0.5,
+        });
+        setTxStatus('ok', 'Topped up 0.5 SOL · ' + sig.slice(0, 8) + '…', 'https://explorer.solana.com/tx/' + sig + '?cluster=devnet');
+        refreshBalances();
+      } catch (e) {
+        setTxStatus('error', String((e && e.message) || e).slice(0, 90));
+      } finally {
+        vantaBusy(false);
+      }
+    }
+
+    async function vantaAirdrop() {
+      if (!isConnected || !engine.session || !window.VantaChain) return;
+      vantaBusy(true);
+      setTxStatus('busy', 'Requesting devnet airdrop…');
+      try {
+        await window.VantaChain.requestAirdrop(engine.session.clientPubkey, 1);
+        setTxStatus('ok', 'Airdropped 1 SOL (devnet)');
+        refreshBalances();
+      } catch {
+        setTxStatus('error', 'Faucet rate-limited — retry shortly or use Top up');
+      } finally {
+        vantaBusy(false);
+      }
     }
 
     // Toggle active screen tab
@@ -997,6 +1181,27 @@
       try {
         if (isConnected) {
           setBadge('busy', 'Revoking...');
+          // Sweep-back FIRST (best-effort): return the session wallet's leftover
+          // balance to the main wallet while the session key still exists, THEN
+          // revoke + wipe. Only for real (extension/MWA) wallets — a dev session
+          // pubkey isn't controlled by the user, so sweeping to it is pointless.
+          if (engine.session && window.VantaChain && mainWallet.pubkey && !mainWallet.dev) {
+            try {
+              const sig = await window.VantaChain.sweepBack({
+                sessionSigner: (bytes) => engine.signSessionBytes(bytes),
+                sessionPubkey: engine.session.clientPubkey,
+                mainPubkey: mainWallet.pubkey,
+              });
+              if (sig) {
+                setTxStatus('ok', 'Swept back · ' + sig.slice(0, 8) + '…', 'https://explorer.solana.com/tx/' + sig + '?cluster=devnet');
+              }
+            } catch (sweepErr) {
+              // Honest failure mode: key wipes anyway; on-chain leftovers are
+              // then unrecoverable. Surfaced, never hidden.
+              console.warn('[vanta] sweep-back failed (revoking anyway):', sweepErr);
+              setTxStatus('error', 'Sweep failed — key wiped, leftover session funds unrecoverable');
+            }
+          }
           const off = await engine.shieldOff();
           setShieldedUi(false);
           if (off.revoked && off.unspentLamports != null) {
@@ -1026,7 +1231,7 @@
         if (err && err.code === 'consent_denied') {
           // User rejected the consent prompt in the wallet: reset connect so
           // the next attempt asks again, and stay truthfully Exposed.
-          mainWallet = { name: mainWallet.name, pubkey: null, signer: null, dev: true };
+          mainWallet = { name: mainWallet.name, pubkey: null, signer: null, dev: true, provider: null };
           setBadge('error', 'Consent declined in wallet');
         } else {
           // Surface the real reason — network failure, extension rejection,
@@ -1086,6 +1291,11 @@
 
     function selectServer(name) {
       document.getElementById('current-server-name').textContent = name;
+      // Switching wallets invalidates any cached connection — the next
+      // power-on connects to the wallet you actually selected.
+      if (mainWallet.pubkey && mainWallet.name !== name) {
+        mainWallet = { name, pubkey: null, signer: null, dev: true, provider: null };
+      }
       if (carouselTrack) {
         const target = carouselTrack.querySelector('[data-wallet="' + name + '"]');
         if (target) {
