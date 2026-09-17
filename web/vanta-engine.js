@@ -107,6 +107,12 @@
       // persistence: page reload == key gone == session worthless. That is the
       // safe failure mode for a privacy utility.
       this._keypair = null;
+
+      // Optional internal hook — set by the page (index.html) once the session
+      // is ACTIVE so the chain layer can sign txs with the session key without
+      // ever exporting the private CryptoKey. Pages should NOT rely on this;
+      // it is the documented seam for vanta-chain.js.
+      this._internalSessionSigner = null;
     }
 
     /**
@@ -140,6 +146,11 @@
           await root.crypto.subtle.exportKey('raw', this._keypair.publicKey),
         );
         const clientPubkey = b58encode(rawPub);
+
+        // Internal signer for the chain layer (tx signing by the session key).
+        this._internalSessionSigner = async (wireBytes) => new Uint8Array(
+          await root.crypto.subtle.sign('Ed25519', this._keypair.privateKey, wireBytes),
+        );
 
         // 2. MAIN-WALLET CONSENT (real wallets only): the injected signer signs
         //    the consent message WITH the main wallet key — user approval in the
@@ -206,6 +217,21 @@
         this.state = STATE.OFF;
         throw err;
       }
+    }
+
+    /**
+     * Sign arbitrary bytes with the CURRENT session key. Only valid while a
+     * session is ACTIVE — the key exists in memory exactly for the session's
+     * lifetime. This is how the chain layer (vanta-chain.js) has the session
+     * key sign real transactions without the key ever leaving the engine.
+     * @param {Uint8Array} wireBytes the tx message bytes to sign
+     * @returns {Promise<Uint8Array>} 64-byte Ed25519 signature
+     */
+    async signSessionBytes(wireBytes) {
+      if (this.state !== STATE.ACTIVE || !this._internalSessionSigner) {
+        throw new VantaError('No active session key to sign with', 'invalid_state');
+      }
+      return this._internalSessionSigner(wireBytes);
     }
 
     /**
@@ -318,6 +344,7 @@
 
     _wipeLocalState() {
       this._keypair = null;
+      this._internalSessionSigner = null; // the tx-signing capability dies with the key
       this.session = null;
     }
 
