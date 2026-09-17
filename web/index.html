@@ -729,6 +729,49 @@
       }
     }
 
+    // Normalize whatever shape a provider returns into raw signature bytes.
+    // Extensions differ: legacy providers give Uint8Array; some wallet-standard
+    // paths return base58 or hex STRINGS (new Uint8Array(string) silently makes
+    // garbage — a historic 401 source), PublicKey objects, or wrappers.
+    function normalizeSignature(out) {
+      if (!out) return null;
+      let sig = (out && out.signature !== undefined) ? out.signature : out;
+      if (sig instanceof Uint8Array) return sig;
+      if (typeof sig === 'string') {
+        // A 128-char pure-hex string is a 64-byte signature in hex — resolve
+        // it as hex FIRST (some of it would also parse as base58, wrongly).
+        if (/^[0-9a-fA-F]{128}$/.test(sig)) {
+          const bytes = new Uint8Array(64);
+          for (let i = 0; i < 64; i++) bytes[i] = parseInt(sig.substr(i * 2, 2), 16);
+          return bytes;
+        }
+        if (/^[1-9A-HJ-NP-Za-km-z]+$/.test(sig)) {
+          try { return VantaEngine.b58decode(sig); } catch { /* fall through */ }
+        }
+        if (/^[0-9a-fA-F]+$/.test(sig) && sig.length % 2 === 0) {
+          const bytes = new Uint8Array(sig.length / 2);
+          for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(sig.substr(i * 2, 2), 16);
+          return bytes;
+        }
+      }
+      if (sig && sig.buffer instanceof ArrayBuffer) return new Uint8Array(sig.buffer);
+      return null;
+    }
+
+    // Same for the connect() pubkey: string (base58), Uint8Array (raw 32),
+    // or a PublicKey-like object with toBase58().
+    function normalizePubkey(v) {
+      if (!v) return null;
+      if (typeof v === 'string' && v.length > 0) return v;
+      if (v instanceof Uint8Array) return VantaEngine.b58encode(v);
+      if (typeof v.toBase58 === 'function') return v.toBase58();
+      if (typeof v.toString === 'function') {
+        const s = v.toString();
+        return s === '[object Object]' ? null : s;
+      }
+      return null;
+    }
+
     async function connectMainWallet(name) {
       // 1. Device path (Android Chrome / MWA / Seed Vault on Seeker).
       if (window.VantaWalletConnect) {
@@ -740,13 +783,28 @@
       const provider = pickProvider(name);
       if (provider && typeof provider.connect === 'function') {
         const resp = await provider.connect(); // extension approval popup
-        const pubkey = String((resp && resp.publicKey) || provider.publicKey || '');
-        if (!pubkey) throw new Error(name + ' returned no public key');
+        const pubkey = normalizePubkey((resp && resp.publicKey) || provider.publicKey);
+        if (!pubkey) throw new Error(name + ' returned no usable public key');
         const signer = async (msg) => {
           // Wallets display these bytes as text — this is the consent prompt
-          // the user approves. Signing is raw UTF-8, verified server-side.
+          // the user approves. Signing is over the exact bytes, and we verify
+          // locally BEFORE sending so a mismatched signature fails fast with
+          // a clear error instead of a cryptic relayer 401.
           const out = await provider.signMessage(msg, 'utf8');
-          return new Uint8Array(out.signature);
+          const sig = normalizeSignature(out);
+          if (!sig || sig.length !== 64) {
+            throw new Error(name + ' returned an unreadable signature (type: ' + (out && out.signature ? typeof out.signature : typeof out) + ')');
+          }
+          try {
+            const pubBytes = VantaEngine.b58decode(pubkey);
+            const cryptoKey = await crypto.subtle.importKey('raw', pubBytes, { name: 'Ed25519' }, false, ['verify']);
+            const ok = await crypto.subtle.verify('Ed25519', cryptoKey, sig, msg);
+            if (!ok) throw new Error(name + ' signed with a different key than it connected with — reconnect that wallet and retry');
+          } catch (e) {
+            if (e instanceof Error && /different key/.test(e.message)) throw e;
+            // Ed25519 verify unavailable in this context — skip local check.
+          }
+          return sig;
         };
         return { name, pubkey, signer, dev: false };
       }
@@ -762,9 +820,13 @@
       };
     }
 
+    // Cache is NAME-KEYED: a cached connection is only reused for the SAME
+    // wallet. Switching wallets in the carousel must (and now does) reconnect
+    // — reusing wallet A's connection for wallet B was the "switched to
+    // Phantom but it kept hitting Backpack" bug.
     async function connectWalletIfNeeded() {
-      if (mainWallet.pubkey) return mainWallet;
-      const name = document.getElementById('current-server-name').textContent.trim() || 'Seed Vault';
+      const name = selectedWalletName() || 'Seed Vault';
+      if (mainWallet.pubkey && mainWallet.name === name) return mainWallet;
       setBadge('busy', 'Connecting ' + name + '...');
       mainWallet = await connectMainWallet(name);
       return mainWallet;
@@ -970,6 +1032,7 @@
           // Surface the real reason — network failure, extension rejection,
           // relayer 4xx — instead of a generic label.
           const msg = String((err && err.message) || err);
+          console.warn('[vanta] toggle failed:', err);
           setBadge('error', msg.slice(0, 60), msg);
         }
         setShieldedUi(false);
