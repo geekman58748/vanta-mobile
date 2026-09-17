@@ -202,6 +202,16 @@ function createRelayer({ store, signer, config: cfg = config, logger = console }
           }
           const consent = consentMessageBytes({ clientPubkey, mainPubkey, issuedAt: body.issuedAt });
           if (!verifyEd25519(mainPubkey, body.mainSignature, consent)) {
+            // Diagnostic (never sent to the client): pinpoints WHICH check
+            // broke — key, timestamp, or signature bytes — from the logs.
+            const sigBytes = (() => { try { return b58decode(body.mainSignature); } catch { return null; } })();
+            console.warn('[consent] verify FAILED', JSON.stringify({
+              mainPubkey,
+              issuedAt: body.issuedAt,
+              sigLen: sigBytes ? sigBytes.length : 'undecodable',
+              sigB58Prefix: typeof body.mainSignature === 'string' ? body.mainSignature.slice(0, 12) : null,
+              clientPubkey,
+            }));
             return json(res, 401, { ok: false, code: 'bad_main_signature', error: 'mainSignature failed verification' });
           }
           consentVerified = true;
