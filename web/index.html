@@ -86,6 +86,36 @@
       transition: opacity 0.3s ease;
     }
 
+    /* Wallet carousel — a real snap-center scroller.
+       Symmetric edge padding means EVERY wallet can land dead-center, even on
+       a wide desktop viewport (the old centered flex container couldn't scroll
+       at all on desktop: all six items fit, so nothing ever moved). */
+    #wallet-track {
+      scroll-snap-type: x mandatory;
+      scroll-behavior: smooth;
+      scroll-padding-inline: 50%;
+      -webkit-overflow-scrolling: touch;
+    }
+    #wallet-track .flag-item {
+      scroll-snap-align: center;
+      transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    #wallet-track .flag-item:not(.is-center) {
+      opacity: 0.35;
+      transform: scale(0.82);
+    }
+    #wallet-track .flag-item.is-center {
+      opacity: 1;
+      transform: scale(1.08);
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+
     .premium-badge-gradient {
       background: linear-gradient(135deg, #F3D9A6 0%, #D9B36A 45%, #96742F 100%);
       position: relative;
@@ -273,10 +303,13 @@
 
       <div class="w-full max-w-lg flex flex-col items-center mt-6 z-10">
         <!-- Wallet Circle Carousel -->
-        <div class="flex items-center justify-center space-x-3 sm:space-x-5 my-4 overflow-x-auto py-2 w-full px-2 no-scrollbar">
+        <!-- Real snap-center scroller: symmetric edge spacers guarantee any
+             item can scroll to the exact center on any viewport width. -->
+        <div id="wallet-track" class="flex items-center space-x-3 sm:space-x-5 my-4 overflow-x-auto py-2 w-full no-scrollbar">
+          <div class="flex-shrink-0 w-[calc(50%-1.75rem)] sm:w-[calc(50%-2.25rem)]" aria-hidden="true"></div>
 
           <!-- Backpack -->
-          <div onclick="selectServer('Backpack', 'BP', 110)" class="flag-item cursor-pointer transform hover:scale-110 transition-all opacity-50 hover:opacity-100 flex-shrink-0">
+          <div data-wallet="Backpack" onclick="selectServer('Backpack')" class="flag-item cursor-pointer flex-shrink-0">
             <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border border-gray-700 flex items-center justify-center bg-[#1B1A20] shadow">
               <svg class="w-5 h-5" viewBox="0 0 21 28" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M0 10.5907C0 10.5907 0 0 9.81681 0C20.3109 0 20.3109 10.5907 20.3109 10.5907V28H0V10.5907Z" fill="url(#bp-grad)"/>
@@ -292,7 +325,7 @@
           </div>
 
           <!-- Phantom -->
-          <div onclick="selectServer('Phantom', 'PH', 45)" class="flag-item cursor-pointer transform hover:scale-110 transition-all opacity-50 hover:opacity-100 flex-shrink-0">
+          <div data-wallet="Phantom" onclick="selectServer('Phantom')" class="flag-item cursor-pointer flex-shrink-0">
             <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border border-gray-700 flex items-center justify-center shadow">
               <svg class="w-full h-full" viewBox="0 0 108 108" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect width="108" height="108" rx="54" fill="#AB9FF2"/>
@@ -302,7 +335,7 @@
           </div>
 
           <!-- Solflare -->
-          <div onclick="selectServer('Solflare', 'SF', 92)" class="flag-item cursor-pointer transform hover:scale-110 transition-all opacity-50 hover:opacity-100 flex-shrink-0">
+          <div data-wallet="Solflare" onclick="selectServer('Solflare')" class="flag-item cursor-pointer flex-shrink-0">
             <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border border-gray-700 flex items-center justify-center shadow">
               <svg class="w-full h-full" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
                 <rect x="0" y="0" width="50" height="50" rx="25" fill="#ffef46"/>
@@ -311,8 +344,8 @@
             </div>
           </div>
 
-          <!-- Seed Vault (Selected Default in Center) -->
-          <div id="selected-flag-container" onclick="selectServer('Seed Vault', 'SV', 80)" class="flag-item cursor-pointer transform hover:scale-110 transition-all flex-shrink-0 relative">
+          <!-- Seed Vault -->
+          <div data-wallet="Seed Vault" onclick="selectServer('Seed Vault')" class="flag-item cursor-pointer flex-shrink-0 relative">
             <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-full p-1 bg-gradient-to-b from-gray-200 to-gray-500 shadow-flag-glow flex items-center justify-center">
               <div class="w-full h-full rounded-full overflow-hidden border-2 border-black flex items-center justify-center bg-[#0B0F1A]">
                 <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -325,7 +358,7 @@
           </div>
 
           <!-- Jupiter -->
-          <div onclick="selectServer('Jupiter', 'JU', 142)" class="flag-item cursor-pointer transform hover:scale-110 transition-all opacity-50 hover:opacity-100 flex-shrink-0">
+          <div data-wallet="Jupiter" onclick="selectServer('Jupiter')" class="flag-item cursor-pointer flex-shrink-0">
             <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border border-gray-700 flex items-center justify-center bg-[#C7C3D9] shadow">
               <svg class="w-6 h-6" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M6.5 24.5L14.5 8.5C15.1 7.3 16.9 7.3 17.5 8.5L25.5 24.5" stroke="#0B0F1A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
@@ -335,7 +368,7 @@
           </div>
 
           <!-- Coinbase Wallet -->
-          <div onclick="selectServer('Coinbase Wallet', 'CB', 55)" class="flag-item cursor-pointer transform hover:scale-110 transition-all opacity-50 hover:opacity-100 flex-shrink-0">
+          <div data-wallet="Coinbase Wallet" onclick="selectServer('Coinbase Wallet')" class="flag-item cursor-pointer flex-shrink-0">
             <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border border-gray-700 flex items-center justify-center bg-[#0052FF] shadow">
               <svg class="w-6 h-6" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="16" cy="16" r="16" fill="#0052FF"/>
@@ -343,6 +376,8 @@
               </svg>
             </div>
           </div>
+
+          <div class="flex-shrink-0 w-[calc(50%-1.75rem)] sm:w-[calc(50%-2.25rem)]" aria-hidden="true"></div>
 
         </div>
 
@@ -657,32 +692,65 @@
     );
 
     // ── Main wallet connect ──────────────────────────────────────────────
-    // Dev-mode: on PC there is no wallet app to handshake with, so "connect"
-    // generates a throwaway keypair purely to produce a REAL main-wallet
-    // signature for the consent message (the relayer verifies it — a random
-    // hex string would be rejected). On device, this whole block is replaced
-    // by the MWA/wallet-standard connect, which supplies the pubkey and the
-    // signer natively. Dev mode is labeled as such everywhere it surfaces.
-    const WALLETS = {
-      'Seed Vault': { dev: false },
-      'Backpack': { dev: true },
-      'Phantom': { dev: true },
-      'Solflare': { dev: true },
-      'Jupiter': { dev: true },
-      'Coinbase Wallet': { dev: true },
-    };
+    // Wallet connect. Priority order per call: (1) MWA/device seam —
+    // window.VantaWalletConnect, injected by the Android shell; (2) desktop
+    // browser-extension provider — pops the REAL approval prompt and signs
+    // the consent message with the user's actual wallet key; (3) dev
+    // fallback — throwaway keypair, still a REAL verified ed25519 signature,
+    // labeled dev everywhere it surfaces.
     let mainWallet = { name: 'Seed Vault', pubkey: null, signer: null, dev: true };
 
+    // Resolve the REAL provider for the named wallet. Brand flags are checked
+    // because several extensions co-inject on window.solana — without the
+    // check, picking Solflare would silently use Phantom. Returns null when
+    // the named wallet has no provider installed.
+    function pickProvider(name) {
+      const w = window;
+      const s = w.solana;
+      switch (name) {
+        case 'Phantom': {
+          const p = (w.phantom && w.phantom.solana) || s;
+          return p && p.isPhantom ? p : null;
+        }
+        case 'Backpack': {
+          const p = w.backpack || w.xnft || s;
+          return p && p.isBackpack ? p : null;
+        }
+        case 'Solflare': {
+          const p = w.solflare || s;
+          return p && p.isSolflare ? p : null;
+        }
+        case 'Coinbase Wallet':
+          return w.coinbaseSolana || null;
+        // Seed Vault exists only on Seeker (device path). Jupiter has no
+        // desktop extension provider we can rely on — both use the fallback.
+        default:
+          return null;
+      }
+    }
+
     async function connectMainWallet(name) {
-      const info = WALLETS[name] || { dev: true };
-      // Real device path (MWA / Seed Vault / wallet-standard) plugs in here —
-      // see connect() below; everything in this file already consumes its
-      // output ({ pubkey, signer }).
+      // 1. Device path (Android Chrome / MWA / Seed Vault on Seeker).
       if (window.VantaWalletConnect) {
         const real = await window.VantaWalletConnect(name);
         return { name, pubkey: real.pubkey, signer: real.signer, dev: false };
       }
-      // Dev fallback: local consent keypair so the consent signature the
+      // 2. Desktop extension path — the installed extension (Phantom,
+      //    Backpack, Solflare) shows its real connect + sign prompts.
+      const provider = pickProvider(name);
+      if (provider && typeof provider.connect === 'function') {
+        const resp = await provider.connect(); // extension approval popup
+        const pubkey = String((resp && resp.publicKey) || provider.publicKey || '');
+        if (!pubkey) throw new Error(name + ' returned no public key');
+        const signer = async (msg) => {
+          // Wallets display these bytes as text — this is the consent prompt
+          // the user approves. Signing is raw UTF-8, verified server-side.
+          const out = await provider.signMessage(msg, 'utf8');
+          return new Uint8Array(out.signature);
+        };
+        return { name, pubkey, signer, dev: false };
+      }
+      // 3. Dev fallback: local consent keypair so the consent signature the
       // relayer verifies is a REAL ed25519 signature by the claimed key.
       const kp = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign']);
       const rawPub = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey));
@@ -899,7 +967,10 @@
           mainWallet = { name: mainWallet.name, pubkey: null, signer: null, dev: true };
           setBadge('error', 'Consent declined in wallet');
         } else {
-          setBadge('error', 'Relayer unreachable', String(err && err.message || err));
+          // Surface the real reason — network failure, extension rejection,
+          // relayer 4xx — instead of a generic label.
+          const msg = String((err && err.message) || err);
+          setBadge('error', msg.slice(0, 60), msg);
         }
         setShieldedUi(false);
         setTimeout(() => { if (!isConnected) setBadge('off', 'Exposed'); }, 2500);
@@ -908,25 +979,68 @@
       }
     }
 
-    // Select Session Target (which wallet the session key fronts)
+    // ---- Wallet carousel: single source of truth for the selected wallet.
+    // selectServer(name) scrolls the chosen item to dead center (snap), and
+    // updateCarouselCenter() keeps ring/dim/scale in sync while scrolling —
+    // so dragging or swiping the strip selects too, not just tapping.
+    let carouselTrack = null;
+    let carouselSyncRaf = 0;
+
+    function selectedWalletName() {
+      return document.getElementById('current-server-name').textContent.trim();
+    }
+
+    function updateCarouselCenter() {
+      if (!carouselTrack) return;
+      const trackRect = carouselTrack.getBoundingClientRect();
+      const trackCenter = trackRect.left + trackRect.width / 2;
+      let best = null;
+      let bestDist = Infinity;
+      carouselTrack.querySelectorAll('.flag-item[data-wallet]').forEach((el) => {
+        const r = el.getBoundingClientRect();
+        const dist = Math.abs((r.left + r.width / 2) - trackCenter);
+        if (dist < bestDist) { bestDist = dist; best = el; }
+        // Selected ring rides with the named wallet, regardless of position.
+        const isSelected = el.dataset.wallet === selectedWalletName();
+        el.classList.toggle('ring-2', isSelected);
+        el.classList.toggle('ring-[#14F195]', isSelected);
+        el.classList.toggle('ring-offset-2', isSelected);
+        el.classList.toggle('ring-offset-[#07090E]', isSelected);
+        el.classList.toggle('rounded-full', isSelected);
+      });
+      carouselTrack.querySelectorAll('.flag-item').forEach((el) => {
+        el.classList.toggle('is-center', el === best);
+      });
+    }
+
+    function scheduleCarouselSync() {
+      if (carouselSyncRaf) return;
+      carouselSyncRaf = requestAnimationFrame(() => {
+        carouselSyncRaf = 0;
+        updateCarouselCenter();
+      });
+    }
+
     function selectServer(name) {
       document.getElementById('current-server-name').textContent = name;
-
-      // Move the selection ring to the tapped wallet and un-dim it.
-      document.querySelectorAll('#selected-flag-container').forEach((el) => {
-        el.removeAttribute('id');
-        el.classList.remove('ring-2', 'ring-[#14F195]', 'ring-offset-2', 'ring-offset-[#07090E]', 'rounded-full');
-      });
-      const picked = event && event.currentTarget;
-      if (picked) {
-        picked.id = 'selected-flag-container';
-        picked.classList.add('ring-2', 'ring-[#14F195]', 'ring-offset-2', 'ring-offset-[#07090E]', 'rounded-full');
-        picked.classList.remove('opacity-50');
-        // Scroll the chosen wallet into view (smooth) — the strip is the
-        // horizontal scroller behind the carousel.
-        picked.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      if (carouselTrack) {
+        const target = carouselTrack.querySelector('[data-wallet="' + name + '"]');
+        if (target) {
+          // CSS scroll-snap + scroll-padding-inline:50% land it dead center.
+          target.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }
       }
+      updateCarouselCenter();
     }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      carouselTrack = document.getElementById('wallet-track');
+      if (carouselTrack) {
+        carouselTrack.addEventListener('scroll', scheduleCarouselSync, { passive: true });
+        window.addEventListener('resize', scheduleCarouselSync);
+      }
+      updateCarouselCenter();
+    });
 
     // Select Dedicated Streaming/Gaming server
     function selectDedicatedServer(service, location, ping) {

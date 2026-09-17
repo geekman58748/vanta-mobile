@@ -56,15 +56,19 @@ function createMessageBytes({ clientPubkey, mainPubkey, issuedAt }) {
 
 // Main-wallet CONSENT message. When the client supplies mainSignature, the
 // claimed main wallet must have signed exactly these bytes — proof that the
-// owner of the main address opted into shielding. Message is minimal and
-// canonical: prefix || mainPubkey || clientPubkey || issuedAt.
+// owner of the main address opted into shielding. Human-readable ON PURPOSE:
+// wallet UIs (Phantom/Backpack/Solflare signMessage, Seed Vault, MWA) display
+// these bytes as text, so this IS the approval prompt the user sees. Must
+// stay byte-identical to buildConsentMessage in both session engines.
 function consentMessageBytes({ clientPubkey, mainPubkey, issuedAt }) {
-  return Buffer.concat([
-    Buffer.from('vanta-session-consent-v1\0'),
-    Buffer.from(b58decode(mainPubkey)),
-    Buffer.from(b58decode(clientPubkey)),
-    Buffer.from(issuedAt.toString(10), 'ascii'),
-  ]);
+  return Buffer.from(
+    'VANTA session consent v1\n' +
+    `Shield wallet (disposable): ${clientPubkey}\n` +
+    `Main wallet: ${mainPubkey}\n` +
+    `Issued at: ${issuedAt}\n` +
+    'By signing, the main wallet approves VANTA shielding transactions for this session key only.',
+    'utf8',
+  );
 }
 
 function json(res, status, body) {
