@@ -616,15 +616,21 @@
   </nav>
 
   <script>
-    // Relayer endpoint resolution: ?relayer= query param wins (and sticks via
-    // localStorage), else localhost for dev. On the Render deployment, open
-    // the web URL once with ?relayer=https://<relayer-host> to bind them.
+    // Relayer endpoint resolution, in priority order:
+    //   1. ?relayer= query param (wins, sticks in localStorage)
+    //   2. previously-bound relayer in localStorage
+    //   3. the production relayer, when the page itself is deployed (any
+    //      non-localhost origin) — deployed site works with zero config
+    //   4. localhost:8787 for local dev
     (function () {
       const q = new URLSearchParams(location.search).get('relayer');
       if (q) { try { localStorage.setItem('vanta_relayer', q); } catch (e) {} }
       let stored = null;
       try { stored = localStorage.getItem('vanta_relayer'); } catch (e) {}
-      window.VANTA_RELAYER_URL = q || stored || 'http://localhost:8787';
+      const host = location.hostname;
+      const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '';
+      const PROD_RELAYER = 'https://vanta-mobile-8ee4.onrender.com';
+      window.VANTA_RELAYER_URL = q || stored || (isLocal ? 'http://localhost:8787' : PROD_RELAYER);
     })();
   </script>
   <script src="vanta-engine.js"></script>
