@@ -150,9 +150,11 @@
       this.state = STATE.PROVISIONING;
       try {        // 1. Session keypair — DERIVED deterministically when a main wallet is
         //    connected (key always restorable, refresh-safe, funds recoverable;
-        //    rotateOnBurn bumps the salt so a burned key never comes back), or
-        //    random when not (ephemeral dev path). Never persisted as bytes.
-        if (mainWalletPubkey) {
+        //    rotateOnBurn bumps the salt so a burned key never comes back).
+        //    Derivation uses tweetnacl (loaded before this file): WebCrypto
+        //    cannot import an Ed25519 SEED via 'raw' — raw import means a
+        //    PUBLIC key, which silently broke every signature.
+        if (mainWalletPubkey && root.nacl && root.nacl.sign) {
           try {
             const saltN = Number(localStorage.getItem('vanta_salt') || 0);
             const rootMaterial = concatBytes([
@@ -163,22 +165,85 @@
             const seed = new Uint8Array(
               await root.crypto.subtle.digest('SHA-256', rootMaterial),
             );
-            this._keypair = await root.crypto.subtle.importKey(
-              'raw',
-              seed.slice(0, 32),
-              'Ed25519',
-              true,
-              ['sign'],
-            );
-          } catch {
-            // No localStorage (test runner / exotic env): fall back to random.
-            this._keypair = await root.crypto.subtle.generateKey(
-              { name: 'Ed25519' },
-              true,
-              ['sign'],
-            );
+            const kp = root.nacl.sign.keyPair.fromSeed(seed);
+            this._naclKp = kp;
+            this._keypair = null;
+            const clientPubkey = b58encode(kp.publicKey);
+
+            // Internal signer for the chain layer (tx signing by the session key).
+            this._internalSessionSigner = async (wireBytes) =>
+              root.nacl.sign.detached(wireBytes, kp.secretKey);
+
+            // 2. MAIN-WALLET CONSENT (real wallets only): the injected signer
+            //    signs the consent message WITH the main wallet key — user
+            //    approval in the wallet UI, and server-side proof the main
+            //    address opted in.
+            const issuedAt = nowSeconds();
+            const consentSigner = opts.signWithMainWallet || this.signWithMainWallet;
+            let mainSignature = null;
+            if (consentSigner) {
+              const consentMsg = VantaSessionEngine.buildConsentMessage({
+                clientPubkey,
+                mainPubkey: mainWalletPubkey,
+                issuedAt,
+              });
+              const consentSig = await consentSigner(consentMsg, issuedAt);
+              if (!consentSig) {
+                throw new VantaError('Wallet declined the shielding consent request', 'consent_denied');
+              }
+              mainSignature = b58encode(new Uint8Array(consentSig));
+            }
+
+            // 3. Sign the create request with the SESSION key (not the main wallet).
+            const message = VantaSessionEngine.buildCreateMessage({
+              clientPubkey,
+              mainPubkey: mainWalletPubkey,
+              issuedAt,
+            });
+            const createSignature = b58encode(root.nacl.sign.detached(message, kp.secretKey));
+
+            // 4. Register with the relayer.
+            const res = await this._post('/v1/session', {
+              clientPubkey,
+              mainPubkey: mainWalletPubkey,
+              issuedAt,
+              createSignature,
+              mainSignature: mainSignature || undefined,
+            });
+            if (!res.ok) {
+              throw new VantaError(res.error || 'Relayer refused session', res.code || 'relayer_error');
+            }
+
+            this.session = {
+              id: res.session.id,
+              clientPubkey,
+              mainPubkey: mainWalletPubkey,
+              expiresAt: res.session.expiresAt,
+              spendCapLamports: res.session.spendCapLamports,
+              txCapLamports: res.session.txCapLamports,
+              spentLamports: 0,
+              startedAt: Date.now(),
+            };
+            this.state = STATE.ACTIVE;
+            // Burned session (the page sweeps leftovers back to the main wallet
+            // before calling this) — advance the salt so the NEXT session derives
+            // a FRESH deterministic key instead of resurrecting this one.
+            try { VantaSessionEngine._rotateOnBurn(); } catch { /* private mode */ }
+            return {
+              sessionPubkey: clientPubkey,
+              sessionId: res.session.id,
+              expiresAt: res.session.expiresAt,
+              spendCapLamports: res.session.spendCapLamports,
+              txCapLamports: res.session.txCapLamports,
+              consentVerified: !!res.session.consentVerified,
+            };
+          } catch (err) {
+            if (err instanceof VantaError) throw err;
+            // Derivation unavailable (no nacl / no localStorage): fall through
+            // to the legacy random-keypath below.
+            this._naclKp = null;
           }
-        } else {
+        }
           this._keypair = await root.crypto.subtle.generateKey(
             { name: 'Ed25519' },
             true,
