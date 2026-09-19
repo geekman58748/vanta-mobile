@@ -153,14 +153,6 @@
             100% { transform: translate(-50%, 0) scale(1); opacity: 1; }
         }
 
-        /* Pulse ring for face ID biometric check */
-        .pulse-ring {
-            animation: pulseRing 1.8s infinite cubic-bezier(0.4, 0, 0.6, 1);
-        }
-        @keyframes pulseRing {
-            0%, 100% { opacity: 0.2; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(1.08); }
-        }
     </style>
 </head>
 <body class="bg-black min-h-screen flex items-center justify-center p-0 sm:p-4">
@@ -408,9 +400,8 @@
                     <button onclick="pressKey('DEL')" class="py-3.5 bg-[#1a1d2d] active:bg-red-500/40 rounded-2xl transition-colors text-xs">DEL</button>
                 </div>
 
-                <button id="confirmSendBtn" onclick="confirmShieldedSend()" class="w-full py-4 bg-[#5B41F4] hover:bg-indigo-600 active:scale-[0.98] text-white font-bold rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.84-1.645 1.316-3.48 1.316-5.364 0-3.412-1.528-6.467-3.924-8.5"></path></svg>
-                    Confirm with Face ID
+                <button id="confirmSendBtn" onclick="confirmShieldedSend()" class="w-full py-4 bg-[#5B41F4] hover:bg-indigo-600 active:scale-[0.98] text-white font-bold rounded-2xl shadow-xl transition-all">
+                    Send
                 </button>
 
             </div>
@@ -559,16 +550,7 @@
             </div>
         </div>
 
-        <!-- Biometric Overlay -->
-        <div id="faceIdSheet" class="fixed inset-0 bg-black/90 backdrop-blur-xl z-50 hidden flex flex-col items-center justify-center p-6">
-            <div class="flex flex-col items-center gap-4">
-                <div class="relative flex items-center justify-center w-24 h-24">
-                    <div class="absolute inset-0 rounded-3xl border-2 border-indigo-500/40 pulse-ring"></div>
-                    <svg class="w-12 h-12 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.84-1.645 1.316-3.48 1.316-5.364 0-3.412-1.528-6.467-3.924-8.5"></path></svg>
-                </div>
-                <span class="text-sm font-bold text-white tracking-wide">Verifying Face ID...</span>
-            </div>
-        </div>
+
 
     </div>
 
@@ -697,19 +679,11 @@
           if (engine.session) return;
           uiBusy = true;
           try {
-            const face = $('faceIdSheet');
-            face.classList.remove('hidden');
-            face.querySelector('span').textContent = 'Opening private wallet…';
             const res = await engine.shieldOn();
-            face.classList.add('hidden');
-            face.querySelector('span').textContent = 'Verifying Face ID...';
             renderShielded(res);
             startBalancePolling();
             if (claimedName) $('receiveName').textContent = claimedName;
           } catch (e) {
-            const face = $('faceIdSheet');
-            face.classList.add('hidden');
-            face.querySelector('span').textContent = 'Verifying Face ID...';
             showToast(String(e.message || e).slice(0, 80));
           } finally { uiBusy = false; }
         }
@@ -751,9 +725,6 @@
           uiBusy = true;
           try {
             if (sessionBalance > 0) {
-              const face = $('faceIdSheet');
-              face.classList.remove('hidden');
-              face.querySelector('span').textContent = 'Sweeping to destination…';
               try {
                 const sig = await VantaChain.sweepBack({
                   sessionSigner: (wire) => engine.signSessionBytes(wire),
@@ -764,8 +735,6 @@
               } catch (e) {
                 showToast('Sweep failed (' + String(e.message || e).slice(0, 40) + ')');
               }
-              face.classList.add('hidden');
-              face.querySelector('span').textContent = 'Verifying Face ID...';
             }
             await engine.shieldOff();
             stopBalancePolling();
@@ -811,7 +780,7 @@
         async function confirmShieldedSend() {
           if (uiBusy) return;
           playHapticTick();
-          if (!engine.session) { showToast('Wallet not active yet — connect once to activate'); return; }
+          if (!engine.session) { showToast('Session not active — opening…'); provisionSession(); return; }
           const toRaw = $('recipientInput').value.trim();
           const amount = parseFloat(keypadVal) || 0;
           if (!toRaw) { showToast('Enter a recipient'); return; }
