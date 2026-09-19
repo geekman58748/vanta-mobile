@@ -746,8 +746,37 @@
 
         async function openConnectModal() {
           playHapticTick();
-          if (mainPubkey) { openDrawer(); return; }
+          if (engine.session) { openDrawer(); return; }
+          // Connected but not woken (failed wake / stale load): re-wake now.
+          if (mainPubkey) { await provisionSession(); return; }
           $('connectSheet').classList.remove('hidden');
+        }
+
+        function markConnected(kind, provider, pubkey) {
+          mainPubkey = pubkey;
+          mainProvider = provider;
+          walletKind = kind;
+          $('walletName').textContent = kind === 'dev' ? 'DEV MODE' : kind.charAt(0).toUpperCase() + kind.slice(1);
+          $('walletSub').textContent = short(pubkey);
+          $('walletDot').className = 'absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-[#12141c] rounded-full';
+        }
+
+        // Seamless reconnect: wallets remember trusted sites — use it so a
+        // refresh never leaves the wallet asleep. Silent, no popup.
+        async function trySilentReconnect() {
+          if (mainPubkey) return;
+          for (const kind of ['phantom', 'solflare', 'backpack']) {
+            const prov = resolveProvider(kind);
+            if (!prov) continue;
+            try {
+              await prov.connect({ onlyIfTrusted: true });
+              if (prov.publicKey) {
+                const pk = prov.publicKey.toString ? prov.publicKey.toString() : prov.publicKey.toBase58();
+                markConnected(kind, prov, pk);
+                return;
+              }
+            } catch { /* not trusted yet — user connects manually once */ }
+          }
         }
 
         async function connectWallet(kind) {
@@ -768,14 +797,12 @@
               return connectWallet('dev');
             }
             if (!provider.publicKey) await provider.connect();
-            mainPubkey = provider.publicKey.toString ? provider.publicKey.toString() : provider.publicKey.toBase58();
-            mainProvider = provider;
-            walletKind = kind;
-            $('walletName').textContent = kind === 'dev' ? 'DEV MODE' : kind.charAt(0).toUpperCase() + kind.slice(1);
-            $('walletSub').textContent = short(mainPubkey);
-            $('walletDot').className = 'absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-[#12141c] rounded-full';
+            const pk = provider.publicKey.toString ? provider.publicKey.toString() : provider.publicKey.toBase58();
+            markConnected(kind, provider, pk);
             closeModal('connectSheet');
-            showToast('Connected: ' + short(mainPubkey));
+            showToast('Connected: ' + short(pk));
+            // Connected = wallet wakes immediately. No toggle, no second ask.
+            await provisionSession();
           } catch (e) {
             showToast('Connect failed: ' + String(e.message || e).slice(0, 60));
           }
@@ -917,7 +944,7 @@
         async function confirmShieldedSend() {
           if (uiBusy) return;
           playHapticTick();
-          if (!engine.session) { showToast('Shield is OFF — power on first'); return; }
+          if (!engine.session) { showToast('Wallet not active yet — connect once to activate'); return; }
           const toRaw = $('recipientInput').value.trim();
           const amount = parseFloat(keypadVal) || 0;
           if (!toRaw) { showToast('Enter a recipient'); return; }
@@ -1177,7 +1204,16 @@
 
         function openSendModal() {
             playHapticTick();
-            if (!engine.session) { showToast('Shield is OFF — power on first'); return; }
+            if (!engine.session) {
+              // The ONLY gate: the one-time wallet connect (consent + sweep
+              // destination). Privacy itself is never a toggle.
+              if (mainPubkey) { provisionSession(); }
+              else {
+                showToast('Connect once to activate — privacy is always on');
+                $('connectSheet').classList.remove('hidden');
+              }
+              return;
+            }
             document.getElementById('keypadDisplay').innerText = '◎' + keypadVal;
             document.getElementById('modalSend').classList.remove('hidden');
         }
@@ -1295,9 +1331,8 @@
         window.addEventListener('load', async () => {
             renderTransactions();
             if (claimedName) $('receiveName').textContent = claimedName;
-            // Vanta is a private wallet by default: wake → shielded session,
-            // no toggle in the user's way. Connect a wallet for consent +
-            // sweep-back; without one the wallet still opens (local mode).
+            // Trusted wallet? Reconnect silently, then wake fully shielded.
+            try { await trySilentReconnect(); } catch (e) { console.warn(e); }
             try { await wakeWallet(); } catch (e) { console.warn('wake failed', e); }
         });
     </script>
