@@ -95,6 +95,16 @@ class SessionStore {
     return this.sessions.get(id) || null;
   }
 
+  /** Find the live (non-revoked, unexpired) session for a given session
+   *  pubkey. Used by the name registry to prove a receive-address rotation
+   *  came from a currently-shielded session — fail-closed when absent. */
+  findLiveByClientPubkey(clientPubkey, t = nowSeconds()) {
+    for (const s of this.sessions.values()) {
+      if (s.clientPubkey === clientPubkey && this._isLive(s, t)) return s;
+    }
+    return null;
+  }
+
   _isLive(session, t = nowSeconds()) {
     return !session.revoked && session.expiresAt > t;
   }

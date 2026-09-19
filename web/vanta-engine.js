@@ -309,6 +309,125 @@
       }
     }
 
+    // Canonical .vanta name-layer messages. Must stay byte-identical to the
+    // relayer's builders in relayer/src/names.js.
+    static buildNameClaimMessage({ name, ownerPubkey, issuedAt }) {
+      return concatBytes([
+        enc.encode('vanta-name-claim-v1\0'),
+        enc.encode(name),
+        enc.encode('\0'),
+        b58decode(ownerPubkey),
+        enc.encode(String(issuedAt)),
+      ]);
+    }
+
+    static buildReceiveUpdateMessage({ name, receivePubkey, issuedAt }) {
+      return concatBytes([
+        enc.encode('vanta-name-receive-v1\0'),
+        enc.encode(name),
+        enc.encode('\0'),
+        b58decode(receivePubkey),
+        enc.encode(String(issuedAt)),
+      ]);
+    }
+
+    static buildKycMessage({ name, kycHash, issuedAt }) {
+      return concatBytes([
+        enc.encode('vanta-name-kyc-v1\0'),
+        enc.encode(name),
+        enc.encode('\0'),
+        enc.encode(kycHash),
+        enc.encode(String(issuedAt)),
+      ]);
+    }
+
+    // ── Name layer (.vanta) ───────────────────────────────────────────
+    // Off-chain social identity. claimName/KYC sign with the MAIN wallet
+    // (injected callback); receive-address rotation signs with the CURRENT
+    // session key. The engine never holds main-wallet secrets.
+
+    /** Claim a .vanta name with the main wallet. Options:
+     *  signWithMainWallet(bytes, issuedAt) → signature (required unless the
+     *  engine-level signer exists); ownerPubkey — explicit main pubkey so a
+     *  claim works while the shield is OFF; kyc — optional { provider,
+     *  level, hash } attestation stored unverified until /kyc confirms it. */
+    async claimName(name, { signWithMainWallet, ownerPubkey, kyc } = {}) {
+      if (!name || typeof name !== 'string') throw new VantaError('name is required', 'config');
+      const signer = signWithMainWallet || this.signWithMainWallet;
+      if (!signer) throw new VantaError('signWithMainWallet is required to claim a name', 'config');
+      const owner = ownerPubkey || (this.session && this.session.mainPubkey);
+      if (!owner) throw new VantaError('Main wallet pubkey unavailable — connect the wallet first', 'config');
+      const issuedAt = nowSeconds();
+      const message = VantaSessionEngine.buildNameClaimMessage({ name, ownerPubkey: owner, issuedAt });
+      const sig = await signer(message, issuedAt);
+      if (!sig) throw new VantaError('Main wallet declined the name claim', 'consent_denied');
+      const res = await this._post('/v1/names/claim', {
+        name,
+        ownerPubkey: owner,
+        issuedAt,
+        signature: b58encode(new Uint8Array(sig)),
+        kyc: kyc || undefined,
+      });
+      if (!res.ok) throw new VantaError(res.error || 'Name claim refused', res.code || 'claim_failed');
+      return res;
+    }
+
+    /** Rotate the ephemeral receive address for a name — signed by the
+     *  CURRENT session key. Fresh address per receive-reveal breaks
+     *  counterparty linkability. */
+    async setReceiveAddress(name, receivePubkey) {
+      if (!this.session || !this._internalSessionSigner) {
+        throw new VantaError('Shield is OFF — no session key', 'invalid_state');
+      }
+      if (b58decode(receivePubkey).length !== 32) {
+        throw new VantaError('receivePubkey must be a 32-byte base58 pubkey', 'config');
+      }
+      const clean = String(name || '').replace(/\.vanta$/, '');
+      const issuedAt = nowSeconds();
+      const message = VantaSessionEngine.buildReceiveUpdateMessage({ name: clean, receivePubkey, issuedAt });
+      const sigBytes = await this._internalSessionSigner(message);
+      const res = await this._post(`/v1/names/${encodeURIComponent(clean)}/receive`, {
+        receivePubkey,
+        issuedAt,
+        signature: b58encode(sigBytes),
+        clientPubkey: this.session.clientPubkey, // relayer proves this session is live
+      });
+      if (!res.ok) throw new VantaError(res.error || 'Receive-address update refused', res.code || 'receive_failed');
+      return res;
+    }
+
+    /** Attach (or refresh) a signed KYC attestation. Documents never touch
+     *  the relayer — only the sha256 digest of the attestation does. */
+    async setKycAttestation(name, kyc, { signWithMainWallet, ownerPubkey } = {}) {
+      const signer = signWithMainWallet || this.signWithMainWallet;
+      if (!signer) throw new VantaError('signWithMainWallet is required for KYC updates', 'config');
+      const owner = ownerPubkey || (this.session && this.session.mainPubkey);
+      if (!owner) throw new VantaError('Main wallet pubkey unavailable — connect the wallet first', 'config');
+      const kycHash = kyc && typeof kyc.hash === 'string' ? kyc.hash.toLowerCase() : null;
+      if (!/^[0-9a-f]{64}$/.test(kycHash || '')) {
+        throw new VantaError('kyc.hash must be a 64-char sha256 hex digest', 'config');
+      }
+      const clean = String(name || '').replace(/\.vanta$/, '');
+      const issuedAt = nowSeconds();
+      const message = VantaSessionEngine.buildKycMessage({ name: clean, kycHash, issuedAt });
+      const sig = await signer(message, issuedAt);
+      if (!sig) throw new VantaError('Main wallet declined the KYC attestation', 'consent_denied');
+      const res = await this._post(`/v1/names/${encodeURIComponent(clean)}/kyc`, {
+        ownerPubkey: owner,
+        issuedAt,
+        signature: b58encode(new Uint8Array(sig)),
+        kyc: { provider: kyc.provider, level: kyc.level, hash: kycHash },
+      });
+      if (!res.ok) throw new VantaError(res.error || 'KYC attestation refused', res.code || 'kyc_failed');
+      return res;
+    }
+
+    /** Resolve a name against the relayer. Returns { ok, record? }. */
+    async resolveName(name) {
+      const clean = String(name || '').replace(/\.vanta$/, '');
+      return this._get(`/v1/names/${encodeURIComponent(clean)}`);
+    }
+
     static buildCreateMessage({ clientPubkey, mainPubkey, issuedAt }) {
       return concatBytes([
         enc.encode('vanta-session-create-v1\0'),

@@ -21,6 +21,7 @@ const http = require('node:http');
 const crypto = require('node:crypto');
 const { config, assertSane } = require('./config');
 const { SessionStore } = require('./store');
+const { NameRegistry } = require('./names');
 const { encode: b58encode, decode: b58decode } = require('./base58');
 
 // Raw 32-byte ed25519 keys are rejected by OpenSSL 3's decoder (Node >= 17
@@ -132,6 +133,10 @@ function createRelayer({ store, signer, config: cfg = config, logger = console }
     throw err;
   });
 
+  // Off-chain .vanta name registry (social layer). Cryptographic ownership,
+  // zero on-chain footprint — see src/names.js for the trust model.
+  const names = new NameRegistry({ verifyEd25519, logger });
+
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     const path = url.pathname;
@@ -155,6 +160,7 @@ function createRelayer({ store, signer, config: cfg = config, logger = console }
           mode: dryRun ? 'dry_run' : 'live',
           activeSessions: theStore.activeSessionCount(),
           globalSpendCommitted: theStore.activeSpendCommitted(),
+          names: names.stats(),
           caps: {
             maxSessionSpendLamports: cfg.MAX_SESSION_SPEND_LAMPORTS,
             maxTxLamports: cfg.MAX_TX_LAMPORTS,
@@ -310,6 +316,62 @@ function createRelayer({ store, signer, config: cfg = config, logger = console }
         }
       }
 
+      // ── name registry (off-chain social layer) ─────────────────────────
+      if (req.method === 'POST' && path === '/v1/names/claim') {
+        const raw = await readBody(req, cfg.MAX_BODY_BYTES);
+        let body;
+        try {
+          body = JSON.parse(raw.toString('utf8'));
+        } catch {
+          return json(res, 400, { ok: false, error: 'Invalid JSON' });
+        }
+        const out = names.claim({
+          name: body.name,
+          ownerPubkey: body.ownerPubkey,
+          issuedAt: body.issuedAt,
+          signature: body.signature,
+          kyc: body.kyc,
+          ip,
+        });
+        return json(res, out.ok ? 201 : out.status, out.ok ? { ok: true, record: out.record } : { ok: false, code: out.code, error: out.error });
+      }
+
+      const nm = path.match(/^\/v1\/names\/([^/]+)(\/(receive|kyc))?$/);
+      if (nm) {
+        const nameKey = nm[1].replace(/\.vanta$/, ''); // accept with or without suffix
+        const action = nm[3] || null;
+
+        if (req.method === 'GET' && !action) {
+          const rec = names.resolve(nameKey);
+          if (!rec) return json(res, 404, { ok: false, error: 'Unknown name' });
+          return json(res, 200, { ok: true, record: rec });
+        }
+
+        if (req.method === 'POST' && (action === 'receive' || action === 'kyc')) {
+          const raw = await readBody(req, cfg.MAX_BODY_BYTES);
+          let body;
+          try {
+            body = JSON.parse(raw.toString('utf8'));
+          } catch {
+            return json(res, 400, { ok: false, error: 'Invalid JSON' });
+          }
+          const out = action === 'receive'
+            ? names.setReceive({
+              name: nameKey,
+              receivePubkey: body.receivePubkey,
+              issuedAt: body.issuedAt,
+              signature: body.signature,
+              // Liveness proof: the signing session key must belong to a
+              // currently-shielded session on THIS relayer (fail-closed).
+              liveSessionPubkey: theStore.findLiveByClientPubkey(body.clientPubkey)
+                ? body.clientPubkey
+                : null,
+            })
+            : names.setKyc({ name: nameKey, ownerPubkey: body.ownerPubkey, issuedAt: body.issuedAt, signature: body.signature, kyc: body.kyc });
+          return json(res, out.ok ? 200 : out.status, out.ok ? { ok: true, record: out.record } : { ok: false, code: out.code, error: out.error });
+        }
+      }
+
       return json(res, 404, { ok: false, error: 'Not found' });
     } catch (err) {
       logger.error?.('request error:', err.message);
@@ -318,8 +380,9 @@ function createRelayer({ store, signer, config: cfg = config, logger = console }
   });
 
   server.theStore = theStore;
+  server.names = names;
   server.dryRun = dryRun;
   return server;
 }
 
-module.exports = { createRelayer, verifyEd25519, createMessageBytes };
+module.exports = { createRelayer, verifyEd25519, createMessageBytes, NameRegistry };
