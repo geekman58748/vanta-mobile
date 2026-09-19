@@ -116,6 +116,19 @@
     }
 
     /**
+     * Rotate the deterministic session-key salt. Called after a clean burn
+     * (sweep → shieldOff): the old session pubkey can never be derived again,
+     * so the next session starts with a fresh address while still being
+     * refresh-safe. Best-effort — private-browsing throws and is ignored.
+     */
+    static _rotateOnBurn() {
+      try {
+        const n = Number(localStorage.getItem('vanta_salt') || 0);
+        localStorage.setItem('vanta_salt', String(n + 1));
+      } catch { /* private mode */ }
+    }
+
+    /**
      * Toggle entry point. Turns the shield ON (provisioning a session key).
      * @param {string} mainWalletPubkey base58 main wallet pubkey (Seed Vault /
      *        MWA-connected wallet)
@@ -135,13 +148,43 @@
       }
 
       this.state = STATE.PROVISIONING;
-      try {
-        // 1. Disposable keypair, generated on device, never leaves except pubkey.
-        this._keypair = await root.crypto.subtle.generateKey(
-          { name: 'Ed25519' },
-          true,
-          ['sign'],
-        );
+      try {        // 1. Session keypair — DERIVED deterministically when a main wallet is
+        //    connected (key always restorable, refresh-safe, funds recoverable;
+        //    rotateOnBurn bumps the salt so a burned key never comes back), or
+        //    random when not (ephemeral dev path). Never persisted as bytes.
+        if (mainWalletPubkey) {
+          try {
+            const saltN = Number(localStorage.getItem('vanta_salt') || 0);
+            const rootMaterial = concatBytes([
+              b58decode(mainWalletPubkey),
+              enc.encode('vanta-session-v1\0'),
+              enc.encode(String(saltN)),
+            ]);
+            const seed = new Uint8Array(
+              await root.crypto.subtle.digest('SHA-256', rootMaterial),
+            );
+            this._keypair = await root.crypto.subtle.importKey(
+              'raw',
+              seed.slice(0, 32),
+              'Ed25519',
+              true,
+              ['sign'],
+            );
+          } catch {
+            // No localStorage (test runner / exotic env): fall back to random.
+            this._keypair = await root.crypto.subtle.generateKey(
+              { name: 'Ed25519' },
+              true,
+              ['sign'],
+            );
+          }
+        } else {
+          this._keypair = await root.crypto.subtle.generateKey(
+            { name: 'Ed25519' },
+            true,
+            ['sign'],
+          );
+        }
         const rawPub = new Uint8Array(
           await root.crypto.subtle.exportKey('raw', this._keypair.publicKey),
         );
@@ -203,6 +246,10 @@
           startedAt: Date.now(),
         };
         this.state = STATE.ACTIVE;
+        // Burned session (the page sweeps leftovers back to the main wallet
+        // before calling this) — advance the salt so the NEXT session derives
+        // a FRESH deterministic key instead of resurrecting this one.
+        try { VantaSessionEngine._rotateOnBurn(); } catch { /* private mode */ }
         return {
           sessionPubkey: clientPubkey,
           sessionId: res.session.id,
