@@ -30,7 +30,7 @@ if (typeof global.Buffer === 'undefined') {
 }
 
 // Resolve the HTML asset to a local file URI
-const htmlAsset = Asset.fromModule(require('./web/vanta.html'));
+const htmlAsset = Asset.fromModule(require('./web/vanta-app.html'));
 
 export default function App() {
   const webViewRef = useRef(null);
@@ -53,48 +53,10 @@ export default function App() {
     try {
       const data = JSON.parse(event.nativeEvent.data);
 
-      if (data.type === 'CONNECT_WALLET') {
-        // WebView asked us to connect a wallet via MWA
-        try {
-          await transact(async (wallet) => {
-            const auth = await wallet.authorize({
-              cluster: 'devnet',
-              identity: {
-                name: 'Vanta Privacy Protocol',
-                uri: 'https://vanta.protocol',
-              },
-            });
+      // No wallet bridge needed — session keys are derived client-side.
+      // The WebView handles everything via tweetnacl + localStorage.
+      if (false) { // placeholder to keep structure
 
-            const raw = auth.accounts[0].publicKey;
-            const pubkey = typeof raw === 'string'
-              ? new PublicKey(raw)
-              : new PublicKey(Buffer.from(raw));
-
-            const address = pubkey.toBase58();
-            const lamports = await connection.getBalance(pubkey);
-            const balance = (lamports / LAMPORTS_PER_SOL).toFixed(4);
-
-            // Tell the WebView: wallet connected successfully
-            sendToWeb(`onWalletConnected('${address}', ${balance});`);
-          });
-        } catch (err) {
-          console.log('VANTA CONNECT ERROR:', err.message, err.code || '', JSON.stringify(err.userInfo || err.data || {}).slice(0, 300));
-          // Wallet connection failed — tell WebView to reset
-          sendToWeb(`
-            document.getElementById('status-badge').className = "flex items-center space-x-2 bg-gray-800 text-gray-400 px-5 py-1.5 rounded-full font-bold text-xs tracking-wide transition-all duration-300 hover:scale-105";
-            document.getElementById('status-text').textContent = "Connection failed";
-            document.getElementById('power-pulse').style.opacity = '0';
-            document.getElementById('power-btn').className = "relative w-36 h-36 sm:w-40 sm:h-40 rounded-[2.2rem] bg-gray-800 shadow-none border border-gray-700 flex items-center justify-center transition-all duration-300 hover:scale-105 opacity-80 cursor-pointer";
-          `);
-        }
-      }
-
-      if (data.type === 'SHIELD_OFF') {
-        // Shield deactivated — nothing to do on native side
-        console.log('Shield deactivated');
-      }
-
-      if (data.type === 'STEALTH_SEND') {
         // WebView asked us to send a stealth transaction
         try {
           const { StealthAddress } = require('./src/stealth/stealth');
@@ -127,7 +89,7 @@ export default function App() {
             sendToWeb(`onStealthTxSent();`);
           });
         } catch (err) {
-          console.error('Stealth send failed:', err);
+          console.error('Native bridge error:', err);
         }
       }
     } catch (parseErr) {

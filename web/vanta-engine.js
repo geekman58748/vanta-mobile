@@ -1,25 +1,18 @@
 'use strict';
 
-// VANTA session engine — BROWSER build.
+// VANTA session engine — BROWSER build (no wallet dependency).
 //
-// This is the web twin of src/session/engine.js: identical lifecycle, identical
-// wire format (domain-separated create message, base58 fields), but the keypair
-// comes from WebCrypto Ed25519 instead of node:crypto. Node's webcrypto is the
-// same API surface, so this exact file is exercised headlessly by
-// relayer/test/browser-engine.test.js before it ever touches a phone.
+// Session keys are derived deterministically from a random seed stored in
+// localStorage + a rotation salt. No main wallet connection required.
 //
-//   OFF  → no session key exists. Nothing in memory, nothing persisted.
-//   ON   → generate Ed25519 keypair, register with the relayer (signed by the
-//          session key itself), expose ONLY the session pubkey.
-//   KILL → revoke with relayer, then wipe key material — even if the network
-//          call fails (the relayer's TTL is the backstop).
+//   OFF      → no session key exists.
+//   ON       → session key derived, registered with relayer, active.
+//   REVOKING → revoking with relayer.
 //
-// The main wallet's secret never passes through here. On device, anything that
-// must be signed by the main wallet goes through the Mobile Wallet Adapter /
-// Seed Vault handshake, which is injected from outside this file.
+// Burn rotates the salt so the next session gets a fresh address.
 
 (function attach(root) {
-  const RELAYER_URL = (root.VANTA_RELAYER_URL || 'http://localhost:8787').replace(/\/+$/, '');
+  const RELAYER_URL = (root.VANTA_RELAYER_URL || 'http://localhost:8787').replace(/\\/+$/, '');
 
   const STATE = Object.freeze({
     OFF: 'OFF',
@@ -77,7 +70,6 @@
   }
 
   const enc = new TextEncoder();
-  const dec = new TextDecoder();
 
   class VantaError extends Error {
     constructor(message, code) {
@@ -91,240 +83,133 @@
     return Math.floor(Date.now() / 1000);
   }
 
+  /**
+   * Get or create the app-level seed. This random 32-byte seed is generated
+   * once and stored in localStorage. All session keys are derived from it.
+   */
+  function getOrCreateSeed() {
+    try {
+      let hex = localStorage.getItem('vanta_seed');
+      if (hex && hex.length === 64) {
+        return new Uint8Array(hex.match(/.{2}/g).map((h) => parseInt(h, 16)));
+      }
+    } catch { /* private mode */ }
+    const seed = new Uint8Array(32);
+    crypto.getRandomValues(seed);
+    try {
+      localStorage.setItem('vanta_seed', [...seed].map((b) => b.toString(16).padStart(2, '0')).join(''));
+    } catch { /* private mode */ }
+    return seed;
+  }
+
+  function getSalt() {
+    try {
+      return Number(localStorage.getItem('vanta_salt') || 0);
+    } catch { return 0; }
+  }
+
+  function rotateSalt() {
+    try {
+      localStorage.setItem('vanta_salt', String(getSalt() + 1));
+    } catch { /* private mode */ }
+  }
+
   class VantaSessionEngine {
-    constructor({ relayerUrl, signWithMainWallet, fetchImpl } = {}) {
-      this.relayerUrl = (relayerUrl || RELAYER_URL).replace(/\/+$/, '');
-      // Injected main-wallet signer (MWA / Seed Vault / wallet-standard).
-      // When absent, the engine runs in dev mode: no consent signature is
-      // requested or sent, and the relayer marks the session consent-unverified.
-      this.signWithMainWallet = signWithMainWallet || null;
+    constructor({ relayerUrl, fetchImpl } = {}) {
+      this.relayerUrl = (relayerUrl || RELAYER_URL).replace(/\\/+$/, '');
       this.fetchImpl = fetchImpl || root.fetch.bind(root);
 
       this.state = STATE.OFF;
       this.session = null;
 
-      // Session key material lives ONLY here, in memory. No localStorage, no
-      // persistence: page reload == key gone == session worthless. That is the
-      // safe failure mode for a privacy utility.
-      this._keypair = null;
-
-      // Optional internal hook — set by the page (index.html) once the session
-      // is ACTIVE so the chain layer can sign txs with the session key without
-      // ever exporting the private CryptoKey. Pages should NOT rely on this;
-      // it is the documented seam for vanta-chain.js.
+      this._naclKp = null;
       this._internalSessionSigner = null;
     }
 
     /**
-     * Rotate the deterministic session-key salt. Called after a clean burn
-     * (sweep → shieldOff): the old session pubkey can never be derived again,
-     * so the next session starts with a fresh address while still being
-     * refresh-safe. Best-effort — private-browsing throws and is ignored.
+     * Provision a session. Derives a deterministic keypair from the stored
+     * seed + current salt, registers with the relayer (best-effort), and
+     * returns the session pubkey.
      */
-    static _rotateOnBurn() {
-      try {
-        const n = Number(localStorage.getItem('vanta_salt') || 0);
-        localStorage.setItem('vanta_salt', String(n + 1));
-      } catch { /* private mode */ }
-    }
-
-    /**
-     * Toggle entry point. Turns the shield ON (provisioning a session key).
-     * @param {string} mainWalletPubkey base58 main wallet pubkey (Seed Vault /
-     *        MWA-connected wallet)
-     * @param {object} [opts]
-     * @param {(message: Uint8Array, issuedAt: number) => Promise<Uint8Array|null>} [opts.signWithMainWallet]
-     *        Per-call main-wallet signer (MWA / Seed Vault / wallet-standard).
-     *        When present, the consent signature is requested through it; when
-     *        it returns null the user declined and provisioning aborts.
-     */
-    async shieldOn(mainWalletPubkey, opts = {}) {
+    async shieldOn() {
       if (this.state !== STATE.OFF) {
         throw new VantaError(`Cannot shieldOn from state ${this.state}`, 'invalid_state');
       }
-      if (!mainWalletPubkey) throw new VantaError('mainWalletPubkey is required', 'config');
-      if (b58decode(mainWalletPubkey).length !== 32) {
-        throw new VantaError('mainWalletPubkey must be a 32-byte base58 pubkey', 'config');
-      }
 
       this.state = STATE.PROVISIONING;
-      try {        // 1. Session keypair — DERIVED deterministically when a main wallet is
-        //    connected (key always restorable, refresh-safe, funds recoverable;
-        //    rotateOnBurn bumps the salt so a burned key never comes back).
-        //    Derivation uses tweetnacl (loaded before this file): WebCrypto
-        //    cannot import an Ed25519 SEED via 'raw' — raw import means a
-        //    PUBLIC key, which silently broke every signature.
-        if (mainWalletPubkey && root.nacl && root.nacl.sign) {
-          try {
-            const saltN = Number(localStorage.getItem('vanta_salt') || 0);
-            const rootMaterial = concatBytes([
-              b58decode(mainWalletPubkey),
-              enc.encode('vanta-session-v1\0'),
-              enc.encode(String(saltN)),
-            ]);
-            const seed = new Uint8Array(
-              await root.crypto.subtle.digest('SHA-256', rootMaterial),
-            );
-            const kp = root.nacl.sign.keyPair.fromSeed(seed);
-            this._naclKp = kp;
-            this._keypair = null;
-            const clientPubkey = b58encode(kp.publicKey);
-
-            // Internal signer for the chain layer (tx signing by the session key).
-            this._internalSessionSigner = async (wireBytes) =>
-              root.nacl.sign.detached(wireBytes, kp.secretKey);
-
-            // 2. MAIN-WALLET CONSENT (real wallets only): the injected signer
-            //    signs the consent message WITH the main wallet key — user
-            //    approval in the wallet UI, and server-side proof the main
-            //    address opted in.
-            const issuedAt = nowSeconds();
-            const consentSigner = opts.signWithMainWallet || this.signWithMainWallet;
-            let mainSignature = null;
-            if (consentSigner) {
-              const consentMsg = VantaSessionEngine.buildConsentMessage({
-                clientPubkey,
-                mainPubkey: mainWalletPubkey,
-                issuedAt,
-              });
-              const consentSig = await consentSigner(consentMsg, issuedAt);
-              if (!consentSig) {
-                throw new VantaError('Wallet declined the shielding consent request', 'consent_denied');
-              }
-              mainSignature = b58encode(new Uint8Array(consentSig));
-            }
-
-            // 3. Sign the create request with the SESSION key (not the main wallet).
-            const message = VantaSessionEngine.buildCreateMessage({
-              clientPubkey,
-              mainPubkey: mainWalletPubkey,
-              issuedAt,
-            });
-            const createSignature = b58encode(root.nacl.sign.detached(message, kp.secretKey));
-
-            // 4. Register with the relayer.
-            const res = await this._post('/v1/session', {
-              clientPubkey,
-              mainPubkey: mainWalletPubkey,
-              issuedAt,
-              createSignature,
-              mainSignature: mainSignature || undefined,
-            });
-            if (!res.ok) {
-              throw new VantaError(res.error || 'Relayer refused session', res.code || 'relayer_error');
-            }
-
-            this.session = {
-              id: res.session.id,
-              clientPubkey,
-              mainPubkey: mainWalletPubkey,
-              expiresAt: res.session.expiresAt,
-              spendCapLamports: res.session.spendCapLamports,
-              txCapLamports: res.session.txCapLamports,
-              spentLamports: 0,
-              startedAt: Date.now(),
-            };
-            this.state = STATE.ACTIVE;
-            // NOTE: salt rotation intentionally does NOT happen here. Rotating
-            // on every provision would re-derive a DIFFERENT session key on
-            // every wake/refresh — stranding any funds on the old one. The
-            // salt advances ONLY in shieldOff (relayer revoke + sweep first).
-            return {
-              sessionPubkey: clientPubkey,
-              sessionId: res.session.id,
-              expiresAt: res.session.expiresAt,
-              spendCapLamports: res.session.spendCapLamports,
-              txCapLamports: res.session.txCapLamports,
-              consentVerified: !!res.session.consentVerified,
-            };
-          } catch (err) {
-            if (err instanceof VantaError) throw err;
-            // Derivation unavailable (no nacl / no localStorage): fall through
-            // to the legacy random-keypath below.
-            this._naclKp = null;
-          }
+      try {
+        if (!root.nacl || !root.nacl.sign) {
+          throw new VantaError('tweetnacl not loaded', 'dependency');
         }
-        // Fallback: random ephemeral key (only when nacl is unavailable).
-        this._keypair = await root.crypto.subtle.generateKey(
-          { name: 'Ed25519' },
-          true,
-          ['sign'],
-        );
-        const rawPub = new Uint8Array(
-          await root.crypto.subtle.exportKey('raw', this._keypair.publicKey),
-        );
-        const clientPubkey = b58encode(rawPub);
 
-        // Internal signer for the chain layer (tx signing by the session key).
-        this._internalSessionSigner = async (wireBytes) => new Uint8Array(
-          await root.crypto.subtle.sign('Ed25519', this._keypair.privateKey, wireBytes),
+        const seed = getOrCreateSeed();
+        const saltN = getSalt();
+        const rootMaterial = concatBytes([
+          seed,
+          enc.encode('vanta-session-v1\\0'),
+          enc.encode(String(saltN)),
+        ]);
+        const derivedSeed = new Uint8Array(
+          await root.crypto.subtle.digest('SHA-256', rootMaterial),
         );
+        const kp = root.nacl.sign.keyPair.fromSeed(derivedSeed);
+        this._naclKp = kp;
+        const clientPubkey = b58encode(kp.publicKey);
 
-        // 2. MAIN-WALLET CONSENT (real wallets only): the injected signer signs
-        //    the consent message WITH the main wallet key — user approval in the
-        //    wallet UI, and server-side proof the main address opted in.
+        this._internalSessionSigner = async (wireBytes) =>
+          root.nacl.sign.detached(wireBytes, kp.secretKey);
+
+        // Register with relayer (best-effort — app works offline too).
+        // mainPubkey = clientPubkey (self-referential, no main wallet).
         const issuedAt = nowSeconds();
-        const consentSigner = opts.signWithMainWallet || this.signWithMainWallet;
-        let mainSignature = null;
-        if (consentSigner) {
-          const consentMsg = VantaSessionEngine.buildConsentMessage({
-            clientPubkey,
-            mainPubkey: mainWalletPubkey,
-            issuedAt,
-          });
-          const consentSig = await consentSigner(consentMsg, issuedAt);
-          if (!consentSig) {
-            throw new VantaError('Wallet declined the shielding consent request', 'consent_denied');
-          }
-          mainSignature = b58encode(new Uint8Array(consentSig));
-        }
-
-        // 3. Sign the create request with the SESSION key (not the main wallet).
         const message = VantaSessionEngine.buildCreateMessage({
           clientPubkey,
-          mainPubkey: mainWalletPubkey,
+          mainPubkey: clientPubkey,
           issuedAt,
         });
-        const sigBytes = await root.crypto.subtle.sign('Ed25519', this._keypair.privateKey, message);
-        const createSignature = b58encode(new Uint8Array(sigBytes));
+        const createSignature = b58encode(root.nacl.sign.detached(message, kp.secretKey));
 
-        // 4. Register with the relayer.
-        const res = await this._post('/v1/session', {
-          clientPubkey,
-          mainPubkey: mainWalletPubkey,
-          issuedAt,
-          createSignature,
-          mainSignature: mainSignature || undefined,
-        });
-        if (!res.ok) {
-          throw new VantaError(res.error || 'Relayer refused session', res.code || 'relayer_error');
+        let sessionId = 'local-' + clientPubkey.slice(0, 8);
+        let expiresAt = issuedAt + 3600;
+        let spendCapLamports = 1000000000;
+        let txCapLamports = 500000000;
+
+        try {
+          const res = await this._post('/v1/session', {
+            clientPubkey,
+            mainPubkey: clientPubkey,
+            issuedAt,
+            createSignature,
+          });
+          if (res.ok) {
+            sessionId = res.session.id;
+            expiresAt = res.session.expiresAt;
+            spendCapLamports = res.session.spendCapLamports;
+            txCapLamports = res.session.txCapLamports;
+          }
+        } catch {
+          // Relayer unreachable — proceed with local-only session.
         }
 
         this.session = {
-          id: res.session.id,
+          id: sessionId,
           clientPubkey,
-          mainPubkey: mainWalletPubkey,
-          expiresAt: res.session.expiresAt,
-          spendCapLamports: res.session.spendCapLamports,
-          txCapLamports: res.session.txCapLamports,
+          expiresAt,
+          spendCapLamports,
+          txCapLamports,
           spentLamports: 0,
           startedAt: Date.now(),
         };
         this.state = STATE.ACTIVE;
-        // Burned session (the page sweeps leftovers back to the main wallet
-        // before calling this) — advance the salt so the NEXT session derives
-        // a FRESH deterministic key instead of resurrecting this one.
-        try { VantaSessionEngine._rotateOnBurn(); } catch { /* private mode */ }
+
         return {
           sessionPubkey: clientPubkey,
-          sessionId: res.session.id,
-          expiresAt: res.session.expiresAt,
-          spendCapLamports: res.session.spendCapLamports,
-          txCapLamports: res.session.txCapLamports,
-          consentVerified: !!res.session.consentVerified,
+          sessionId,
+          expiresAt,
+          spendCapLamports,
+          txCapLamports,
         };
       } catch (err) {
-        // Provisioning failed: leave nothing behind.
         this._wipeLocalState();
         this.state = STATE.OFF;
         throw err;
@@ -332,12 +217,7 @@
     }
 
     /**
-     * Sign arbitrary bytes with the CURRENT session key. Only valid while a
-     * session is ACTIVE — the key exists in memory exactly for the session's
-     * lifetime. This is how the chain layer (vanta-chain.js) has the session
-     * key sign real transactions without the key ever leaving the engine.
-     * @param {Uint8Array} wireBytes the tx message bytes to sign
-     * @returns {Promise<Uint8Array>} 64-byte Ed25519 signature
+     * Sign arbitrary bytes with the current session key.
      */
     async signSessionBytes(wireBytes) {
       if (this.state !== STATE.ACTIVE || !this._internalSessionSigner) {
@@ -347,15 +227,15 @@
     }
 
     /**
-     * Kill-switch. Revokes with the relayer (idempotent server-side) and then
-     * wipes local state no matter what the network says.
+     * Burn the session: revoke with relayer (best-effort), wipe local state,
+     * and rotate the salt so next session gets a fresh address.
      */
     async shieldOff() {
-      if (this.state === STATE.OFF) return { revoked: false, unspentLamports: null };
+      if (this.state === STATE.OFF) return { revoked: false };
       if (this.state === STATE.PROVISIONING) {
         this._wipeLocalState();
         this.state = STATE.OFF;
-        return { revoked: false, unspentLamports: null };
+        return { revoked: false };
       }
       if (this.state === STATE.REVOKING) {
         throw new VantaError('shieldOff already in progress', 'invalid_state');
@@ -364,70 +244,29 @@
       this.state = STATE.REVOKING;
       const sessionId = this.session ? this.session.id : null;
       let revoked = false;
-      let unspentLamports = null;
 
       try {
-        if (sessionId) {
+        if (sessionId && !sessionId.startsWith('local-')) {
           try {
             const res = await this._post(`/v1/session/${encodeURIComponent(sessionId)}/revoke`, {});
-            if (res.ok) {
-              revoked = true;
-              unspentLamports = typeof res.unspentLamports === 'number' ? res.unspentLamports : null;
-            }
-          } catch {
-            // Relayer unreachable: NOT an error. The local wipe below is what
-            // matters; the relayer's TTL reclaims the server-side session.
-          }
+            if (res.ok) revoked = true;
+          } catch { /* relayer unreachable */ }
         }
       } finally {
-        // Kill-switch semantics: local wipe ALWAYS happens, even if the
-        // relayer was unreachable. The relayer's TTL is the backstop.
         this._wipeLocalState();
         this.state = STATE.OFF;
+        rotateSalt();
       }
-      return { revoked, unspentLamports };
+      return { revoked };
     }
 
-    /** Ask the relayer to co-sign a spend from the session key. */
-    async requestCosign(lamports, tx) {
-      if (this.state !== STATE.ACTIVE) throw new VantaError('Session is not active', 'invalid_state');
-      if (!Number.isInteger(lamports) || lamports <= 0) {
-        throw new VantaError('lamports must be a positive integer', 'bad_amount');
-      }
-      if (lamports > this.session.txCapLamports) {
-        throw new VantaError('Amount exceeds per-tx cap', 'tx_cap');
-      }
+    // ── Name layer (.vanta) ───────────────────────────────────────────
 
-      const res = await this._post(
-        `/v1/session/${encodeURIComponent(this.session.id)}/cosign`,
-        { lamports, tx },
-      );
-      if (!res.ok) throw new VantaError(res.error || 'Co-sign refused', res.code || 'cosign_failed');
-      this.session.spentLamports = res.spentLamports;
-      return res;
-    }
-
-    /** Fresh status from the relayer; falls back to local view when offline. */
-    async status() {
-      if (this.state !== STATE.ACTIVE || !this.session) {
-        return { state: this.state, active: false };
-      }
-      try {
-        const res = await this._get(`/v1/session/${encodeURIComponent(this.session.id)}`);
-        if (res.ok) return { state: this.state, active: res.session.live, session: res.session };
-        return { state: this.state, active: true, session: this._localView() };
-      } catch (err) {
-        return { state: this.state, active: true, offline: true, session: this._localView() };
-      }
-    }
-
-    // Canonical .vanta name-layer messages. Must stay byte-identical to the
-    // relayer's builders in relayer/src/names.js.
     static buildNameClaimMessage({ name, ownerPubkey, issuedAt }) {
       return concatBytes([
-        enc.encode('vanta-name-claim-v1\0'),
+        enc.encode('vanta-name-claim-v1\\0'),
         enc.encode(name),
-        enc.encode('\0'),
+        enc.encode('\\0'),
         b58decode(ownerPubkey),
         enc.encode(String(issuedAt)),
       ]);
@@ -435,66 +274,41 @@
 
     static buildReceiveUpdateMessage({ name, receivePubkey, issuedAt }) {
       return concatBytes([
-        enc.encode('vanta-name-receive-v1\0'),
+        enc.encode('vanta-name-receive-v1\\0'),
         enc.encode(name),
-        enc.encode('\0'),
+        enc.encode('\\0'),
         b58decode(receivePubkey),
         enc.encode(String(issuedAt)),
       ]);
     }
 
-    static buildKycMessage({ name, kycHash, issuedAt }) {
-      return concatBytes([
-        enc.encode('vanta-name-kyc-v1\0'),
-        enc.encode(name),
-        enc.encode('\0'),
-        enc.encode(kycHash),
-        enc.encode(String(issuedAt)),
-      ]);
-    }
-
-    // ── Name layer (.vanta) ───────────────────────────────────────────
-    // Off-chain social identity. claimName/KYC sign with the MAIN wallet
-    // (injected callback); receive-address rotation signs with the CURRENT
-    // session key. The engine never holds main-wallet secrets.
-
-    /** Claim a .vanta name with the main wallet. Options:
-     *  signWithMainWallet(bytes, issuedAt) → signature (required unless the
-     *  engine-level signer exists); ownerPubkey — explicit main pubkey so a
-     *  claim works while the shield is OFF; kyc — optional { provider,
-     *  level, hash } attestation stored unverified until /kyc confirms it. */
-    async claimName(name, { signWithMainWallet, ownerPubkey, kyc } = {}) {
+    async claimName(name) {
       if (!name || typeof name !== 'string') throw new VantaError('name is required', 'config');
-      const signer = signWithMainWallet || this.signWithMainWallet;
-      if (!signer) throw new VantaError('signWithMainWallet is required to claim a name', 'config');
-      const owner = ownerPubkey || (this.session && this.session.mainPubkey);
-      if (!owner) throw new VantaError('Main wallet pubkey unavailable — connect the wallet first', 'config');
+      if (!this.session || !this._internalSessionSigner) {
+        throw new VantaError('No active session', 'invalid_state');
+      }
       const issuedAt = nowSeconds();
-      const message = VantaSessionEngine.buildNameClaimMessage({ name, ownerPubkey: owner, issuedAt });
-      const sig = await signer(message, issuedAt);
-      if (!sig) throw new VantaError('Main wallet declined the name claim', 'consent_denied');
+      const message = VantaSessionEngine.buildNameClaimMessage({
+        name,
+        ownerPubkey: this.session.clientPubkey,
+        issuedAt,
+      });
+      const sigBytes = await this._internalSessionSigner(message);
       const res = await this._post('/v1/names/claim', {
         name,
-        ownerPubkey: owner,
+        ownerPubkey: this.session.clientPubkey,
         issuedAt,
-        signature: b58encode(new Uint8Array(sig)),
-        kyc: kyc || undefined,
+        signature: b58encode(sigBytes),
       });
       if (!res.ok) throw new VantaError(res.error || 'Name claim refused', res.code || 'claim_failed');
       return res;
     }
 
-    /** Rotate the ephemeral receive address for a name — signed by the
-     *  CURRENT session key. Fresh address per receive-reveal breaks
-     *  counterparty linkability. */
     async setReceiveAddress(name, receivePubkey) {
       if (!this.session || !this._internalSessionSigner) {
-        throw new VantaError('Shield is OFF — no session key', 'invalid_state');
+        throw new VantaError('No active session', 'invalid_state');
       }
-      if (b58decode(receivePubkey).length !== 32) {
-        throw new VantaError('receivePubkey must be a 32-byte base58 pubkey', 'config');
-      }
-      const clean = String(name || '').replace(/\.vanta$/, '');
+      const clean = String(name || '').replace(/\\.vanta$/, '');
       const issuedAt = nowSeconds();
       const message = VantaSessionEngine.buildReceiveUpdateMessage({ name: clean, receivePubkey, issuedAt });
       const sigBytes = await this._internalSessionSigner(message);
@@ -502,80 +316,29 @@
         receivePubkey,
         issuedAt,
         signature: b58encode(sigBytes),
-        clientPubkey: this.session.clientPubkey, // relayer proves this session is live
+        clientPubkey: this.session.clientPubkey,
       });
       if (!res.ok) throw new VantaError(res.error || 'Receive-address update refused', res.code || 'receive_failed');
       return res;
     }
 
-    /** Attach (or refresh) a signed KYC attestation. Documents never touch
-     *  the relayer — only the sha256 digest of the attestation does. */
-    async setKycAttestation(name, kyc, { signWithMainWallet, ownerPubkey } = {}) {
-      const signer = signWithMainWallet || this.signWithMainWallet;
-      if (!signer) throw new VantaError('signWithMainWallet is required for KYC updates', 'config');
-      const owner = ownerPubkey || (this.session && this.session.mainPubkey);
-      if (!owner) throw new VantaError('Main wallet pubkey unavailable — connect the wallet first', 'config');
-      const kycHash = kyc && typeof kyc.hash === 'string' ? kyc.hash.toLowerCase() : null;
-      if (!/^[0-9a-f]{64}$/.test(kycHash || '')) {
-        throw new VantaError('kyc.hash must be a 64-char sha256 hex digest', 'config');
-      }
-      const clean = String(name || '').replace(/\.vanta$/, '');
-      const issuedAt = nowSeconds();
-      const message = VantaSessionEngine.buildKycMessage({ name: clean, kycHash, issuedAt });
-      const sig = await signer(message, issuedAt);
-      if (!sig) throw new VantaError('Main wallet declined the KYC attestation', 'consent_denied');
-      const res = await this._post(`/v1/names/${encodeURIComponent(clean)}/kyc`, {
-        ownerPubkey: owner,
-        issuedAt,
-        signature: b58encode(new Uint8Array(sig)),
-        kyc: { provider: kyc.provider, level: kyc.level, hash: kycHash },
-      });
-      if (!res.ok) throw new VantaError(res.error || 'KYC attestation refused', res.code || 'kyc_failed');
-      return res;
-    }
-
-    /** Resolve a name against the relayer. Returns { ok, record? }. */
     async resolveName(name) {
-      const clean = String(name || '').replace(/\.vanta$/, '');
+      const clean = String(name || '').replace(/\\.vanta$/, '');
       return this._get(`/v1/names/${encodeURIComponent(clean)}`);
     }
 
     static buildCreateMessage({ clientPubkey, mainPubkey, issuedAt }) {
       return concatBytes([
-        enc.encode('vanta-session-create-v1\0'),
+        enc.encode('vanta-session-create-v1\\0'),
         b58decode(clientPubkey),
         b58decode(mainPubkey),
         enc.encode(String(issuedAt)),
       ]);
     }
 
-    // Consent message signed by the MAIN wallet. Human-readable ON PURPOSE:
-    // wallet UIs display these bytes as text — this IS the approval prompt
-    // the user sees ("let Vanta shield your txns"). Must stay byte-identical
-    // to consentMessageBytes in relayer/src/server.js.
-    static buildConsentMessage({ clientPubkey, mainPubkey, issuedAt }) {
-      return enc.encode(
-        'VANTA session consent v1\n' +
-        `Shield wallet (disposable): ${clientPubkey}\n` +
-        `Main wallet: ${mainPubkey}\n` +
-        `Issued at: ${issuedAt}\n` +
-        'By signing, the main wallet approves VANTA shielding transactions for this session key only.',
-      );
-    }
-
-    _localView() {
-      return {
-        id: this.session.id,
-        clientPubkey: this.session.clientPubkey,
-        expiresAt: this.session.expiresAt,
-        spentLamports: this.session.spentLamports || 0,
-        spendCapLamports: this.session.spendCapLamports,
-      };
-    }
-
     _wipeLocalState() {
-      this._keypair = null;
-      this._internalSessionSigner = null; // the tx-signing capability dies with the key
+      this._naclKp = null;
+      this._internalSessionSigner = null;
       this.session = null;
     }
 
@@ -595,8 +358,6 @@
   }
 
   root.VantaEngine = { VantaSessionEngine, VantaError, STATE, b58encode, b58decode };
-  // Bare globals too, so the page's inline script can use them directly
-  // (window.VantaEngine.VantaSessionEngine is the namespaced path).
   root.VantaSessionEngine = VantaSessionEngine;
   root.VantaError = VantaError;
 })(typeof window !== 'undefined' ? window : globalThis);

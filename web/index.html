@@ -180,13 +180,13 @@
             <!-- 1. Header Navigation Pill Card -->
             <header class="floating-pill-card rounded-[28px] p-2 pr-3 flex items-center justify-between">
                 <!-- Profile Block -->
-                <div onclick="openConnectModal()" class="flex items-center gap-3 cursor-pointer group active:scale-95 transition-transform">
+                <div onclick="openDrawer()" class="flex items-center gap-3 cursor-pointer group active:scale-95 transition-transform">
                     <div class="relative">
                         <div id="walletAvatar" class="w-11 h-11 rounded-full bg-gradient-to-br from-[#5B41F4] to-[#3B12D0] flex items-center justify-center text-white font-black text-sm border border-white/20 shadow-md group-hover:border-indigo-400 transition-colors">V</div>
                         <span id="walletDot" class="absolute bottom-0 right-0 w-3 h-3 bg-slate-500 border-2 border-[#12141c] rounded-full"></span>
                     </div>
                     <div class="flex flex-col leading-tight">
-                        <span class="text-[12px] font-normal text-[#8A8F9E]" id="walletSub">Tap to connect</span>
+                        <span class="text-[12px] font-normal text-[#8A8F9E]" id="walletSub">Shielded wallet</span>
                         <span class="text-[17px] font-bold text-white tracking-tight" id="walletName">VANTA</span>
                     </div>
                 </div>
@@ -529,16 +529,11 @@
 
                     <div class="space-y-2">
                         <div class="px-1 pt-1 text-[11px] font-bold text-slate-500 uppercase tracking-widest">Session Funding</div>
-                        <button onclick="topUpSession()" class="w-full p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 text-left text-sm font-medium text-slate-200 flex items-center gap-3">
-                            ⚡ Fund from connected wallet (+0.2 SOL)
-                        </button>
+                        <div class="px-1 pt-2 text-[11px] font-bold text-slate-500 uppercase tracking-widest">Fund your session wallet by sending SOL to your Receive address from any wallet</div>
                         <button onclick="faucetSession()" class="w-full p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 text-left text-sm font-medium text-slate-200 flex items-center gap-3">
                             🚰 Devnet faucet (+1 SOL)
                         </button>
-                        <div class="px-1 pt-2 text-[11px] font-bold text-slate-500 uppercase tracking-widest">Wallet</div>
-                        <button onclick="showToast('Connected: ' + (walletKind === 'dev' ? 'DEV MODE' : walletKind)); closeModal('modalDrawer');" class="w-full p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 text-left text-sm font-medium text-slate-200 flex items-center gap-3">
-                            🔒 Security & Connection
-                        </button>
+
                     </div>
                 </div>
 
@@ -643,9 +638,6 @@
 
         const engine = new VantaSessionEngine({ relayerUrl: window.VANTA_RELAYER_URL });
         const sessionTxs = [];      // live session transaction log
-        let mainPubkey = null;      // connected main wallet (or dev-mode key)
-        let mainProvider = null;    // raw injected provider (for top-up signing)
-        let walletKind = 'none';    // phantom | backpack | solflare | dev
         let sessionBalance = 0;     // SOL, polled while shielded
         let claimedName = localStorage.getItem('vanta_name') || null;
         let balanceTimer = null;
@@ -658,53 +650,8 @@
         const short = (k) => (k ? k.slice(0, 4) + '…' + k.slice(-4) : '—');
         const fmtSol = (n) => '◎' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
-        // ── wallet provider resolution (brand-checked, no cross-pickup) ────
-        function resolveProvider(kind) {
-          if (kind === 'phantom') return (window.phantom && window.phantom.solana && window.phantom.solana.isPhantom) ? window.phantom.solana : null;
-          if (kind === 'backpack') return (window.backpack && window.backpack.isBackpack) ? window.backpack : ((window.backpack && window.backpack.solana && window.backpack.solana.isBackpack) ? window.backpack.solana : null);
-          if (kind === 'solflare') return (window.solflare && window.solflare.isSolflare) ? window.solflare : null;
-          return null;
-        }
 
-        // Dev-mode throwaway main key (clearly labeled; sessionStorage per-tab).
-        async function getDevMain() {
-          let hex = sessionStorage.getItem('vanta_dev_main_seed');
-          if (!hex) {
-            const seed = new Uint8Array(32);
-            crypto.getRandomValues(seed);
-            hex = [...seed].map((b) => b.toString(16).padStart(2, '0')).join('');
-            sessionStorage.setItem('vanta_dev_main_seed', hex);
-          }
-          const seed = new Uint8Array(hex.match(/.{2}/g).map((h) => parseInt(h, 16)));
-          const kp = w3().Keypair.fromSeed(seed);
-          const naclKp = window.nacl.sign.keyPair.fromSeed(seed);
-          return { pubkey: kp.publicKey.toBase58(), provider: {
-            isDev: true,
-            publicKey: kp.publicKey,
-            signMessage: async (bytes) => ({ signature: window.nacl.sign.detached(bytes, naclKp.secretKey) }),
-            signAndSendTransaction: async (tx) => {
-              const c = new w3().Connection(window.VANTA_SOLANA_RPC || 'https://api.devnet.solana.com', 'confirmed');
-              if (!tx.recentBlockhash) tx.recentBlockhash = (await c.getLatestBlockhash()).blockhash;
-              tx.sign(kp);
-              const signature = await c.sendRawTransaction(tx.serialize());
-              await c.confirmTransaction(signature, 'confirmed');
-              return { signature };
-            },
-          } };
-        }
 
-        function updateBalanceDisplayAnimated(newBalance) {
-            const el = document.getElementById('mainBalanceDisplay');
-            if (!el) return;
-
-            el.classList.remove('balance-rollup-enter');
-            void el.offsetWidth;
-            
-            currentBalance = newBalance;
-            el.innerText = '$' + currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            el.classList.add('balance-rollup-enter');
-            playHapticTick();
-        }
 
         function flipVisaCard() {
             playHapticTick();
@@ -734,86 +681,16 @@
             showToast(`Recipient: ${name}`);
         }
 
-        // ── main-wallet signing helpers ─────────────────────────────────────
-        async function mainSignMessage(bytes) {
-          if (!mainProvider) return null;
-          if (typeof mainProvider.signMessage === 'function') {
-            const out = await mainProvider.signMessage(bytes, 'utf8');
-            return out && out.signature ? out.signature : out;
-          }
-          return null;
-        }
-
+        // ── session lifecycle (no wallet needed) ───────────────────────
         async function openConnectModal() {
           playHapticTick();
           if (engine.session) { openDrawer(); return; }
-          // Connected but not woken (failed wake / stale load): re-wake now.
-          if (mainPubkey) { await provisionSession(); return; }
-          $('connectSheet').classList.remove('hidden');
+          await provisionSession();
         }
-
-        function markConnected(kind, provider, pubkey) {
-          mainPubkey = pubkey;
-          mainProvider = provider;
-          walletKind = kind;
-          $('walletName').textContent = kind === 'dev' ? 'DEV MODE' : kind.charAt(0).toUpperCase() + kind.slice(1);
-          $('walletSub').textContent = short(pubkey);
-          $('walletDot').className = 'absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-[#12141c] rounded-full';
-        }
-
-        // Seamless reconnect: ONLY the wallet the user chose (remembered in
-        // localStorage). Never scans for other installed wallets — no drive-by
-        // popups from Backpack/anything else, ever.
-        async function trySilentReconnect() {
-          if (mainPubkey) return;
-          const savedKind = localStorage.getItem('vanta_wallet');
-          if (!savedKind || savedKind === 'dev') return;
-          const prov = resolveProvider(savedKind);
-          if (!prov) return;
-          try {
-            await prov.connect({ onlyIfTrusted: true });
-            if (prov.publicKey) {
-              const pk = prov.publicKey.toString ? prov.publicKey.toString() : prov.publicKey.toBase58();
-              markConnected(savedKind, prov, pk);
-            }
-          } catch { /* not trusted yet — user connects manually once */ }
-        }
-
-        async function connectWallet(kind) {
-          playHapticTick();
-          try {
-            let pubkey, provider;
-            if (kind === 'dev') {
-              ({ pubkey, provider } = await getDevMain());
-            } else {
-            }
-            if (!provider) {
-              showToast(kind + ' not detected — dev mode on');
-              return connectWallet('dev');
-            }
-            if (!provider.publicKey) await provider.connect();
-            const pk = provider.publicKey.toString ? provider.publicKey.toString() : provider.publicKey.toBase58();
-            markConnected(kind, provider, pk);
-            localStorage.setItem('vanta_wallet', kind);
-            closeModal('connectSheet');
-            showToast('Connected: ' + short(pk));
-            // Connected = wallet wakes immediately. No toggle, no second ask.
-            await provisionSession();
-          } catch (e) {
-            showToast('Connect failed: ' + String(e.message || e).slice(0, 60));
-          }
-        }
-        // ── wallet lifecycle: ALWAYS ON — Vanta is private by default ──────
-        // No toggle. Opening the app provisions a shielded session (key
-        // derived deterministically from your main wallet, so a refresh never
-        // strands funds). Everything on-chain is signed by the session key.
+        // ── session lifecycle (always on, no wallet needed) ─────────────
         async function wakeWallet() {
           if (engine.session || uiBusy) return;
-          if (mainPubkey) {
-            await provisionSession();
-          } else {
-            await renderLocalWallet();
-          }
+          await provisionSession();
         }
 
         async function provisionSession() {
@@ -823,7 +700,7 @@
             const face = $('faceIdSheet');
             face.classList.remove('hidden');
             face.querySelector('span').textContent = 'Opening private wallet…';
-            const res = await engine.shieldOn(mainPubkey, { signWithMainWallet: mainSignMessage });
+            const res = await engine.shieldOn();
             face.classList.add('hidden');
             face.querySelector('span').textContent = 'Verifying Face ID...';
             renderShielded(res);
@@ -833,22 +710,8 @@
             const face = $('faceIdSheet');
             face.classList.add('hidden');
             face.querySelector('span').textContent = 'Verifying Face ID...';
-            renderLocalWallet();
             showToast(String(e.message || e).slice(0, 80));
           } finally { uiBusy = false; }
-        }
-
-        // No main wallet connected: the wallet still works — balance read
-        // straight from the chain for whatever address is on the card.
-        async function renderLocalWallet() {
-          const pk = engine.session ? engine.session.clientPubkey : null;
-          $('sessionShort').textContent = pk ? short(pk) : '····';
-          try {
-            if (pk) {
-              const bal = await VantaChain.getSolBalance(pk);
-              $('mainBalanceDisplay').innerText = fmtSol(bal);
-            }
-          } catch { /* offline */ }
         }
 
         function renderShielded(res) {
@@ -867,29 +730,37 @@
           if (claimedName) $('receiveName').textContent = claimedName;
         }
 
-        // Manual BURN: sweeps everything back to the main wallet, revokes,
-        // and rotates to a fresh private address next wake. Not a privacy
-        // toggle — the wallet is always private — this is hard disposal.
+        // Manual BURN: sweeps everything to a destination, revokes,
+        // and rotates to a fresh private address next wake.
         async function burnWallet() {
           if (uiBusy || !engine.session) return;
           playHapticTick();
+
+          // Ask for sweep destination
+          const dest = prompt('Enter destination address to sweep remaining balance:');
+          if (!dest || !dest.trim()) {
+            showToast('Burn cancelled — no destination entered');
+            return;
+          }
+          const destAddr = dest.trim();
+          try { b58decode(destAddr); } catch {
+            showToast('Invalid address');
+            return;
+          }
+
           uiBusy = true;
           try {
-            if (!mainPubkey) {
-              $('connectSheet').classList.remove('hidden');
-              return;
-            }
             if (sessionBalance > 0) {
               const face = $('faceIdSheet');
               face.classList.remove('hidden');
-              face.querySelector('span').textContent = 'Sweeping to main wallet…';
+              face.querySelector('span').textContent = 'Sweeping to destination…';
               try {
                 const sig = await VantaChain.sweepBack({
                   sessionSigner: (wire) => engine.signSessionBytes(wire),
                   sessionPubkey: engine.session.clientPubkey,
-                  mainPubkey,
+                  mainPubkey: destAddr,
                 });
-                if (sig) showToast('Swept to main ✓ ' + short(sig));
+                if (sig) showToast('Swept ✓ ' + short(sig));
               } catch (e) {
                 showToast('Sweep failed (' + String(e.message || e).slice(0, 40) + ')');
               }
@@ -995,10 +866,10 @@
           playHapticTick();
           const name = $('claimNameInput').value.trim().toLowerCase();
           if (!/^[a-z0-9]{1,32}$/.test(name)) { showToast('Names: a-z, 0-9, max 32'); return; }
-          if (!mainPubkey) { showToast('Connect a wallet first'); return; }
+          if (!engine.session) { showToast('Session not active'); return; }
           uiBusy = true;
           try {
-            await engine.claimName(name, { signWithMainWallet: mainSignMessage, ownerPubkey: mainPubkey });
+            await engine.claimName(name);
             claimedName = name + '.vanta';
             localStorage.setItem('vanta_name', name);
             $('receiveName').textContent = claimedName;
@@ -1016,8 +887,8 @@
           // spendable via shielded Send. (NEVER generate a throwaway keypair
           // here: a key whose secret is discarded is a fund black hole.)
           if (!engine.session) {
-            showToast('Connect once to activate — then receive');
-            $('connectSheet').classList.remove('hidden');
+            showToast('Session not active — opening…');
+            provisionSession();
             return;
           }
           uiBusy = true;
@@ -1045,36 +916,6 @@
         }
 
         // ── session funding ────────────────────────────────────────────────
-        async function topUpSession() {
-          if (uiBusy) return;
-          playHapticTick();
-          if (!engine.session) { showToast('Wallet asleep — connect once to activate'); return; }
-          if (!mainProvider || !mainPubkey) { showToast('No main wallet connected'); return; }
-          uiBusy = true;
-          try {
-            const sig = await VantaChain.topUp({
-              mainProvider,
-              mainPubkey,
-              sessionPubkey: engine.session.clientPubkey,
-              amountSol: 0.2,
-            });
-            sessionTxs.unshift({
-              title: 'Top up from main',
-              amount: 0.2,
-              isPositive: true,
-              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              category: 'Funding',
-              icon: 'card',
-              sig,
-            });
-            renderTransactions();
-            refreshBalance();
-            showToast('Session funded +0.2 ✓');
-          } catch (e) {
-            showToast('Top-up failed: ' + String(e.message || e).slice(0, 60));
-          } finally { uiBusy = false; }
-        }
-
         async function faucetSession() {
           if (uiBusy) return;
           playHapticTick();
@@ -1085,7 +926,7 @@
             showToast('Faucet request sent — balance updates shortly');
             setTimeout(refreshBalance, 4000);
           } catch (e) {
-            showToast('Faucet refused (rate-limited?) — use Top up instead');
+            showToast('Faucet refused (rate-limited?) — send SOL to your receive address instead');
           } finally { uiBusy = false; }
         }
 
@@ -1205,13 +1046,8 @@
         function openSendModal() {
             playHapticTick();
             if (!engine.session) {
-              // The ONLY gate: the one-time wallet connect (consent + sweep
-              // destination). Privacy itself is never a toggle.
-              if (mainPubkey) { provisionSession(); }
-              else {
-                showToast('Connect once to activate — privacy is always on');
-                $('connectSheet').classList.remove('hidden');
-              }
+              showToast('Wallet not active yet — opening…');
+              provisionSession();
               return;
             }
             document.getElementById('keypadDisplay').innerText = '◎' + keypadVal;
@@ -1301,8 +1137,6 @@
         window.addEventListener('load', async () => {
             renderTransactions();
             if (claimedName) $('receiveName').textContent = claimedName;
-            // Trusted wallet? Reconnect silently, then wake fully shielded.
-            try { await trySilentReconnect(); } catch (e) { console.warn(e); }
             try { await wakeWallet(); } catch (e) { console.warn('wake failed', e); }
         });
     </script>
