@@ -225,10 +225,10 @@
               startedAt: Date.now(),
             };
             this.state = STATE.ACTIVE;
-            // Burned session (the page sweeps leftovers back to the main wallet
-            // before calling this) — advance the salt so the NEXT session derives
-            // a FRESH deterministic key instead of resurrecting this one.
-            try { VantaSessionEngine._rotateOnBurn(); } catch { /* private mode */ }
+            // NOTE: salt rotation intentionally does NOT happen here. Rotating
+            // on every provision would re-derive a DIFFERENT session key on
+            // every wake/refresh — stranding any funds on the old one. The
+            // salt advances ONLY in shieldOff (relayer revoke + sweep first).
             return {
               sessionPubkey: clientPubkey,
               sessionId: res.session.id,
@@ -244,12 +244,12 @@
             this._naclKp = null;
           }
         }
-          this._keypair = await root.crypto.subtle.generateKey(
-            { name: 'Ed25519' },
-            true,
-            ['sign'],
-          );
-        }
+        // Fallback: random ephemeral key (only when nacl is unavailable).
+        this._keypair = await root.crypto.subtle.generateKey(
+          { name: 'Ed25519' },
+          true,
+          ['sign'],
+        );
         const rawPub = new Uint8Array(
           await root.crypto.subtle.exportKey('raw', this._keypair.publicKey),
         );
