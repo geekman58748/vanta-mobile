@@ -1048,7 +1048,7 @@
         async function topUpSession() {
           if (uiBusy) return;
           playHapticTick();
-          if (!engine.session) { showToast('Shield is OFF — power on first'); return; }
+          if (!engine.session) { showToast('Wallet asleep — connect once to activate'); return; }
           if (!mainProvider || !mainPubkey) { showToast('No main wallet connected'); return; }
           uiBusy = true;
           try {
@@ -1078,7 +1078,7 @@
         async function faucetSession() {
           if (uiBusy) return;
           playHapticTick();
-          if (!engine.session) { showToast('Shield is OFF — power on first'); return; }
+          if (!engine.session) { showToast('Wallet asleep — connect once to activate'); return; }
           uiBusy = true;
           try {
             await VantaChain.requestAirdrop(engine.session.clientPubkey, 1);
