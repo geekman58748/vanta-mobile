@@ -10,9 +10,59 @@
             ? 'http://localhost:8787'
             : 'https://vanta-mobile-8ee4.onrender.com';
     </script>
-    <!-- Buffer polyfill for browser (web3.js needs it) -->
-    <script src="https://cdn.jsdelivr.net/npm/buffer@5.7.1/index.min.js"></script>
-    <script>window.Buffer = window.buffer.Buffer;</script>
+    <!-- Minimal Buffer polyfill for browser (web3.js needs it) -->
+    <script>
+    if (typeof Buffer === 'undefined') {
+      var B = function Buffer(subject, encoding) {
+        if (typeof subject === 'number') { var b = new Uint8Array(subject); b.__proto__ = B.prototype; return b; }
+        if (typeof subject === 'string') { return B.from(subject, encoding); }
+        if (subject instanceof Uint8Array) { var b = new Uint8Array(subject); b.__proto__ = B.prototype; return b; }
+        return new Uint8Array(subject);
+      };
+      B.prototype = Uint8Array.prototype;
+      B.from = function(value, encoding) {
+        if (typeof value === 'string') {
+          if (encoding === 'hex') {
+            var bytes = new Uint8Array(value.length / 2);
+            for (var i = 0; i < value.length; i += 2) bytes[i / 2] = parseInt(value.substr(i, 2), 16);
+            bytes.__proto__ = B.prototype; return bytes;
+          }
+          if (encoding === 'utf8' || encoding === 'utf-8' || !encoding) {
+            var enc = new TextEncoder();
+            var bytes = enc.encode(value);
+            bytes.__proto__ = B.prototype; return bytes;
+          }
+          if (encoding === 'base64') {
+            var binary = atob(value);
+            var bytes = new Uint8Array(binary.length);
+            for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            bytes.__proto__ = B.prototype; return bytes;
+          }
+          var enc = new TextEncoder();
+          var bytes = enc.encode(value);
+          bytes.__proto__ = B.prototype; return bytes;
+        }
+        if (value instanceof Uint8Array) { var b = new Uint8Array(value); b.__proto__ = B.prototype; return b; }
+        if (Array.isArray(value)) { var b = new Uint8Array(value); b.__proto__ = B.prototype; return b; }
+        return new Uint8Array(0);
+      };
+      B.alloc = function(size, fill) {
+        var b = new Uint8Array(size);
+        if (fill !== undefined) b.fill(typeof fill === 'number' ? fill : 0);
+        b.__proto__ = B.prototype; return b;
+      };
+      B.concat = function(list) {
+        var total = 0;
+        for (var i = 0; i < list.length; i++) total += list[i].length;
+        var result = new Uint8Array(total);
+        var offset = 0;
+        for (var i = 0; i < list.length; i++) { result.set(list[i], offset); offset += list[i].length; }
+        result.__proto__ = B.prototype; return result;
+      };
+      window.Buffer = B;
+    }
+    </script>
+
     <!-- Solana web3.js (for the chain layer) + nacl (dev-mode signing) + VANTA engine + chain ops -->
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.8/lib/index.iife.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
