@@ -648,6 +648,9 @@
         let claimedName = localStorage.getItem('vanta_name') || null;
         let balanceTimer = null;
         let uiBusy = false;
+        let keypadVal = '0';        // send-modal amount buffer
+        let activeRecipient = null;
+        let receiveAddr = null;     // current ephemeral receive address
 
         const $ = (id) => document.getElementById(id);
         const short = (k) => (k ? k.slice(0, 4) + '…' + k.slice(-4) : '—');
@@ -720,7 +723,7 @@
                 if (keypadVal === '0') keypadVal = key;
                 else keypadVal += key;
             }
-            document.getElementById('keypadDisplay').innerText = '$' + keypadVal;
+            document.getElementById('keypadDisplay').innerText = '◎' + keypadVal;
         }
 
         function selectRecipient(name) {
@@ -870,7 +873,7 @@
           $('shieldIconWrap').className = 'w-10 h-10 rounded-full bg-[#5B41F4] flex items-center justify-center text-white shadow-md shadow-indigo-600/30 group-hover:scale-105 transition-transform';
           $('receiveAddress').classList.add('hidden');
           $('receivePlaceholder').classList.remove('hidden');
-          $('receivePlaceholder').textContent = 'shield OFF — turn it on to receive';
+          $('receivePlaceholder').textContent = 'tap Reveal → one-time address';
         }
 
         function copySessionKey() {
@@ -969,18 +972,23 @@
         async function revealReceiveAddress() {
           if (uiBusy) return;
           playHapticTick();
-          if (!engine.session) { showToast('Shield is OFF — power on first'); return; }
-          if (!claimedName) { showToast('Claim a .vanta name first'); return; }
+          // Standalone receive: works with or without a shielded session.
+          // WITH session → address registers under your .vanta name (relayer-signed)
+          // WITHOUT session → local deposit address for one-time funding
           uiBusy = true;
           try {
             const kp = w3().Keypair.generate();
             const addr = kp.publicKey.toBase58();
-            await engine.setReceiveAddress(claimedName, addr); // signed by live session key
+            if (engine.session && claimedName) {
+              await engine.setReceiveAddress(claimedName, addr); // signed by live session key
+            }
             $('receiveAddress').textContent = addr;
             $('receiveAddress').classList.remove('hidden');
             $('receivePlaceholder').classList.add('hidden');
+            receiveAddr = addr;
+            startReceivePolling(addr);
             copyText(addr);
-            showToast('Fresh receive address ready + copied');
+            showToast('One-time address ready + copied — fund it from ANY wallet');
           } catch (e) {
             showToast(String(e.message || e).slice(0, 80));
           } finally { uiBusy = false; }
@@ -1109,72 +1117,6 @@
             container.innerHTML = html;
         }
 
-        function renderTransactions() {
-            const container = document.getElementById('transactionList');
-            if (!container) return;
-
-            let html = '';
-            const mainItems = transactions.slice(0, 4);
-
-            mainItems.forEach((tx, idx) => {
-                const borderStyle = idx === mainItems.length - 1 ? '' : 'border-b border-white/[0.05]';
-                const isPos = tx.isPositive;
-                const sign = isPos ? '+' : '-';
-                const signClass = isPos ? 'text-[#34d399]' : 'text-red-400';
-                const valueClass = isPos ? 'text-[#34d399]' : 'text-white';
-
-                html += `
-                    <div onclick="openReceiptModal('${tx.title}', '${sign}$${tx.amount.toFixed(2)}', '${tx.category}', '${tx.time}', ${tx.isPositive})" 
-                         class="py-3 flex items-center justify-between ${borderStyle} hover:bg-white/[0.03] active:bg-white/[0.06] rounded-xl px-1 transition-colors cursor-pointer group">
-                        <div class="flex items-center gap-3.5">
-                            <div class="w-11 h-11 rounded-full bg-[#1e2132] flex items-center justify-center text-slate-200 border border-white/5 group-hover:scale-105 transition-transform">
-                                ${getCategoryIconSvg(tx.icon)}
-                            </div>
-                            <div class="flex flex-col">
-                                <span class="text-[15px] font-semibold text-slate-100 tracking-tight">${tx.title}</span>
-                                <span class="text-[12px] text-slate-400 font-normal">${tx.time}</span>
-                            </div>
-                        </div>
-                        <span class="text-[15px] font-bold ${valueClass} tracking-tight">
-                            <span class="${signClass} font-semibold mr-0.5">${sign}</span>$${tx.amount.toLocaleString('en-US', {minimumFractionDigits: tx.amount % 1 === 0 ? 0 : 2})}
-                        </span>
-                    </div>
-                `;
-            });
-
-            container.innerHTML = html;
-            renderFullLogs();
-        }
-
-        function renderFullLogs() {
-            const container = document.getElementById('fullTxList');
-            if (!container) return;
-
-            let html = '';
-            transactions.forEach(tx => {
-                const sign = tx.isPositive ? '+' : '-';
-                const signClass = tx.isPositive ? 'text-[#34d399]' : 'text-red-400';
-                const valClass = tx.isPositive ? 'text-[#34d399]' : 'text-white';
-
-                html += `
-                    <div onclick="openReceiptModal('${tx.title}', '${sign}$${tx.amount.toFixed(2)}', '${tx.category}', '${tx.time}', ${tx.isPositive})" 
-                         class="p-3.5 bg-[#161826] rounded-2xl flex items-center justify-between border border-white/5 cursor-pointer hover:bg-[#1f2236]">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-full bg-[#222538] flex items-center justify-center text-slate-200">
-                                ${getCategoryIconSvg(tx.icon)}
-                            </div>
-                            <div>
-                                <div class="text-sm font-semibold text-white">${tx.title}</div>
-                                <div class="text-[11px] text-slate-400">${tx.category} • ${tx.time}</div>
-                            </div>
-                        </div>
-                        <span class="text-sm font-bold ${valClass}"><span class="${signClass}">${sign}</span>$${tx.amount.toFixed(2)}</span>
-                    </div>
-                `;
-            });
-            container.innerHTML = html;
-        }
-
         function getCategoryIconSvg(type) {
             if (type === 'shield') {
                 return `<svg class="w-5 h-5 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>`;
@@ -1213,7 +1155,38 @@
         function openSendModal() {
             playHapticTick();
             if (!engine.session) { showToast('Shield is OFF — power on first'); return; }
+            document.getElementById('keypadDisplay').innerText = '◎' + keypadVal;
             document.getElementById('modalSend').classList.remove('hidden');
+        }
+
+        // ── standalone receive: poll + auto-forward a local deposit address ──
+        // (used when the shield is OFF; with the shield ON the registered
+        // address sweeps via the session engine instead)
+        let receiveTimer = null;
+        function startReceivePolling(addr) {
+          stopReceivePolling();
+          receiveTimer = setInterval(async () => {
+            try {
+              const bal = await VantaChain.getSolBalance(addr);
+              if (bal > 0) {
+                stopReceivePolling();
+                sessionTxs.unshift({
+                  title: 'Incoming (unshielded)',
+                  amount: bal,
+                  isPositive: true,
+                  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  category: 'Receive',
+                  icon: 'card',
+                  sig: null,
+                });
+                renderTransactions();
+                showToast('Funds detected: ◎' + bal.toFixed(4) + ' — shield ON to spend privately');
+              }
+            } catch { /* rpc hiccup — keep polling */ }
+          }, 8000);
+        }
+        function stopReceivePolling() {
+          if (receiveTimer) { clearInterval(receiveTimer); receiveTimer = null; }
         }
 
         function openRequestModal() {
