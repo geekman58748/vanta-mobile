@@ -218,7 +218,7 @@
                         
                         <!-- Top Abstract Silk Image Section -->
                         <div class="visa-card-container flex-1 p-5 text-white flex flex-col justify-start items-start gap-1 relative overflow-hidden">
-                            <span class="text-[13px] font-medium text-purple-200/80 tracking-wide text-left" id="balanceLabel">Session Balance</span>
+                            <span class="text-[13px] font-medium text-purple-200/80 tracking-wide text-left" id="balanceLabel">Private Balance</span>
                             <div class="overflow-hidden w-full text-left">
                                 <h1 id="mainBalanceDisplay" class="text-[36px] font-extrabold tracking-tight text-white leading-tight text-left balance-rollup-enter">
                                     ◎0.00
@@ -229,12 +229,12 @@
                         <!-- Bottom Metallic Strip -->
                         <div class="bg-[#0a0b10] px-5 py-3.5 flex items-center justify-between border-t border-white/5">
                             <span class="text-[22px] font-black italic tracking-tighter text-white font-sans leading-none select-none" id="cardBrand">
-                                SHIELD
+                                VANTA
                             </span>
 
                             <div class="flex items-center gap-1.5 font-mono text-purple-100 text-[13px] tracking-widest">
                                 <span class="text-xs font-bold tracking-tighter opacity-70">.... .... ....</span>
-                                <span class="font-bold text-white text-[15px]" id="sessionShort">OFF</span>
+                                <span class="font-bold text-white text-[15px]" id="sessionShort">····</span>
                             </div>
                         </div>
 
@@ -243,8 +243,8 @@
                     <!-- Card Back Face -->
                     <div class="card-back absolute inset-0 w-full h-full bg-[#16122c] rounded-[28px] p-5 text-white shadow-2xl flex flex-col justify-between overflow-hidden border border-purple-500/30">
                         <div class="flex justify-between items-center border-b border-white/10 pb-2">
-                            <span class="text-xs font-semibold text-purple-300">Shielded Session Identity</span>
-                            <span id="shieldStatusBadge" class="text-[10px] bg-slate-500/20 text-slate-300 px-2 py-0.5 rounded-full font-mono">OFF</span>
+                            <span class="text-xs font-semibold text-purple-300">Vanta Identity</span>
+                            <span id="shieldStatusBadge" class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-mono">SHIELDED BY DEFAULT</span>
                         </div>
 
                         <div class="space-y-2 font-mono text-xs">
@@ -282,13 +282,14 @@
                     <span class="text-[15px] font-semibold text-white tracking-wide">Send</span>
                 </button>
 
-                <button id="shieldBtn" onclick="toggleShield()" class="floating-pill-card hover:bg-app-cardHover active:scale-[0.97] transition-all rounded-[24px] p-3.5 flex items-center gap-3.5 group">
-                    <div id="shieldIconWrap" class="w-10 h-10 rounded-full bg-[#5B41F4] flex items-center justify-center text-white shadow-md shadow-indigo-600/30 group-hover:scale-105 transition-transform">
-                        <svg id="shieldIcon" class="w-5 h-5 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+                <button id="receiveBtn" onclick="openRequestModal()" class="floating-pill-card hover:bg-app-cardHover active:scale-[0.97] transition-all rounded-[24px] p-3.5 flex items-center gap-3.5 group">
+                    <div class="w-10 h-10 rounded-full bg-[#5B41F4] flex items-center justify-center text-white shadow-md shadow-indigo-600/30 group-hover:scale-105 transition-transform">
+                        <svg class="w-5 h-5 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <polyline points="19 12 12 19 5 12"></polyline>
                         </svg>
                     </div>
-                    <span id="shieldLabel" class="text-[15px] font-semibold text-white tracking-wide">Shield ON</span>
+                    <span class="text-[15px] font-semibold text-white tracking-wide">Receive</span>
                 </button>
             </section>
 
@@ -528,7 +529,7 @@
                     <div class="space-y-2">
                         <div class="px-1 pt-1 text-[11px] font-bold text-slate-500 uppercase tracking-widest">Session Funding</div>
                         <button onclick="topUpSession()" class="w-full p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 text-left text-sm font-medium text-slate-200 flex items-center gap-3">
-                            ⚡ Top up session (+0.2 SOL)
+                            ⚡ Fund private wallet (+0.2 SOL)
                         </button>
                         <button onclick="faucetSession()" class="w-full p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 text-left text-sm font-medium text-slate-200 flex items-center gap-3">
                             🚰 Devnet faucet (+1 SOL)
@@ -540,8 +541,8 @@
                     </div>
                 </div>
 
-                <button onclick="showToast('Logged out securely'); closeModal('modalDrawer');" class="w-full py-3.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 rounded-2xl text-xs font-bold transition-colors">
-                    Sign Out
+                <button onclick="burnWallet()" class="w-full py-3.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 rounded-2xl text-xs font-bold transition-colors">
+                    🔥 Burn Wallet — sweep everything to main, rotate address
                 </button>
             </div>
         </div>
@@ -778,102 +779,116 @@
             showToast('Connect failed: ' + String(e.message || e).slice(0, 60));
           }
         }
-
-        // ── shield lifecycle ────────────────────────────────────────────────
-        async function toggleShield() {
-          if (uiBusy) return;
-          playHapticTick();
-          if (!engine.session) return shieldOn();
-          return shieldOff();
+        // ── wallet lifecycle: ALWAYS ON — Vanta is private by default ──────
+        // No toggle. Opening the app provisions a shielded session (key
+        // derived deterministically from your main wallet, so a refresh never
+        // strands funds). Everything on-chain is signed by the session key.
+        async function wakeWallet() {
+          if (engine.session || uiBusy) return;
+          if (mainPubkey) {
+            await provisionSession();
+          } else {
+            await renderLocalWallet();
+          }
         }
 
-        async function shieldOn() {
-          if (!mainPubkey) {
-            $('connectSheet').classList.remove('hidden');
-            return;
-          }
+        async function provisionSession() {
+          if (engine.session) return;
           uiBusy = true;
           try {
-            $('shieldLabel').textContent = 'Provisioning…';
             const face = $('faceIdSheet');
             face.classList.remove('hidden');
-            face.querySelector('span').textContent = 'Provisioning shield…';
+            face.querySelector('span').textContent = 'Opening private wallet…';
             const res = await engine.shieldOn(mainPubkey, { signWithMainWallet: mainSignMessage });
             face.classList.add('hidden');
             face.querySelector('span').textContent = 'Verifying Face ID...';
             renderShielded(res);
             startBalancePolling();
-            showToast(res.consentVerified ? 'SHIELDED ✓ consent verified on relayer' : 'SHIELDED ✓ (dev consent)');
+            if (claimedName) $('receiveName').textContent = claimedName;
           } catch (e) {
             const face = $('faceIdSheet');
             face.classList.add('hidden');
             face.querySelector('span').textContent = 'Verifying Face ID...';
+            renderLocalWallet();
             showToast(String(e.message || e).slice(0, 80));
           } finally { uiBusy = false; }
         }
 
-        async function shieldOff() {
-          if (!engine.session) return;
-          uiBusy = true;
+        // No main wallet connected: the wallet still works — balance read
+        // straight from the chain for whatever address is on the card.
+        async function renderLocalWallet() {
+          const pk = engine.session ? engine.session.clientPubkey : null;
+          $('sessionShort').textContent = pk ? short(pk) : '····';
           try {
-            // 1. Sweep leftovers back to main (session-key-signed, best-effort).
-            try {
-              const sig = await VantaChain.sweepBack({
-                sessionSigner: (wire) => engine.signSessionBytes(wire),
-                sessionPubkey: engine.session.clientPubkey,
-                mainPubkey,
-              });
-              if (sig) showToast('Swept leftovers to main ✓');
-            } catch (e) {
-              showToast('Sweep failed (' + String(e.message || e).slice(0, 40) + ') — wiping anyway');
+            if (pk) {
+              const bal = await VantaChain.getSolBalance(pk);
+              $('mainBalanceDisplay').innerText = fmtSol(bal);
             }
-            // 2. Revoke + wipe. Kill-switch semantics: wipe ALWAYS happens.
-            await engine.shieldOff();
-            stopBalancePolling();
-            renderUnshielded();
-            showToast('KILL-SWITCH — session revoked, key wiped');
-          } finally { uiBusy = false; }
+          } catch { /* offline */ }
         }
 
         function renderShielded(res) {
           const pk = res.sessionPubkey;
           $('mainBalanceDisplay').innerText = fmtSol(sessionBalance);
-          $('balanceLabel').textContent = 'Session Balance';
+          $('balanceLabel').textContent = 'Private Balance';
           $('cardBrand').textContent = 'VANTA';
           $('sessionShort').textContent = short(pk);
           $('backSessionKey').textContent = short(pk);
           $('backExpires').textContent = new Date(res.expiresAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          const badge = $('shieldStatusBadge');
-          badge.textContent = 'SHIELDED';
-          badge.className = 'text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-mono';
           $('consentBadge').textContent = res.consentVerified ? 'CONSENT ✓' : 'DEV CONSENT';
           $('consentBadge').className = res.consentVerified
             ? 'text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded'
             : 'text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded';
           $('walletDot').className = 'absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-[#12141c] rounded-full animate-pulse';
-          $('shieldLabel').textContent = 'KILL';
-          $('shieldIconWrap').className = 'w-10 h-10 rounded-full bg-red-500/90 flex items-center justify-center text-white shadow-md shadow-red-600/30 group-hover:scale-105 transition-transform';
           if (claimedName) $('receiveName').textContent = claimedName;
         }
 
-        function renderUnshielded() {
-          sessionBalance = 0;
-          $('mainBalanceDisplay').innerText = '◎0.00';
-          $('cardBrand').textContent = 'SHIELD';
-          $('sessionShort').textContent = 'OFF';
-          $('backSessionKey').textContent = '— none —';
-          $('backExpires').textContent = '—';
-          const badge = $('shieldStatusBadge');
-          badge.textContent = 'OFF';
-          badge.className = 'text-[10px] bg-slate-500/20 text-slate-300 px-2 py-0.5 rounded-full font-mono';
-          $('consentBadge').textContent = 'NO CONSENT';
-          $('consentBadge').className = 'text-slate-400 font-bold bg-white/5 px-1.5 py-0.5 rounded';
-          $('walletDot').className = 'absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-[#12141c] rounded-full';
-          $('shieldLabel').textContent = 'Shield ON';
-          $('shieldIconWrap').className = 'w-10 h-10 rounded-full bg-[#5B41F4] flex items-center justify-center text-white shadow-md shadow-indigo-600/30 group-hover:scale-105 transition-transform';
-          $('receiveAddress').classList.add('hidden');
-          $('receivePlaceholder').classList.remove('hidden');
-          $('receivePlaceholder').textContent = 'tap Reveal → one-time address';
+        // Manual BURN: sweeps everything back to the main wallet, revokes,
+        // and rotates to a fresh private address next wake. Not a privacy
+        // toggle — the wallet is always private — this is hard disposal.
+        async function burnWallet() {
+          if (uiBusy || !engine.session) return;
+          playHapticTick();
+          uiBusy = true;
+          try {
+            if (!mainPubkey) {
+              $('connectSheet').classList.remove('hidden');
+              return;
+            }
+            if (sessionBalance > 0) {
+              const face = $('faceIdSheet');
+              face.classList.remove('hidden');
+              face.querySelector('span').textContent = 'Sweeping to main wallet…';
+              try {
+                const sig = await VantaChain.sweepBack({
+                  sessionSigner: (wire) => engine.signSessionBytes(wire),
+                  sessionPubkey: engine.session.clientPubkey,
+                  mainPubkey,
+                });
+                if (sig) showToast('Swept to main ✓ ' + short(sig));
+              } catch (e) {
+                showToast('Sweep failed (' + String(e.message || e).slice(0, 40) + ')');
+              }
+              face.classList.add('hidden');
+              face.querySelector('span').textContent = 'Verifying Face ID...';
+            }
+            await engine.shieldOff();
+            stopBalancePolling();
+            sessionTxs.unshift({
+              title: 'Wallet burned',
+              amount: 0,
+              isPositive: false,
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              category: 'Burn',
+              icon: 'shield',
+              sig: null,
+            });
+            renderTransactions();
+            $('mainBalanceDisplay').innerText = '◎0.00';
+            $('sessionShort').textContent = '····';
+            showToast('Burned — next wake gets a fresh private address');
+            await provisionSession();
+          } finally { uiBusy = false; }
         }
 
         function copySessionKey() {
@@ -1249,10 +1264,13 @@
         }
 
         // ── boot ──────────────────────────────────────────────────────────
-        window.addEventListener('load', () => {
+        window.addEventListener('load', async () => {
             renderTransactions();
-            if (!engine.session) renderUnshielded();
             if (claimedName) $('receiveName').textContent = claimedName;
+            // Vanta is a private wallet by default: wake → shielded session,
+            // no toggle in the user's way. Connect a wallet for consent +
+            // sweep-back; without one the wallet still opens (local mode).
+            try { await wakeWallet(); } catch (e) { console.warn('wake failed', e); }
         });
     </script>
 </body>
