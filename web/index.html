@@ -441,19 +441,19 @@
 
                 <div onclick="copyReceiveAddress()" class="bg-white p-4 rounded-3xl shadow-2xl my-2 flex items-center justify-center cursor-pointer active:scale-[0.98] transition-transform select-all">
                     <div class="text-center">
-                        <div id="receivePlaceholder" class="text-slate-400 text-xs font-mono">tap Reveal → one-time address</div>
+                        <div id="receivePlaceholder" class="text-slate-400 text-xs font-mono">tap Reveal → your private address</div>
                         <div id="receiveAddress" class="text-[13px] font-mono font-bold text-black break-all hidden max-w-[220px]">—</div>
                         <div id="receiveCopyHint" class="text-[10px] text-slate-500 mt-1 hidden">tap address to copy</div>
                     </div>
                 </div>
 
                 <div class="text-center">
-                    <span class="text-xs text-slate-400">Ephemeral receive address</span>
+                    <span class="text-xs text-slate-400">Your private address (session wallet)</span>
                     <div class="text-sm font-mono font-bold text-indigo-400" id="receiveName">claim a name first</div>
                 </div>
 
                 <button id="revealReceiveBtn" onclick="revealReceiveAddress()" class="w-full py-3.5 bg-[#5B41F4] hover:bg-indigo-600 text-white font-bold rounded-2xl shadow-lg transition-all">
-                    Reveal Fresh Address
+                    Reveal My Private Address
                 </button>
 
             </div>
@@ -530,7 +530,7 @@
                     <div class="space-y-2">
                         <div class="px-1 pt-1 text-[11px] font-bold text-slate-500 uppercase tracking-widest">Session Funding</div>
                         <button onclick="topUpSession()" class="w-full p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 text-left text-sm font-medium text-slate-200 flex items-center gap-3">
-                            ⚡ Fund private wallet (+0.2 SOL)
+                            ⚡ Fund from connected wallet (+0.2 SOL)
                         </button>
                         <button onclick="faucetSession()" class="w-full p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 text-left text-sm font-medium text-slate-200 flex items-center gap-3">
                             🚰 Devnet faucet (+1 SOL)
@@ -1011,17 +1011,22 @@
         async function revealReceiveAddress() {
           if (uiBusy) return;
           playHapticTick();
-          // Standalone receive: works with or without a shielded session.
-          // WITH session → address registers under your .vanta name (relayer-signed)
-          // WITHOUT session → local deposit address for one-time funding
+          // Receive = YOUR SESSION WALLET ADDRESS. Its key is derived
+          // deterministically and held by the engine — funds sent here are
+          // spendable via shielded Send. (NEVER generate a throwaway keypair
+          // here: a key whose secret is discarded is a fund black hole.)
+          if (!engine.session) {
+            showToast('Connect once to activate — then receive');
+            $('connectSheet').classList.remove('hidden');
+            return;
+          }
           uiBusy = true;
           try {
-            const kp = w3().Keypair.generate();
-            const addr = kp.publicKey.toBase58();
+            const addr = engine.session.clientPubkey;
             // Copy FIRST, inside the user gesture — clipboard access dies after
             // the first network await.
             const copied = await copyText(addr);
-            if (engine.session && claimedName) {
+            if (claimedName) {
               try {
                 await engine.setReceiveAddress(claimedName, addr); // signed by live session key
               } catch (regErr) {
@@ -1033,7 +1038,6 @@
             $('receivePlaceholder').classList.add('hidden');
             $('receiveCopyHint').classList.remove('hidden');
             receiveAddr = addr;
-            startReceivePolling(addr);
             showToast(copied ? 'Copied ✓ — fund it from ANY wallet' : 'Address ready — tap the card to copy');
           } catch (e) {
             showToast(String(e.message || e).slice(0, 80));
@@ -1212,36 +1216,6 @@
             }
             document.getElementById('keypadDisplay').innerText = '◎' + keypadVal;
             document.getElementById('modalSend').classList.remove('hidden');
-        }
-
-        // ── standalone receive: poll + auto-forward a local deposit address ──
-        // (used when the shield is OFF; with the shield ON the registered
-        // address sweeps via the session engine instead)
-        let receiveTimer = null;
-        function startReceivePolling(addr) {
-          stopReceivePolling();
-          receiveTimer = setInterval(async () => {
-            try {
-              const bal = await VantaChain.getSolBalance(addr);
-              if (bal > 0) {
-                stopReceivePolling();
-                sessionTxs.unshift({
-                  title: 'Incoming (unshielded)',
-                  amount: bal,
-                  isPositive: true,
-                  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                  category: 'Receive',
-                  icon: 'card',
-                  sig: null,
-                });
-                renderTransactions();
-                showToast('Funds detected: ◎' + bal.toFixed(4) + ' — shield ON to spend privately');
-              }
-            } catch { /* rpc hiccup — keep polling */ }
-          }, 8000);
-        }
-        function stopReceivePolling() {
-          if (receiveTimer) { clearInterval(receiveTimer); receiveTimer = null; }
         }
 
         function openRequestModal() {
