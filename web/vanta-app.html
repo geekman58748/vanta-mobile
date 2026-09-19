@@ -439,10 +439,11 @@
                     </button>
                 </div>
 
-                <div class="bg-white p-4 rounded-3xl shadow-2xl my-2 flex items-center justify-center">
+                <div onclick="copyReceiveAddress()" class="bg-white p-4 rounded-3xl shadow-2xl my-2 flex items-center justify-center cursor-pointer active:scale-[0.98] transition-transform select-all">
                     <div class="text-center">
-                        <div id="receivePlaceholder" class="text-slate-400 text-xs font-mono">tap reveal → fresh address</div>
+                        <div id="receivePlaceholder" class="text-slate-400 text-xs font-mono">tap Reveal → one-time address</div>
                         <div id="receiveAddress" class="text-[13px] font-mono font-bold text-black break-all hidden max-w-[220px]">—</div>
+                        <div id="receiveCopyHint" class="text-[10px] text-slate-500 mt-1 hidden">tap address to copy</div>
                     </div>
                 </div>
 
@@ -994,16 +995,23 @@
           try {
             const kp = w3().Keypair.generate();
             const addr = kp.publicKey.toBase58();
+            // Copy FIRST, inside the user gesture — clipboard access dies after
+            // the first network await.
+            const copied = await copyText(addr);
             if (engine.session && claimedName) {
-              await engine.setReceiveAddress(claimedName, addr); // signed by live session key
+              try {
+                await engine.setReceiveAddress(claimedName, addr); // signed by live session key
+              } catch (regErr) {
+                showToast('Address ready (name reg failed: ' + String(regErr.message || regErr).slice(0, 40) + ')');
+              }
             }
             $('receiveAddress').textContent = addr;
             $('receiveAddress').classList.remove('hidden');
             $('receivePlaceholder').classList.add('hidden');
+            $('receiveCopyHint').classList.remove('hidden');
             receiveAddr = addr;
             startReceivePolling(addr);
-            copyText(addr);
-            showToast('One-time address ready + copied — fund it from ANY wallet');
+            showToast(copied ? 'Copied ✓ — fund it from ANY wallet' : 'Address ready — tap the card to copy');
           } catch (e) {
             showToast(String(e.message || e).slice(0, 80));
           } finally { uiBusy = false; }
@@ -1240,13 +1248,33 @@
             showToast("Transaction Ref ID copied!");
         }
 
-        function copyText(text) {
-            const input = document.createElement('textarea');
-            input.value = text;
-            document.body.appendChild(input);
-            input.select();
-            document.execCommand('copy');
-            document.body.removeChild(input);
+        async function copyText(text) {
+            // Modern API first (secure contexts); execCommand fallback for the rest.
+            try {
+              if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text);
+                return true;
+              }
+            } catch { /* fall through to legacy */ }
+            try {
+              const input = document.createElement('textarea');
+              input.value = text;
+              input.style.position = 'fixed';
+              input.style.opacity = '0';
+              document.body.appendChild(input);
+              input.focus();
+              input.select();
+              const ok = document.execCommand('copy');
+              document.body.removeChild(input);
+              return ok;
+            } catch { return false; }
+        }
+
+        async function copyReceiveAddress() {
+            playHapticTick();
+            if (!receiveAddr) { showToast('Reveal an address first'); return; }
+            const ok = await copyText(receiveAddr);
+            showToast(ok ? 'Address copied ✓' : 'Copy blocked — long-press the address');
         }
 
         function showToast(msg) {
