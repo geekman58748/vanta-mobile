@@ -42,7 +42,12 @@ async function main() {
   const w3 = globalThis.solanaWeb3;
 
   // 3. Session wallet + recipients.
-  const session = w3.Keypair.generate();
+  // VANTA_E2E_SEED: 64-byte hex [seed(32) ‖ pubkey(32)] of a PRE-FUNDED
+  // keypair (e.g. funded from a devnet-capable wallet when the faucet is
+  // rate-limited). Lets the test run against a known, externally funded key.
+  const session = process.env.VANTA_E2E_SEED
+    ? w3.Keypair.fromSecretKey(Buffer.from(process.env.VANTA_E2E_SEED, 'hex'))
+    : w3.Keypair.generate();
   const recipient = w3.Keypair.generate(); // an "unrelated" party on-chain
   const mainWallet = w3.Keypair.generate(); // sweep destination ("main")
   // node:crypto needs a KeyObject — wrap the 32-byte ed25519 seed in PKCS8.
@@ -71,9 +76,11 @@ async function main() {
   assert.ok(!ataOwner.equals(w3.PublicKey.default), 'ATA PDA must derive');
   console.log('ATA derivation OK (bump', ataBump + ')');
 
-  // 5. Fund the session wallet from the devnet faucet (retry — faucet is rate-limited).
+  // 5. Fund the session wallet. With VANTA_E2E_SEED the key is ALREADY
+  // funded externally (e.g. from a devnet-capable wallet when the faucet is
+  // rate-limited) — airdrop becomes best-effort, the balance check decides.
   let funded = false;
-  for (let i = 0; i < 5 && !funded; i++) {
+  for (let i = 0; i < (process.env.VANTA_E2E_SEED ? 1 : 5) && !funded; i++) {
     try {
       await VantaChain.requestAirdrop(session.publicKey.toBase58(), 1);
       funded = true;
@@ -82,11 +89,14 @@ async function main() {
       await new Promise((r) => setTimeout(r, 3000));
     }
   }
-  assert.ok(funded, 'devnet airdrop must eventually succeed');
+  if (!funded && process.env.VANTA_E2E_SEED) {
+    console.log('faucet refused — continuing on external funding (VANTA_E2E_SEED)');
+  }
+  assert.ok(funded || process.env.VANTA_E2E_SEED, 'devnet airdrop must eventually succeed');
   await new Promise((r) => setTimeout(r, 1500));
   const bal0 = await VantaChain.getSolBalance(session.publicKey.toBase58());
   console.log('funded balance:', bal0, 'SOL');
-  assert.ok(bal0 >= 0.99, 'session wallet funded');
+  assert.ok(bal0 >= 0.2, 'session wallet funded (>= 0.2 SOL)');
 
   // Self-check BEFORE the chain layer: is the signature even valid for this pubkey?
   const selfTestWire = new w3.Transaction().add(
@@ -111,7 +121,9 @@ async function main() {
 
   // 6. SHIELDED SEND — the core product move: recipient receives from the
   //    session key; the tx shows fee-payer = signer = session pubkey ONLY.
-  const sendAmt = 0.25;
+  // Send HALF the funded balance (capped at 0.25) so both the 1-SOL localnet
+  // run and the 0.5-SOL externally-funded devnet run stay solvent.
+  const sendAmt = Math.min(bal0 / 2, 0.25);
   let sig;
   try {
     sig = await VantaChain.sendSol({
@@ -132,7 +144,9 @@ async function main() {
   console.log('post-send session balance:', balAfterSend, '| recipient:', recipBal);
   assert.ok(Math.abs(recipBal - sendAmt) < 1e-9, 'recipient received exactly the amount');
   assert.ok(balAfterSend < bal0 - sendAmt, 'session wallet paid amount + fee');
-  assert.ok(balAfterSend > 0.5, 'session wallet still solvent');
+  // Solvency is RELATIVE to the starting balance (0.25 out + ~5k-lamport fee):
+  // works for 1 SOL localnet funding and 0.5 SOL externally-funded runs alike.
+  assert.ok(balAfterSend > bal0 - 0.25001, 'session wallet still solvent');
 
   // 7. SWEEP-BACK — kill-switch companion: everything minus fee returns to main.
   const sweepSig = await VantaChain.sweepBack({
@@ -146,7 +160,7 @@ async function main() {
   const swept = await VantaChain.getSolBalance(mainWallet.publicKey.toBase58());
   const sessionLeft = await VantaChain.getSolBalance(session.publicKey.toBase58());
   console.log('main wallet after sweep:', swept, '| session leftover:', sessionLeft);
-  assert.ok(swept > 0.4, 'main wallet received the sweep');
+  assert.ok(swept > bal0 - 0.25001, 'main wallet received the sweep');
   assert.ok(sessionLeft === 0, 'session wallet drained to zero');
 
   // 8. Sweep with nothing to move must be a clean no-op (null, no throw).

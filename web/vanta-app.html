@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Clara Marvin - Mobile Fintech Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter and JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        app: {
+                            bg: '#000000',
+                            card: '#12141c',
+                            cardHover: '#1a1d2c',
+                            pill: '#161826',
+                            purple: '#5B41F4',
+                            purpleDark: '#3B12D0',
+                            green: '#34d399',
+                            red: '#f87171'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #000000;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            touch-action: manipulation;
+        }
+
+        /* Custom scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 3px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #000000;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #26293c;
+            border-radius: 999px;
+        }
+
+        /* 3D Perspective Card Flip */
+        .card-flip-container {
+            perspective: 1000px;
+        }
+        .card-inner {
+            transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transform-style: preserve-3d;
+        }
+        .card-inner.flipped {
+            transform: rotateY(180deg);
+        }
+        .card-front, .card-back {
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+        .card-back {
+            transform: rotateY(180deg);
+        }
+
+        /* Smooth Blur Roll-Up Balance Animation */
+        .balance-rollup-enter {
+            animation: blurRollUp 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes blurRollUp {
+            0% {
+                opacity: 0.2;
+                filter: blur(12px);
+                transform: translateY(12px) scale(0.98);
+            }
+            50% {
+                filter: blur(4px);
+            }
+            100% {
+                opacity: 1;
+                filter: blur(0px);
+                transform: translateY(0px) scale(1);
+            }
+        }
+
+        /* Abstract Dark Purple Satin Background Card Styling */
+        .visa-card-container {
+            background-image: linear-gradient(180deg, rgba(30, 15, 60, 0.25) 0%, rgba(10, 8, 20, 0.85) 100%), 
+                              url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80');
+            background-size: cover;
+            background-position: center center;
+        }
+
+        /* Floating Pill Glass Utilities */
+        .floating-pill-card {
+            background: #12141c;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.8);
+        }
+
+        /* Modal Sheet Slide Up Animation */
+        .sheet-slide-up {
+            animation: sheetSlide 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes sheetSlide {
+            from {
+                transform: translateY(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        /* Toast notification popup animation */
+        .toast-pop {
+            animation: toastPop 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes toastPop {
+            0% { transform: translate(-50%, -18px) scale(0.92); opacity: 0; }
+            100% { transform: translate(-50%, 0) scale(1); opacity: 1; }
+        }
+
+        /* Pulse ring for face ID biometric check */
+        .pulse-ring {
+            animation: pulseRing 1.8s infinite cubic-bezier(0.4, 0, 0.6, 1);
+        }
+        @keyframes pulseRing {
+            0%, 100% { opacity: 0.2; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.08); }
+        }
+    </style>
+</head>
+<body class="bg-black min-h-screen flex items-center justify-center p-0 sm:p-4">
+
+    <!-- Global Haptic Toast Notification -->
+    <div id="toastNotification" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 hidden bg-[#1a1d2e] border border-emerald-500/30 text-emerald-300 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs font-semibold backdrop-blur-xl">
+        <div class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+        <span id="toastMessage">Transaction verified</span>
+    </div>
+
+    <!-- Native Mobile Application Viewport Shell -->
+    <div id="appShell" class="w-full max-w-[430px] min-h-screen sm:min-h-[900px] bg-black sm:rounded-[44px] sm:border sm:border-white/10 shadow-[0_0_60px_rgba(0,0,0,1)] relative flex flex-col justify-between p-4 sm:p-5 gap-3.5 overflow-hidden">
+
+        <!-- Main Dashboard Viewport -->
+        <div class="flex-1 flex flex-col gap-3.5 z-10">
+
+            <!-- 1. Header Navigation Pill Card -->
+            <header class="floating-pill-card rounded-[28px] p-2 pr-3 flex items-center justify-between">
+                <!-- Profile Block -->
+                <div onclick="openDrawer()" class="flex items-center gap-3 cursor-pointer group active:scale-95 transition-transform">
+                    <div class="relative">
+                        <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80" 
+                             alt="Clara Marvin" 
+                             class="w-11 h-11 rounded-full object-cover border border-white/20 shadow-md group-hover:border-indigo-400 transition-colors"
+                             onerror="this.src='https://placehold.co/100x100/1e293b/FFF?text=CM'">
+                        <span class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-[#12141c] rounded-full"></span>
+                    </div>
+                    <div class="flex flex-col leading-tight">
+                        <span class="text-[12px] font-normal text-[#8A8F9E]">Good Morning!</span>
+                        <span class="text-[17px] font-bold text-white tracking-tight">Clara Marvin</span>
+                    </div>
+                </div>
+
+                <!-- Action Controls -->
+                <div class="flex items-center gap-2">
+                    <button onclick="openAnalyticsModal()" aria-label="Analytics" class="w-10 h-10 rounded-full bg-[#1e2130] hover:bg-[#262a3d] active:scale-90 transition-all flex items-center justify-center text-white border border-white/5">
+                        <svg class="w-4 h-4 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 3v18h18"></path>
+                            <path d="M18 9l-5 5-4-4-4 4"></path>
+                        </svg>
+                    </button>
+                    <button onclick="openDrawer()" aria-label="Menu" class="w-10 h-10 rounded-full bg-[#1e2130] hover:bg-[#262a3d] active:scale-90 transition-all flex items-center justify-center text-white border border-white/5">
+                        <svg class="w-4.5 h-4.5 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke-linecap="round">
+                            <line x1="4" y1="7" x2="20" y2="7"></line>
+                            <line x1="4" y1="12" x2="20" y2="12"></line>
+                            <line x1="4" y1="17" x2="20" y2="17"></line>
+                        </svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- 2. Integrated Bifold Visa Balance Card -->
+            <section class="card-flip-container w-full h-[195px] cursor-pointer my-0.5" onclick="flipVisaCard()">
+                <div id="visaCardInner" class="card-inner relative w-full h-full">
+                    
+                    <!-- Card Front Face -->
+                    <div class="card-front absolute inset-0 w-full h-full rounded-[28px] overflow-hidden shadow-2xl flex flex-col justify-between border border-white/10">
+                        
+                        <!-- Top Abstract Silk Image Section -->
+                        <div class="visa-card-container flex-1 p-5 text-white flex flex-col justify-start items-start gap-1 relative overflow-hidden">
+                            <span class="text-[13px] font-medium text-purple-200/80 tracking-wide text-left">Your Balance</span>
+                            <div class="overflow-hidden w-full text-left">
+                                <h1 id="mainBalanceDisplay" class="text-[36px] font-extrabold tracking-tight text-white leading-tight text-left balance-rollup-enter">
+                                    $25,552.92
+                                </h1>
+                            </div>
+                        </div>
+
+                        <!-- Bottom Metallic Strip -->
+                        <div class="bg-[#0a0b10] px-5 py-3.5 flex items-center justify-between border-t border-white/5">
+                            <span class="text-[22px] font-black italic tracking-tighter text-white font-sans leading-none select-none">
+                                VISA
+                            </span>
+
+                            <div class="flex items-center gap-1.5 font-mono text-purple-100 text-[13px] tracking-widest">
+                                <span class="text-xs font-bold tracking-tighter opacity-70">.... .... ....</span>
+                                <span class="font-bold text-white text-[15px]">6828</span>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Card Back Face -->
+                    <div class="card-back absolute inset-0 w-full h-full bg-[#16122c] rounded-[28px] p-5 text-white shadow-2xl flex flex-col justify-between overflow-hidden border border-purple-500/30">
+                        <div class="flex justify-between items-center border-b border-white/10 pb-2">
+                            <span class="text-xs font-semibold text-purple-300">Digital Platinum Visa</span>
+                            <span class="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full font-mono">ACTIVE</span>
+                        </div>
+
+                        <div class="space-y-2 font-mono text-xs">
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-400">Card Number:</span>
+                                <span class="text-white font-bold tracking-widest">4532 •••• •••• 6828</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-400">Expiry / CVV:</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-white font-semibold">09/28</span>
+                                    <span class="text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">CVV 892</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between items-center pt-2 border-t border-white/10 text-[11px]">
+                            <span class="text-slate-400">Tap anywhere to flip back</span>
+                            <span class="text-indigo-400 font-semibold underline">Copy Details</span>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- 3. Quick Action Grid Pill Buttons -->
+            <section class="grid grid-cols-2 gap-3.5 my-0.5">
+                <button onclick="openSendModal()" class="floating-pill-card hover:bg-app-cardHover active:scale-[0.97] transition-all rounded-[24px] p-3.5 flex items-center gap-3.5 group">
+                    <div class="w-10 h-10 rounded-full bg-[#5B41F4] flex items-center justify-center text-white shadow-md shadow-indigo-600/30 group-hover:scale-105 transition-transform">
+                        <svg class="w-5 h-5 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="7" y1="17" x2="17" y2="7"></line>
+                            <polyline points="7 7 17 7 17 17"></polyline>
+                        </svg>
+                    </div>
+                    <span class="text-[15px] font-semibold text-white tracking-wide">Send</span>
+                </button>
+
+                <button onclick="openRequestModal()" class="floating-pill-card hover:bg-app-cardHover active:scale-[0.97] transition-all rounded-[24px] p-3.5 flex items-center gap-3.5 group">
+                    <div class="w-10 h-10 rounded-full bg-[#5B41F4] flex items-center justify-center text-white shadow-md shadow-indigo-600/30 group-hover:scale-105 transition-transform">
+                        <svg class="w-5 h-5 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="17" y1="7" x2="7" y2="17"></line>
+                            <polyline points="17 17 7 17 7 7"></polyline>
+                        </svg>
+                    </div>
+                    <span class="text-[15px] font-semibold text-white tracking-wide">Request</span>
+                </button>
+            </section>
+
+            <!-- 4. Transaction History Floating Card -->
+            <section class="floating-pill-card rounded-[28px] p-5 flex flex-col gap-3.5 flex-1">
+                <div class="flex items-center justify-between pb-0.5">
+                    <h2 class="text-[17px] font-bold text-white tracking-tight">Transaction History</h2>
+                    <button onclick="openViewAllModal()" class="text-[13px] font-normal text-slate-400 hover:text-white underline underline-offset-4 transition-colors">
+                        View All
+                    </button>
+                </div>
+
+                <div id="transactionList" class="flex flex-col">
+                    <!-- Dynamic Transaction Items injected via JS -->
+                </div>
+            </section>
+
+        </div>
+
+        <!-- MODAL 1: Interactive Transaction Receipt Sheet -->
+        <div id="modalReceipt" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 hidden flex flex-col justify-end overflow-hidden">
+            <div class="max-w-[430px] w-full mx-auto bg-[#12141c] rounded-t-[36px] p-6 border-t border-white/10 sheet-slide-up flex flex-col gap-4">
+                
+                <div class="flex items-center justify-between border-b border-white/10 pb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></div>
+                        <span class="text-xs font-bold text-emerald-400 uppercase tracking-widest">Completed Transaction</span>
+                    </div>
+                    <button onclick="closeModal('modalReceipt')" class="p-1.5 rounded-full bg-white/10 text-slate-300 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+
+                <!-- Receipt Body -->
+                <div class="bg-[#181b28] rounded-2xl p-4 border border-white/5 flex flex-col items-center text-center gap-2">
+                    <div id="receiptIcon" class="w-12 h-12 rounded-full bg-[#222638] flex items-center justify-center text-indigo-400 text-xl font-bold mb-1">
+                        💳
+                    </div>
+                    <span id="receiptTitle" class="text-lg font-bold text-white">Salary received</span>
+                    <span id="receiptAmount" class="text-3xl font-extrabold text-emerald-400 tracking-tight">+$8,250.20</span>
+                    <span id="receiptTime" class="text-xs text-slate-400">Today at 12:34 PM • Ref: TXN-8920149</span>
+                </div>
+
+                <div class="space-y-2.5 text-xs">
+                    <div class="flex justify-between py-2 border-b border-white/5">
+                        <span class="text-slate-400">Payment Category</span>
+                        <span id="receiptCategory" class="text-white font-semibold">Income / Direct Deposit</span>
+                    </div>
+                    <div class="flex justify-between py-2 border-b border-white/5">
+                        <span class="text-slate-400">Source Account</span>
+                        <span class="text-white font-mono font-medium">VISA **** 6828</span>
+                    </div>
+                    <div class="flex justify-between py-2 border-b border-white/5">
+                        <span class="text-slate-400">Transaction Status</span>
+                        <span class="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded">SETTLED</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 mt-1">
+                    <button onclick="copyTxnRef()" class="py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-xs font-bold text-white transition-all flex items-center justify-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        Copy Ref ID
+                    </button>
+                    <button onclick="showToast('Receipt PDF downloaded'); closeModal('modalReceipt');" class="py-3 bg-[#5B41F4] hover:bg-indigo-600 rounded-2xl text-xs font-bold text-white transition-all shadow-lg flex items-center justify-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        Download PDF
+                    </button>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- MODAL 2: Keypad Send Money Flow -->
+        <div id="modalSend" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 hidden flex flex-col justify-end overflow-hidden">
+            <div class="max-w-[430px] w-full mx-auto bg-[#12141c] rounded-t-[36px] p-6 border-t border-white/10 sheet-slide-up flex flex-col gap-4">
+                
+                <div class="flex items-center justify-between border-b border-white/10 pb-3">
+                    <h3 class="text-base font-bold text-white">Send Money</h3>
+                    <button onclick="closeModal('modalSend')" class="p-1.5 rounded-full bg-white/10 text-slate-300 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+
+                <!-- Recipient Selection -->
+                <div class="flex flex-col gap-2">
+                    <span class="text-xs text-slate-400">Select Recipient</span>
+                    <div class="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
+                        <div onclick="selectRecipient('Alex Rivera')" class="recipient-item cursor-pointer flex flex-col items-center gap-1.5 min-w-[62px]">
+                            <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80" class="w-12 h-12 rounded-full object-cover border-2 border-indigo-500">
+                            <span class="text-[11px] text-white font-medium">Alex</span>
+                        </div>
+                        <div onclick="selectRecipient('Sophia Chen')" class="recipient-item cursor-pointer flex flex-col items-center gap-1.5 min-w-[62px]">
+                            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80" class="w-12 h-12 rounded-full object-cover border border-white/20">
+                            <span class="text-[11px] text-slate-300">Sophia</span>
+                        </div>
+                        <div onclick="selectRecipient('Marcus Vance')" class="recipient-item cursor-pointer flex flex-col items-center gap-1.5 min-w-[62px]">
+                            <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80" class="w-12 h-12 rounded-full object-cover border border-white/20">
+                            <span class="text-[11px] text-slate-300">Marcus</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Keypad Display -->
+                <div class="bg-[#181b28] p-4 rounded-2xl border border-white/5 flex flex-col items-center justify-center">
+                    <span class="text-[11px] text-indigo-400 uppercase font-semibold tracking-wider">Amount to Transfer</span>
+                    <div id="keypadDisplay" class="text-3xl font-extrabold text-white font-mono mt-1">$150.00</div>
+                </div>
+
+                <!-- Keypad Grid -->
+                <div class="grid grid-cols-3 gap-2 text-lg font-bold text-white">
+                    <button onclick="pressKey('1')" class="py-3.5 bg-[#1a1d2d] active:bg-indigo-600 rounded-2xl transition-colors">1</button>
+                    <button onclick="pressKey('2')" class="py-3.5 bg-[#1a1d2d] active:bg-indigo-600 rounded-2xl transition-colors">2</button>
+                    <button onclick="pressKey('3')" class="py-3.5 bg-[#1a1d2d] active:bg-indigo-600 rounded-2xl transition-colors">3</button>
+                    <button onclick="pressKey('4')" class="py-3.5 bg-[#1a1d2d] active:bg-indigo-600 rounded-2xl transition-colors">4</button>
+                    <button onclick="pressKey('5')" class="py-3.5 bg-[#1a1d2d] active:bg-indigo-600 rounded-2xl transition-colors">5</button>
+                    <button onclick="pressKey('6')" class="py-3.5 bg-[#1a1d2d] active:bg-indigo-600 rounded-2xl transition-colors">6</button>
+                    <button onclick="pressKey('7')" class="py-3.5 bg-[#1a1d2d] active:bg-indigo-600 rounded-2xl transition-colors">7</button>
+                    <button onclick="pressKey('8')" class="py-3.5 bg-[#1a1d2d] active:bg-indigo-600 rounded-2xl transition-colors">8</button>
+                    <button onclick="pressKey('9')" class="py-3.5 bg-[#1a1d2d] active:bg-indigo-600 rounded-2xl transition-colors">9</button>
+                    <button onclick="pressKey('.')" class="py-3.5 bg-[#1a1d2d] active:bg-indigo-600 rounded-2xl transition-colors">.</button>
+                    <button onclick="pressKey('0')" class="py-3.5 bg-[#1a1d2d] active:bg-indigo-600 rounded-2xl transition-colors">0</button>
+                    <button onclick="pressKey('DEL')" class="py-3.5 bg-[#1a1d2d] active:bg-red-500/40 rounded-2xl transition-colors text-xs">DEL</button>
+                </div>
+
+                <button onclick="triggerFaceIdAuthentication()" class="w-full py-4 bg-[#5B41F4] hover:bg-indigo-600 active:scale-[0.98] text-white font-bold rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.84-1.645 1.316-3.48 1.316-5.364 0-3.412-1.528-6.467-3.924-8.5"></path></svg>
+                    Confirm with Face ID
+                </button>
+
+            </div>
+        </div>
+
+        <!-- MODAL 3: Request QR Modal -->
+        <div id="modalRequest" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 hidden flex flex-col justify-end overflow-hidden">
+            <div class="max-w-[430px] w-full mx-auto bg-[#12141c] rounded-t-[36px] p-6 border-t border-white/10 sheet-slide-up flex flex-col gap-4 items-center">
+                
+                <div class="w-full flex items-center justify-between border-b border-white/10 pb-3">
+                    <h3 class="text-base font-bold text-white">Receive Payment</h3>
+                    <button onclick="closeModal('modalRequest')" class="p-1.5 rounded-full bg-white/10 text-slate-300 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+
+                <div class="bg-white p-4 rounded-3xl shadow-2xl my-2">
+                    <svg class="w-40 h-40" viewBox="0 0 100 100" fill="#000">
+                        <path d="M0,0 h30 v30 h-30 z M10,10 v10 h10 v-10 z M70,0 h30 v30 h-30 z M80,10 v10 h10 v-10 z M0,70 h30 v30 h-30 z M10,80 v10 h10 v-10 z M40,10 h10 v20 h-10 z M50,40 h20 v10 h-20 z M30,60 h30 v10 h-30 z M70,70 h20 v20 h-20 z" />
+                    </svg>
+                </div>
+
+                <div class="text-center">
+                    <span class="text-xs text-slate-400">Your PayTag Link</span>
+                    <div class="text-sm font-mono font-bold text-indigo-400">pay.clara.marvin/6828</div>
+                </div>
+
+                <button onclick="copyPayLink()" class="w-full py-3.5 bg-[#5B41F4] hover:bg-indigo-600 text-white font-bold rounded-2xl shadow-lg transition-all">
+                    Copy Payment Link
+                </button>
+
+            </div>
+        </div>
+
+        <!-- MODAL 4: Analytics Chart Sheet -->
+        <div id="modalAnalytics" class="fixed inset-0 bg-[#0a0c14] z-50 hidden flex flex-col p-6 overflow-y-auto">
+            <div class="max-w-[430px] w-full mx-auto flex flex-col gap-4">
+                <div class="flex items-center justify-between pb-2 border-b border-white/10">
+                    <div>
+                        <h3 class="text-lg font-bold text-white">Analytics & Insights</h3>
+                        <p class="text-xs text-slate-400">September Cash Flow</p>
+                    </div>
+                    <button onclick="closeModal('modalAnalytics')" class="p-1.5 rounded-full bg-white/10 text-slate-300 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+
+                <div class="floating-pill-card rounded-2xl p-4 border border-white/10">
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-xs font-semibold text-slate-300">Net Growth</span>
+                        <span class="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">+18.4%</span>
+                    </div>
+                    
+                    <svg class="w-full h-36" viewBox="0 0 300 120">
+                        <defs>
+                            <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#5B41F4" stop-opacity="0.6"/>
+                                <stop offset="100%" stop-color="#5B41F4" stop-opacity="0.0"/>
+                            </linearGradient>
+                        </defs>
+                        <path d="M0 90 Q 60 20, 120 60 T 240 30 T 300 10 L 300 120 L 0 120 Z" fill="url(#chartGrad)" />
+                        <path d="M0 90 Q 60 20, 120 60 T 240 30 T 300 10" fill="none" stroke="#5B41F4" stroke-width="3.5" stroke-linecap="round" />
+                        <circle cx="120" cy="60" r="4" class="fill-indigo-400 stroke-white stroke-2" />
+                        <circle cx="240" cy="30" r="4" class="fill-indigo-400 stroke-white stroke-2" />
+                    </svg>
+                </div>
+
+                <div class="flex flex-col gap-2">
+                    <span class="text-xs font-bold text-slate-400">Spending Breakdown</span>
+                    <div class="floating-pill-card p-3 rounded-2xl flex justify-between items-center">
+                        <span class="text-xs text-white">Income (Salary & Deposits)</span>
+                        <span class="text-xs font-bold text-emerald-400">+$8,250.20</span>
+                    </div>
+                    <div class="floating-pill-card p-3 rounded-2xl flex justify-between items-center">
+                        <span class="text-xs text-white">Living & Rent</span>
+                        <span class="text-xs font-bold text-red-400">-$880.00</span>
+                    </div>
+                    <div class="floating-pill-card p-3 rounded-2xl flex justify-between items-center">
+                        <span class="text-xs text-white">Transport & Rides</span>
+                        <span class="text-xs font-bold text-red-400">-$58.34</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL 5: Side Drawer Navigation -->
+        <div id="modalDrawer" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 hidden flex flex-col justify-end overflow-hidden">
+            <div class="max-w-[430px] w-full mx-auto bg-[#12141c] h-[82%] rounded-t-[36px] p-6 border-t border-white/10 sheet-slide-up flex flex-col justify-between">
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between border-b border-white/10 pb-4">
+                        <div class="flex items-center gap-3">
+                            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80" class="w-12 h-12 rounded-full object-cover border border-white/20">
+                            <div>
+                                <div class="text-base font-bold text-white">Clara Marvin</div>
+                                <div class="text-xs text-indigo-400">Tier 3 Verified</div>
+                            </div>
+                        </div>
+                        <button onclick="closeModal('modalDrawer')" class="p-1.5 rounded-full bg-white/10 text-slate-300 hover:text-white">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+
+                    <div class="space-y-2">
+                        <button onclick="showToast('Profile management opened'); closeModal('modalDrawer');" class="w-full p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 text-left text-sm font-medium text-slate-200 flex items-center gap-3">
+                            👤 Account Settings
+                        </button>
+                        <button onclick="showToast('Security & biometric active'); closeModal('modalDrawer');" class="w-full p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 text-left text-sm font-medium text-slate-200 flex items-center gap-3">
+                            🔒 Security & Face ID
+                        </button>
+                        <button onclick="showToast('Limits: $50,000/day'); closeModal('modalDrawer');" class="w-full p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 text-left text-sm font-medium text-slate-200 flex items-center gap-3">
+                            ⚡ Transfer Limits
+                        </button>
+                    </div>
+                </div>
+
+                <button onclick="showToast('Logged out securely'); closeModal('modalDrawer');" class="w-full py-3.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 rounded-2xl text-xs font-bold transition-colors">
+                    Sign Out
+                </button>
+            </div>
+        </div>
+
+        <!-- MODAL 6: View All Transactions Drawer -->
+        <div id="modalViewAll" class="fixed inset-0 bg-[#0a0c14] z-50 hidden flex flex-col p-6 overflow-y-auto">
+            <div class="max-w-[430px] w-full mx-auto flex flex-col gap-4">
+                <div class="flex items-center justify-between pb-3 border-b border-white/10">
+                    <h3 class="text-lg font-bold text-white">Transaction Logs</h3>
+                    <button onclick="closeModal('modalViewAll')" class="p-1.5 rounded-full bg-white/10 text-slate-300 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+
+                <div id="fullTxList" class="flex flex-col gap-2.5">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Biometric Overlay -->
+        <div id="faceIdSheet" class="fixed inset-0 bg-black/90 backdrop-blur-xl z-50 hidden flex flex-col items-center justify-center p-6">
+            <div class="flex flex-col items-center gap-4">
+                <div class="relative flex items-center justify-center w-24 h-24">
+                    <div class="absolute inset-0 rounded-3xl border-2 border-indigo-500/40 pulse-ring"></div>
+                    <svg class="w-12 h-12 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.84-1.645 1.316-3.48 1.316-5.364 0-3.412-1.528-6.467-3.924-8.5"></path></svg>
+                </div>
+                <span class="text-sm font-bold text-white tracking-wide">Verifying Face ID...</span>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Audio Synthesizer for Native Haptic Pops
+        let audioCtx = null;
+
+        function playHapticTick() {
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(180, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.04);
+                
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.04);
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.04);
+
+                if (navigator.vibrate) {
+                    navigator.vibrate(10);
+                }
+            } catch (e) {}
+        }
+
+        // Global Application State
+        let currentBalance = 25552.92;
+        let keypadVal = "150.00";
+        let activeRecipient = "Alex Rivera";
+
+        const transactions = [
+            { id: 101, title: 'Salary received', amount: 8250.20, isPositive: true, time: '12:34', category: 'Income', icon: 'card' },
+            { id: 102, title: 'Uber', amount: 58.34, isPositive: false, time: '12:34', category: 'Transport', icon: 'car' },
+            { id: 103, title: 'House rent', amount: 880.00, isPositive: false, time: '12:34', category: 'Housing', icon: 'house' },
+            { id: 104, title: 'Shopping', amount: 275.00, isPositive: false, time: '12:34', category: 'Shopping', icon: 'shopping' }
+        ];
+
+        function updateBalanceDisplayAnimated(newBalance) {
+            const el = document.getElementById('mainBalanceDisplay');
+            if (!el) return;
+
+            el.classList.remove('balance-rollup-enter');
+            void el.offsetWidth;
+            
+            currentBalance = newBalance;
+            el.innerText = '$' + currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            el.classList.add('balance-rollup-enter');
+            playHapticTick();
+        }
+
+        function flipVisaCard() {
+            playHapticTick();
+            const inner = document.getElementById('visaCardInner');
+            if (inner) {
+                inner.classList.toggle('flipped');
+            }
+        }
+
+        function pressKey(key) {
+            playHapticTick();
+            if (key === 'DEL') {
+                keypadVal = keypadVal.slice(0, -1);
+                if (keypadVal === '') keypadVal = '0';
+            } else if (key === '.') {
+                if (!keypadVal.includes('.')) keypadVal += '.';
+            } else {
+                if (keypadVal === '0') keypadVal = key;
+                else keypadVal += key;
+            }
+            document.getElementById('keypadDisplay').innerText = '$' + keypadVal;
+        }
+
+        function selectRecipient(name) {
+            playHapticTick();
+            activeRecipient = name;
+            showToast(`Recipient: ${name}`);
+        }
+
+        function triggerFaceIdAuthentication() {
+            playHapticTick();
+            const transferAmt = parseFloat(keypadVal) || 0;
+            if (transferAmt <= 0) {
+                showToast("Enter a valid amount");
+                return;
+            }
+            if (transferAmt > currentBalance) {
+                showToast("Insufficient balance!");
+                return;
+            }
+
+            const faceSheet = document.getElementById('faceIdSheet');
+            faceSheet.classList.remove('hidden');
+
+            setTimeout(() => {
+                faceSheet.classList.add('hidden');
+                
+                updateBalanceDisplayAnimated(currentBalance - transferAmt);
+
+                transactions.unshift({
+                    id: Date.now(),
+                    title: `Sent to ${activeRecipient.split(' ')[0]}`,
+                    amount: transferAmt,
+                    isPositive: false,
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    category: 'Transfer',
+                    icon: 'card'
+                });
+
+                renderTransactions();
+                closeModal('modalSend');
+                showToast(`Sent $${transferAmt.toFixed(2)} to ${activeRecipient}`);
+            }, 1400);
+        }
+
+        function renderTransactions() {
+            const container = document.getElementById('transactionList');
+            if (!container) return;
+
+            let html = '';
+            const mainItems = transactions.slice(0, 4);
+
+            mainItems.forEach((tx, idx) => {
+                const borderStyle = idx === mainItems.length - 1 ? '' : 'border-b border-white/[0.05]';
+                const isPos = tx.isPositive;
+                const sign = isPos ? '+' : '-';
+                const signClass = isPos ? 'text-[#34d399]' : 'text-red-400';
+                const valueClass = isPos ? 'text-[#34d399]' : 'text-white';
+
+                html += `
+                    <div onclick="openReceiptModal('${tx.title}', '${sign}$${tx.amount.toFixed(2)}', '${tx.category}', '${tx.time}', ${tx.isPositive})" 
+                         class="py-3 flex items-center justify-between ${borderStyle} hover:bg-white/[0.03] active:bg-white/[0.06] rounded-xl px-1 transition-colors cursor-pointer group">
+                        <div class="flex items-center gap-3.5">
+                            <div class="w-11 h-11 rounded-full bg-[#1e2132] flex items-center justify-center text-slate-200 border border-white/5 group-hover:scale-105 transition-transform">
+                                ${getCategoryIconSvg(tx.icon)}
+                            </div>
+                            <div class="flex flex-col">
+                                <span class="text-[15px] font-semibold text-slate-100 tracking-tight">${tx.title}</span>
+                                <span class="text-[12px] text-slate-400 font-normal">${tx.time}</span>
+                            </div>
+                        </div>
+                        <span class="text-[15px] font-bold ${valueClass} tracking-tight">
+                            <span class="${signClass} font-semibold mr-0.5">${sign}</span>$${tx.amount.toLocaleString('en-US', {minimumFractionDigits: tx.amount % 1 === 0 ? 0 : 2})}
+                        </span>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+            renderFullLogs();
+        }
+
+        function renderFullLogs() {
+            const container = document.getElementById('fullTxList');
+            if (!container) return;
+
+            let html = '';
+            transactions.forEach(tx => {
+                const sign = tx.isPositive ? '+' : '-';
+                const signClass = tx.isPositive ? 'text-[#34d399]' : 'text-red-400';
+                const valClass = tx.isPositive ? 'text-[#34d399]' : 'text-white';
+
+                html += `
+                    <div onclick="openReceiptModal('${tx.title}', '${sign}$${tx.amount.toFixed(2)}', '${tx.category}', '${tx.time}', ${tx.isPositive})" 
+                         class="p-3.5 bg-[#161826] rounded-2xl flex items-center justify-between border border-white/5 cursor-pointer hover:bg-[#1f2236]">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-[#222538] flex items-center justify-center text-slate-200">
+                                ${getCategoryIconSvg(tx.icon)}
+                            </div>
+                            <div>
+                                <div class="text-sm font-semibold text-white">${tx.title}</div>
+                                <div class="text-[11px] text-slate-400">${tx.category} • ${tx.time}</div>
+                            </div>
+                        </div>
+                        <span class="text-sm font-bold ${valClass}"><span class="${signClass}">${sign}</span>$${tx.amount.toFixed(2)}</span>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function getCategoryIconSvg(type) {
+            if (type === 'car') {
+                return `<svg class="w-5 h-5 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="2"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H7c-.7 0-1.3.3-1.8.7C4.3 8.6 3 10 3 10s-2.7.6-4.5 1.1C-.7 11.3-1.4 12.1-1.4 13v3c0 .6.4 1 1 1h2"></path><circle cx="7" cy="17" r="2"></circle><circle cx="17" cy="17" r="2"></circle></svg>`;
+            } else if (type === 'house') {
+                return `<svg class="w-5 h-5 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>`;
+            } else if (type === 'shopping') {
+                return `<svg class="w-5 h-5 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>`;
+            }
+            return `<svg class="w-5 h-5 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>`;
+        }
+
+        function openReceiptModal(title, amountStr, category, time, isPos) {
+            playHapticTick();
+            document.getElementById('receiptTitle').innerText = title;
+            
+            const amtEl = document.getElementById('receiptAmount');
+            amtEl.innerText = amountStr;
+            amtEl.className = isPos ? 'text-3xl font-extrabold text-emerald-400 tracking-tight' : 'text-3xl font-extrabold text-white tracking-tight';
+
+            document.getElementById('receiptCategory').innerText = category;
+            document.getElementById('receiptTime').innerText = `Today at ${time} • Ref: TXN-` + Math.floor(100000 + Math.random() * 900000);
+            
+            document.getElementById('modalReceipt').classList.remove('hidden');
+        }
+
+        function openSendModal() {
+            playHapticTick();
+            document.getElementById('modalSend').classList.remove('hidden');
+        }
+
+        function openRequestModal() {
+            playHapticTick();
+            document.getElementById('modalRequest').classList.remove('hidden');
+        }
+
+        function openAnalyticsModal() {
+            playHapticTick();
+            document.getElementById('modalAnalytics').classList.remove('hidden');
+        }
+
+        function openDrawer() {
+            playHapticTick();
+            document.getElementById('modalDrawer').classList.remove('hidden');
+        }
+
+        function openViewAllModal() {
+            playHapticTick();
+            document.getElementById('modalViewAll').classList.remove('hidden');
+        }
+
+        function closeModal(id) {
+            playHapticTick();
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        function copyPayLink() {
+            copyText("https://pay.clara.marvin/6828");
+            showToast("Payment link copied to clipboard!");
+            closeModal('modalRequest');
+        }
+
+        function copyTxnRef() {
+            copyText("TXN-8920149204");
+            showToast("Transaction Ref ID copied!");
+        }
+
+        function copyText(text) {
+            const input = document.createElement('textarea');
+            input.value = text;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toastNotification');
+            const msgEl = document.getElementById('toastMessage');
+            if (toast && msgEl) {
+                msgEl.innerText = msg;
+                toast.classList.remove('hidden');
+                toast.classList.add('toast-pop');
+
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 2600);
+            }
+        }
+
+        window.addEventListener('load', () => {
+            renderTransactions();
+        });
+    </script>
+</body>
+</html>
