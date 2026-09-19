@@ -1,18 +1,10 @@
 'use strict';
 
-// VANTA session engine — BROWSER build (no wallet dependency).
-//
-// Session keys are derived deterministically from a random seed stored in
-// localStorage + a rotation salt. No main wallet connection required.
-//
-//   OFF      → no session key exists.
-//   ON       → session key derived, registered with relayer, active.
-//   REVOKING → revoking with relayer.
-//
-// Burn rotates the salt so the next session gets a fresh address.
+// VANTA session engine — no wallet dependency.
+// Session keys derived from a stored seed + rotation salt.
 
 (function attach(root) {
-  const RELAYER_URL = (root.VANTA_RELAYER_URL || 'http://localhost:8787').replace(/\\/+$/, '');
+  const RELAYER_URL = (root.VANTA_RELAYER_URL || 'http://localhost:8787').replace(/\/+$/, '');
 
   const STATE = Object.freeze({
     OFF: 'OFF',
@@ -83,59 +75,43 @@
     return Math.floor(Date.now() / 1000);
   }
 
-  /**
-   * Get or create the app-level seed. This random 32-byte seed is generated
-   * once and stored in localStorage. All session keys are derived from it.
-   */
   function getOrCreateSeed() {
     try {
       let hex = localStorage.getItem('vanta_seed');
       if (hex && hex.length === 64) {
         return new Uint8Array(hex.match(/.{2}/g).map((h) => parseInt(h, 16)));
       }
-    } catch { /* private mode */ }
+    } catch {}
     const seed = new Uint8Array(32);
     crypto.getRandomValues(seed);
     try {
       localStorage.setItem('vanta_seed', [...seed].map((b) => b.toString(16).padStart(2, '0')).join(''));
-    } catch { /* private mode */ }
+    } catch {}
     return seed;
   }
 
   function getSalt() {
-    try {
-      return Number(localStorage.getItem('vanta_salt') || 0);
-    } catch { return 0; }
+    try { return Number(localStorage.getItem('vanta_salt') || 0); } catch { return 0; }
   }
 
   function rotateSalt() {
-    try {
-      localStorage.setItem('vanta_salt', String(getSalt() + 1));
-    } catch { /* private mode */ }
+    try { localStorage.setItem('vanta_salt', String(getSalt() + 1)); } catch {}
   }
 
   class VantaSessionEngine {
     constructor({ relayerUrl, fetchImpl } = {}) {
-      this.relayerUrl = (relayerUrl || RELAYER_URL).replace(/\\/+$/, '');
+      this.relayerUrl = (relayerUrl || RELAYER_URL).replace(/\/+$/, '');
       this.fetchImpl = fetchImpl || root.fetch.bind(root);
-
       this.state = STATE.OFF;
       this.session = null;
-
       this._naclKp = null;
       this._internalSessionSigner = null;
     }
 
-    /**
-     * Provision a session. Derives a deterministic keypair from the stored
-     * seed + current salt, registers with the relayer (best-effort), and
-     * returns the session pubkey.
-     */
     async shieldOn() {
       if (this.state !== STATE.OFF) {
-        throw new VantaError(`Cannot shieldOn from state ${this.state}`, 'invalid_state');
+        throw new VantaError('Cannot shieldOn from state ' + this.state, 'invalid_state');
       }
-
       this.state = STATE.PROVISIONING;
       try {
         if (!root.nacl || !root.nacl.sign) {
@@ -146,7 +122,7 @@
         const saltN = getSalt();
         const rootMaterial = concatBytes([
           seed,
-          enc.encode('vanta-session-v1\\0'),
+          enc.encode('vanta-session-v1\0'),
           enc.encode(String(saltN)),
         ]);
         const derivedSeed = new Uint8Array(
@@ -159,8 +135,6 @@
         this._internalSessionSigner = async (wireBytes) =>
           root.nacl.sign.detached(wireBytes, kp.secretKey);
 
-        // Register with relayer (best-effort — app works offline too).
-        // mainPubkey = clientPubkey (self-referential, no main wallet).
         const issuedAt = nowSeconds();
         const message = VantaSessionEngine.buildCreateMessage({
           clientPubkey,
@@ -187,9 +161,7 @@
             spendCapLamports = res.session.spendCapLamports;
             txCapLamports = res.session.txCapLamports;
           }
-        } catch {
-          // Relayer unreachable — proceed with local-only session.
-        }
+        } catch {}
 
         this.session = {
           id: sessionId,
@@ -216,9 +188,6 @@
       }
     }
 
-    /**
-     * Sign arbitrary bytes with the current session key.
-     */
     async signSessionBytes(wireBytes) {
       if (this.state !== STATE.ACTIVE || !this._internalSessionSigner) {
         throw new VantaError('No active session key to sign with', 'invalid_state');
@@ -226,10 +195,6 @@
       return this._internalSessionSigner(wireBytes);
     }
 
-    /**
-     * Burn the session: revoke with relayer (best-effort), wipe local state,
-     * and rotate the salt so next session gets a fresh address.
-     */
     async shieldOff() {
       if (this.state === STATE.OFF) return { revoked: false };
       if (this.state === STATE.PROVISIONING) {
@@ -240,17 +205,15 @@
       if (this.state === STATE.REVOKING) {
         throw new VantaError('shieldOff already in progress', 'invalid_state');
       }
-
       this.state = STATE.REVOKING;
       const sessionId = this.session ? this.session.id : null;
       let revoked = false;
-
       try {
         if (sessionId && !sessionId.startsWith('local-')) {
           try {
-            const res = await this._post(`/v1/session/${encodeURIComponent(sessionId)}/revoke`, {});
+            const res = await this._post('/v1/session/' + encodeURIComponent(sessionId) + '/revoke', {});
             if (res.ok) revoked = true;
-          } catch { /* relayer unreachable */ }
+          } catch {}
         }
       } finally {
         this._wipeLocalState();
@@ -260,13 +223,11 @@
       return { revoked };
     }
 
-    // ── Name layer (.vanta) ───────────────────────────────────────────
-
     static buildNameClaimMessage({ name, ownerPubkey, issuedAt }) {
       return concatBytes([
-        enc.encode('vanta-name-claim-v1\\0'),
+        enc.encode('vanta-name-claim-v1\0'),
         enc.encode(name),
-        enc.encode('\\0'),
+        enc.encode('\0'),
         b58decode(ownerPubkey),
         enc.encode(String(issuedAt)),
       ]);
@@ -274,9 +235,9 @@
 
     static buildReceiveUpdateMessage({ name, receivePubkey, issuedAt }) {
       return concatBytes([
-        enc.encode('vanta-name-receive-v1\\0'),
+        enc.encode('vanta-name-receive-v1\0'),
         enc.encode(name),
-        enc.encode('\\0'),
+        enc.encode('\0'),
         b58decode(receivePubkey),
         enc.encode(String(issuedAt)),
       ]);
@@ -308,11 +269,11 @@
       if (!this.session || !this._internalSessionSigner) {
         throw new VantaError('No active session', 'invalid_state');
       }
-      const clean = String(name || '').replace(/\\.vanta$/, '');
+      const clean = String(name || '').replace(/\.vanta$/, '');
       const issuedAt = nowSeconds();
       const message = VantaSessionEngine.buildReceiveUpdateMessage({ name: clean, receivePubkey, issuedAt });
       const sigBytes = await this._internalSessionSigner(message);
-      const res = await this._post(`/v1/names/${encodeURIComponent(clean)}/receive`, {
+      const res = await this._post('/v1/names/' + encodeURIComponent(clean) + '/receive', {
         receivePubkey,
         issuedAt,
         signature: b58encode(sigBytes),
@@ -323,13 +284,13 @@
     }
 
     async resolveName(name) {
-      const clean = String(name || '').replace(/\\.vanta$/, '');
-      return this._get(`/v1/names/${encodeURIComponent(clean)}`);
+      const clean = String(name || '').replace(/\.vanta$/, '');
+      return this._get('/v1/names/' + encodeURIComponent(clean));
     }
 
     static buildCreateMessage({ clientPubkey, mainPubkey, issuedAt }) {
       return concatBytes([
-        enc.encode('vanta-session-create-v1\\0'),
+        enc.encode('vanta-session-create-v1\0'),
         b58decode(clientPubkey),
         b58decode(mainPubkey),
         enc.encode(String(issuedAt)),
@@ -343,7 +304,7 @@
     }
 
     async _post(path, body) {
-      const res = await this.fetchImpl(`${this.relayerUrl}${path}`, {
+      const res = await this.fetchImpl(this.relayerUrl + path, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
@@ -352,7 +313,7 @@
     }
 
     async _get(path) {
-      const res = await this.fetchImpl(`${this.relayerUrl}${path}`);
+      const res = await this.fetchImpl(this.relayerUrl + path);
       return res.json();
     }
   }
