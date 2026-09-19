@@ -761,22 +761,22 @@
           $('walletDot').className = 'absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-[#12141c] rounded-full';
         }
 
-        // Seamless reconnect: wallets remember trusted sites — use it so a
-        // refresh never leaves the wallet asleep. Silent, no popup.
+        // Seamless reconnect: ONLY the wallet the user chose (remembered in
+        // localStorage). Never scans for other installed wallets — no drive-by
+        // popups from Backpack/anything else, ever.
         async function trySilentReconnect() {
           if (mainPubkey) return;
-          for (const kind of ['phantom', 'solflare', 'backpack']) {
-            const prov = resolveProvider(kind);
-            if (!prov) continue;
-            try {
-              await prov.connect({ onlyIfTrusted: true });
-              if (prov.publicKey) {
-                const pk = prov.publicKey.toString ? prov.publicKey.toString() : prov.publicKey.toBase58();
-                markConnected(kind, prov, pk);
-                return;
-              }
-            } catch { /* not trusted yet — user connects manually once */ }
-          }
+          const savedKind = localStorage.getItem('vanta_wallet');
+          if (!savedKind || savedKind === 'dev') return;
+          const prov = resolveProvider(savedKind);
+          if (!prov) return;
+          try {
+            await prov.connect({ onlyIfTrusted: true });
+            if (prov.publicKey) {
+              const pk = prov.publicKey.toString ? prov.publicKey.toString() : prov.publicKey.toBase58();
+              markConnected(savedKind, prov, pk);
+            }
+          } catch { /* not trusted yet — user connects manually once */ }
         }
 
         async function connectWallet(kind) {
@@ -786,11 +786,6 @@
             if (kind === 'dev') {
               ({ pubkey, provider } = await getDevMain());
             } else {
-              provider = resolveProvider(kind);
-              if (!provider) {
-                const anyProv = window.solana || (window.phantom && window.phantom.solana);
-                if (anyProv && anyProv.isPhantom) { kind = 'phantom'; provider = anyProv; }
-              }
             }
             if (!provider) {
               showToast(kind + ' not detected — dev mode on');
@@ -799,6 +794,7 @@
             if (!provider.publicKey) await provider.connect();
             const pk = provider.publicKey.toString ? provider.publicKey.toString() : provider.publicKey.toBase58();
             markConnected(kind, provider, pk);
+            localStorage.setItem('vanta_wallet', kind);
             closeModal('connectSheet');
             showToast('Connected: ' + short(pk));
             // Connected = wallet wakes immediately. No toggle, no second ask.
