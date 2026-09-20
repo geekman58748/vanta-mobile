@@ -36,7 +36,7 @@ The thing that made this confusing for weeks: an earlier version framed itself a
 A **mobile-first privacy wallet**: your spending is always shielded, by default, with no toggle.
 
 - Open the app → a session wallet is provisioned (or restored) automatically.
-- **Receive** → one-time ephemeral address, rotates on every reveal; optionally bound to your `name.vanta` (off-chain registry).
+- **Receive** → reveals the **session wallet address** (the key the engine actually holds). Fund it manually from any wallet; spend it via shielded Send. Optionally bound to your `name.vanta` (off-chain registry). NOTE: an earlier version generated a throwaway keypair per reveal and discarded the secret — a fund black hole. Fixed in `f338cec`; never reintroduce keypair-generation in a receive path.
 - **Send** → session key signs and pays; fee-payer = signer = session key. Main wallet absent from the transaction.
 - **Burn** (drawer) → sweeps everything back to main, revokes the session, advances the rotation so the next session address is fresh. This is disposal, not a privacy switch.
 - **Refresh-safe** — session keys derive deterministically from your main wallet address (+ a rotation salt), so a page refresh restores the same key and never strands funds.
