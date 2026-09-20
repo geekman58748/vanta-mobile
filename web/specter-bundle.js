@@ -1,3 +1,10 @@
+var require = function(m) {
+    if (m === "@solana/web3.js") return window.solanaWeb3;
+    if (m === "stream") return { Transform: function(){} };
+    if (m === "events") return { EventEmitter: function(){} };
+    if (m === "buffer") return window.Buffer || {};
+    throw new Error("Cannot find module: " + m);
+  };
 var SpecterSDK = (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
