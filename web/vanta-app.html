@@ -63,9 +63,10 @@
     }
     </script>
 
-    <!-- Solana web3.js (for the chain layer) + nacl (dev-mode signing) + VANTA engine + chain ops -->
+    <!-- Solana web3.js (for the chain layer) + nacl + Specter privacy SDK + VANTA engine + chain ops -->
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.8/lib/index.iife.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
+    <script src="specter-bundle.js"></script>
     <script src="vanta-engine.js"></script>
     <script src="vanta-chain.js"></script>
     <!-- Tailwind CSS CDN -->
@@ -297,10 +298,7 @@
                                 <span class="text-slate-400">Relay:</span>
                                 <span id="backSessionKey" class="text-white font-bold tracking-widest">— none —</span>
                             </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-slate-400">Vault:</span>
-                                <span id="backVaultKey" class="text-white font-bold tracking-widest">— none —</span>
-                            </div>
+
                             <div class="flex justify-between items-center">
                                 <span class="text-slate-400">Expires:</span>
                                 <div class="flex items-center gap-2">
@@ -739,19 +737,6 @@
           try {
             const res = await engine.shieldOn();
             renderShielded(res);
-            // Auto-sweep: if relay has funds, move them to vault.
-            try {
-              const relayBal = await VantaChain.getSolBalance(res.relayPubkey);
-              if (relayBal > 0.00001) {
-                showToast('Sweeping relay → vault…');
-                await VantaChain.sweepRelayToVault({
-                  relaySigner: (wire) => engine.signRelayBytes(wire),
-                  relayPubkey: res.relayPubkey,
-                  vaultPubkey: res.vaultPubkey,
-                });
-                showToast('Swept to vault ✓');
-              }
-            } catch {}
             startBalancePolling();
             if (claimedName) $('receiveName').textContent = claimedName;
           } catch (e) {
@@ -760,13 +745,12 @@
         }
 
         function renderShielded(res) {
-          const pk = res.relayPubkey;
+          const pk = res.stealthMetaAddress || res.pubkey;
           $('mainBalanceDisplay').innerText = fmtSol(sessionBalance);
-          $('balanceLabel').textContent = 'Vault Balance';
+          $('balanceLabel').textContent = 'Private Balance';
           $('cardBrand').textContent = 'VANTA';
           $('sessionShort').textContent = short(pk);
           $('backSessionKey').textContent = short(pk);
-          $('backVaultKey').textContent = short(res.vaultPubkey);
           $('backExpires').textContent = new Date(res.expiresAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
           $('consentBadge').textContent = res.consentVerified ? 'CONSENT ✓' : 'DEV CONSENT';
           $('consentBadge').className = res.consentVerified
@@ -776,45 +760,35 @@
           if (claimedName) $('receiveName').textContent = claimedName;
         }
 
-        // Rotate relay: sweep relay→vault, get a fresh relay address.
+        // Reset: clear stealth wallet, generate fresh identity on next load.
         async function burnWallet() {
           if (uiBusy || !engine.session) return;
           playHapticTick();
           uiBusy = true;
           try {
-            // Sweep any remaining relay funds to vault.
-            try {
-              const sig = await VantaChain.sweepRelayToVault({
-                relaySigner: (wire) => engine.signRelayBytes(wire),
-                relayPubkey: engine.session.clientPubkey,
-                vaultPubkey: engine.session.vaultPubkey,
-              });
-              if (sig) showToast('Swept to vault ✓');
-            } catch (e) {
-              showToast('Sweep failed (' + String(e.message || e).slice(0, 40) + ')');
-            }
-            // Rotate salt → new relay address next provision.
             await engine.shieldOff();
+            localStorage.removeItem('vanta_mnemonic');
+            localStorage.removeItem('vanta_meta_address');
             stopBalancePolling();
             sessionTxs.unshift({
-              title: 'Relay rotated',
+              title: 'Identity reset',
               amount: 0,
               isPositive: false,
               time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              category: 'Rotate',
+              category: 'Reset',
               icon: 'shield',
               sig: null,
             });
             renderTransactions();
             $('mainBalanceDisplay').innerText = '◎0.00';
             $('sessionShort').textContent = '····';
-            showToast('Relay rotated — fresh address next wake');
+            showToast('Identity reset — new stealth wallet next load');
             await provisionSession();
           } finally { uiBusy = false; }
         }
 
         function copySessionKey() {
-          if (engine.session) { copyText(engine.session.relayPubkey || engine.session.clientPubkey); showToast('Relay address copied'); }
+          if (engine.session) { copyText(engine.session.stealthMetaAddress || engine.session.pubkey); showToast('Stealth address copied'); }
         }
 
         // ── balance polling ────────────────────────────────────────────────
@@ -829,26 +803,18 @@
         async function refreshBalance() {
           if (!engine.session) return;
           try {
-            // Show vault balance (the real money), not relay.
-            sessionBalance = await VantaChain.getSolBalance(engine.session.vaultPubkey);
-            $('mainBalanceDisplay').innerText = fmtSol(sessionBalance);
-            // Auto-sweep: if relay has funds, move them to vault.
+            // Scan for stealth payments and auto-claim them.
             try {
-              const relayBal = await VantaChain.getSolBalance(engine.session.clientPubkey);
-              if (relayBal > 0.00001 && !uiBusy) {
-                uiBusy = true;
-                await VantaChain.sweepRelayToVault({
-                  relaySigner: (wire) => engine.signRelayBytes(wire),
-                  relayPubkey: engine.session.clientPubkey,
-                  vaultPubkey: engine.session.vaultPubkey,
-                });
-                showToast('Swept relay → vault ✓');
-                // Re-check vault balance after sweep
-                sessionBalance = await VantaChain.getSolBalance(engine.session.vaultPubkey);
-                $('mainBalanceDisplay').innerText = fmtSol(sessionBalance);
-                uiBusy = false;
+              const payments = await engine.scanPayments();
+              for (const p of payments) {
+                showToast('Claiming stealth payment…');
+                await engine.claimPayment(p);
+                showToast('Stealth payment claimed ✓');
               }
             } catch {}
+            // Get stealth balance
+            sessionBalance = await engine.getStealthBalance();
+            $('mainBalanceDisplay').innerText = fmtSol(sessionBalance);
           } catch { /* offline: keep last value */ }
         }
 
@@ -879,14 +845,7 @@
             }
             if (b58decode(to).length !== 32) throw new Error('invalid recipient pubkey');
 
-            const sig = await VantaChain.sendViaRelay({
-              vaultSigner: (wire) => engine.signVaultBytes(wire),
-              vaultPubkey: engine.session.vaultPubkey,
-              relaySigner: (wire) => engine.signRelayBytes(wire),
-              relayPubkey: engine.session.clientPubkey,
-              to,
-              amountSol: amount,
-            });
+            const sig = await engine.sendPrivate(to, amount);
 
             sessionTxs.unshift({
               title: 'Shielded send',
@@ -945,7 +904,7 @@
           }
           uiBusy = true;
           try {
-            const addr = engine.session.clientPubkey;
+            const addr = engine.session.stealthMetaAddress || engine.session.pubkey;
             // Copy FIRST, inside the user gesture — clipboard access dies after
             // the first network await.
             const copied = await copyText(addr);
@@ -974,19 +933,9 @@
           if (!engine.session) {            showToast('Session not active — tap Receive to start'); return; }
           uiBusy = true;
           try {
-            await VantaChain.requestAirdrop(engine.session.clientPubkey, 1);
-            showToast('Faucet sent — sweeping to vault…');
-            setTimeout(async () => {
-              try {
-                await VantaChain.sweepRelayToVault({
-                  relaySigner: (wire) => engine.signRelayBytes(wire),
-                  relayPubkey: engine.session.clientPubkey,
-                  vaultPubkey: engine.session.vaultPubkey,
-                });
-                showToast('Swept to vault ✓');
-              } catch {}
-              refreshBalance();
-            }, 5000);
+            await VantaChain.requestAirdrop(engine.session.pubkey, 1);
+            showToast('Faucet sent — balance updates shortly');
+            setTimeout(refreshBalance, 5000);
           } catch (e) {
             showToast('Faucet refused (rate-limited?) — send SOL to your receive address instead');
           } finally { uiBusy = false; }
