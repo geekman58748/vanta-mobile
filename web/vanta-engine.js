@@ -92,14 +92,14 @@
     try { localStorage.setItem('vanta_salt', String(getSalt() + 1)); } catch {}
   }
 
-  function deriveKeypair(labelParts) {
+  async function deriveKeypair(labelParts) {
     const seed = getOrCreateSeed();
     const material = concatBytes([
       seed,
       ...labelParts,
     ]);
     const derivedSeed = new Uint8Array(
-      root.crypto.subtle.digest('SHA-256', material),
+      await root.crypto.subtle.digest('SHA-256', material),
     );
     return root.nacl.sign.keyPair.fromSeed(derivedSeed);
   }
@@ -115,19 +115,19 @@
     }
 
     // Derive the persistent vault keypair (salt=0, never rotates).
-    _getVaultKp() {
+    async _getVaultKp() {
       if (this._vaultKp) return this._vaultKp;
       if (!root.nacl || !root.nacl.sign) throw new VantaError('tweetnacl not loaded', 'dependency');
-      this._vaultKp = deriveKeypair([enc.encode('\x00vanta-vault-v1\x00')]);
+      this._vaultKp = await deriveKeypair([enc.encode('\x00vanta-vault-v1\x00')]);
       return this._vaultKp;
     }
 
     // Derive the rotating relay keypair (salt changes on rotate).
-    _getRelayKp() {
+    async _getRelayKp() {
       if (this._relayKp) return this._relayKp;
       if (!root.nacl || !root.nacl.sign) throw new VantaError('tweetnacl not loaded', 'dependency');
       const saltN = getSalt();
-      this._relayKp = deriveKeypair([
+      this._relayKp = await deriveKeypair([
         enc.encode('\x00vanta-relay-v1\x00'),
         enc.encode(String(saltN)),
       ]);
@@ -148,8 +148,8 @@
           throw new VantaError('tweetnacl not loaded', 'dependency');
         }
 
-        const vaultKp = this._getVaultKp();
-        const relayKp = this._getRelayKp();
+        const vaultKp = await this._getVaultKp();
+        const relayKp = await this._getRelayKp();
         const relayPub = b58encode(relayKp.publicKey);
         const vaultPub = b58encode(vaultKp.publicKey);
 
