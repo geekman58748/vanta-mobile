@@ -1,4 +1,11 @@
-var require = function(m) { if (m === '@solana/web3.js') return window.solanaWeb3; if (m === 'tweetnacl') return window.nacl; if (m === 'stream') return { Transform: function(){}, EventEmitter: function(){} }; if (m === 'events') return { EventEmitter: function(){} }; if (m === 'buffer') return window.Buffer || {}; throw new Error('Cannot find module: ' + m); };
+var require = function(m) {
+    if (m === '@solana/web3.js') return window.solanaWeb3;
+    if (m === 'tweetnacl') return window.nacl || window.tweetnacl || {};
+    if (m === 'stream') return { Transform: function(){}, EventEmitter: function(){} };
+    if (m === 'events') return { EventEmitter: function(){} };
+    if (m === 'buffer') return window.Buffer || { isBuffer: function(){ return false; }, from: function(d){ return new Uint8Array(d); } };
+    throw new Error('Cannot find module: ' + m);
+  };
 var SpecterSDK = (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
