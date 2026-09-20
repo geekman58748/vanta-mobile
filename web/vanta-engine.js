@@ -119,6 +119,7 @@
         }
 
         const seed = getOrCreateSeed();
+        rotateSalt();
         const saltN = getSalt();
         const rootMaterial = concatBytes([
           seed,
