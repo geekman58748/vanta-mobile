@@ -831,13 +831,12 @@
 
         // ── shielded send (Face ID confirm = real tx) ─────────────────────
         async function confirmShieldedSend() {
-          console.log('[VANTA SEND] clicked', { uiBusy, session: !!engine.session, keypadVal });
-          if (uiBusy) { console.log('[VANTA SEND] blocked by uiBusy'); return; }
+          if (uiBusy) return;
           playHapticTick();
           if (!engine.session) { showToast('Session not active — opening…'); provisionSession(); return; }
           const toRaw = $('recipientInput').value.trim();
           const amount = parseFloat(keypadVal) || 0;
-          console.log('[VANTA SEND] to:', toRaw, 'amount:', amount, 'balance:', sessionBalance);
+
           if (!toRaw) { showToast('Enter a recipient'); return; }
           if (amount <= 0) { showToast('Enter a valid amount'); return; }
           if (amount + 0.00001 > sessionBalance) { showToast('Insufficient session balance'); return; }
@@ -848,7 +847,7 @@
           btn.innerHTML = '<span class="text-sm">Signing & sending…</span>';
           try {
             let to = toRaw;
-            console.log('[VANTA SEND] starting tx...');
+
             if (/^[a-z0-9]{1,32}\.vanta$/i.test(toRaw) || /^[a-z0-9]{1,32}$/i.test(toRaw)) {
               const clean = toRaw.replace(/\.vanta$/i, '');
               const r = await engine.resolveName(clean);
@@ -856,14 +855,14 @@
               else throw new Error('name has no receive address yet');
             }
             if (b58decode(to).length !== 32) throw new Error('invalid recipient pubkey');
-            console.log('[VANTA SEND resolved recipient:', to, 'calling sendSol...');
+
             const sig = await VantaChain.sendSol({
               sessionSigner: (wire) => engine.signSessionBytes(wire),
               sessionPubkey: engine.session.clientPubkey,
               to,
               amountSol: amount,
             });
-            console.log('[VANTA SEND] success sig:', sig);
+
             sessionTxs.unshift({
               title: 'Shielded send',
               amount,

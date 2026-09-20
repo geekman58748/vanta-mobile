@@ -119,7 +119,6 @@
         }
 
         const seed = getOrCreateSeed();
-        rotateSalt(); // new address every time we provision
         const saltN = getSalt();
         const rootMaterial = concatBytes([
           seed,
