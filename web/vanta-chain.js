@@ -138,7 +138,8 @@
       const feeLamports = 5000n;
 
       // Step 1: vault → relay (fund relay with amount + fee for the relay tx)
-      const vaultToRelay = totalLamports + feeLamports;
+      const rentBuffer = 890880n;
+      const vaultToRelay = totalLamports + feeLamports + rentBuffer;
       await transferSol({
         signer: vaultSigner,
         fromPubkey: vaultPubkey,

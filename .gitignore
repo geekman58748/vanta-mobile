@@ -42,3 +42,4 @@ yarn-error.*
 
 # local UI mock screenshots (not part of the build)
 screenshot-*.png
+test-ledger/
