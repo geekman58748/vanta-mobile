@@ -1,33 +1,32 @@
 {
-  "name": "vanta-mobile",
-  "version": "1.0.0",
-  "main": "index.js",
-  "dependencies": {
-    "@noble/ed25519": "^3.2.0",
-    "@protocol-01/specter-sdk": "^0.4.3",
-    "@solana-mobile/mobile-wallet-adapter-protocol": "^2.3.0",
-    "@solana/web3.js": "^1.99.0",
-    "bs58": "^6.0.0",
-    "buffer": "^6.0.3",
-    "expo": "~57.0.22",
-    "expo-asset": "~57.0.17",
-    "expo-dev-client": "~57.0.19",
-    "expo-linear-gradient": "~57.0.2",
-    "expo-standard-web-crypto": "^57.0.2",
-    "expo-status-bar": "~57.0.1",
-    "react": "19.2.3",
-    "react-native": "0.86.3",
-    "react-native-webview": "13.16.1"
-  },
-  "scripts": {
-    "start": "expo start",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
-    "web": "expo start --web"
-  },
+  "name": "vanta-temp",
   "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "oxlint",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@noble/ciphers": "^2.4.0",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
+    "@solana/spl-token": "^0.4.15",
+    "@solana/web3.js": "^1.99.0",
+    "@umbra-privacy/sdk": "^5.0.0-rc.10",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "snarkjs": "^0.7.6"
+  },
   "devDependencies": {
-    "esbuild-plugin-node-polyfills": "^1.0.2",
-    "tweetnacl": "^1.0.3"
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "oxlint": "^1.81.0",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.0"
   }
 }

@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+/* Custom Scrollbar & Interaction Tweaks */
+::-webkit-scrollbar { display: none; }
+* { 
+  -webkit-tap-highlight-color: transparent; 
+  user-select: none; 
+  touch-action: manipulation;
+}
+
+/* Blur Roll-Up Balance Animation */
+.blur-rollup {
+  animation: blurRollUp 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes blurRollUp {
+  0% {
+    opacity: 0;
+    filter: blur(14px);
+    transform: translateY(16px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0px);
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Privacy Blur Toggle Effect */
+.balance-masked {
+  filter: blur(12px) !important;
+  user-select: none;
+  transition: filter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Drawer Transition Helpers */
+.drawer-overlay {
+  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.drawer-sheet {
+  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Toast Notification Slide Animation */
+.toast-anim {
+  animation: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes toastIn {
+  0% { transform: translateY(-100%) scale(0.9); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* Card Glow Hover */
+.card-glow {
+  box-shadow: 0 0 35px -5px rgba(91, 65, 244, 0.25);
+}
