@@ -1,17 +1,11 @@
 'use strict';
 
-// VANTA session engine — no wallet dependency.
-// Session keys derived from a stored seed + rotation salt.
+// VANTA session engine — vault + relay two-keypair model.
+// Vault = persistent (derived from seed, never visible in outgoing txns).
+// Relay = disposable (derived from seed + salt, rotates, visible to public).
 
 (function attach(root) {
   const RELAYER_URL = (root.VANTA_RELAYER_URL || 'http://localhost:8787').replace(/\/+$/, '');
-
-  const STATE = Object.freeze({
-    OFF: 'OFF',
-    PROVISIONING: 'PROVISIONING',
-    ACTIVE: 'ACTIVE',
-    REVOKING: 'REVOKING',
-  });
 
   const B58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
@@ -98,61 +92,84 @@
     try { localStorage.setItem('vanta_salt', String(getSalt() + 1)); } catch {}
   }
 
+  function deriveKeypair(labelParts) {
+    const seed = getOrCreateSeed();
+    const material = concatBytes([
+      seed,
+      ...labelParts,
+    ]);
+    const derivedSeed = new Uint8Array(
+      root.crypto.subtle.digest('SHA-256', material),
+    );
+    return root.nacl.sign.keyPair.fromSeed(derivedSeed);
+  }
+
   class VantaSessionEngine {
     constructor({ relayerUrl, fetchImpl } = {}) {
       this.relayerUrl = (relayerUrl || RELAYER_URL).replace(/\/+$/, '');
       this.fetchImpl = fetchImpl || root.fetch.bind(root);
-      this.state = STATE.OFF;
+      this.state = 'OFF';
       this.session = null;
-      this._naclKp = null;
-      this._internalSessionSigner = null;
+      this._vaultKp = null;
+      this._relayKp = null;
     }
 
+    // Derive the persistent vault keypair (salt=0, never rotates).
+    _getVaultKp() {
+      if (this._vaultKp) return this._vaultKp;
+      if (!root.nacl || !root.nacl.sign) throw new VantaError('tweetnacl not loaded', 'dependency');
+      this._vaultKp = deriveKeypair([enc.encode('\x00vanta-vault-v1\x00')]);
+      return this._vaultKp;
+    }
+
+    // Derive the rotating relay keypair (salt changes on rotate).
+    _getRelayKp() {
+      if (this._relayKp) return this._relayKp;
+      if (!root.nacl || !root.nacl.sign) throw new VantaError('tweetnacl not loaded', 'dependency');
+      const saltN = getSalt();
+      this._relayKp = deriveKeypair([
+        enc.encode('\x00vanta-relay-v1\x00'),
+        enc.encode(String(saltN)),
+      ]);
+      return this._relayKp;
+    }
+
+    get vaultPubkey() { return this._vaultKp ? b58encode(this._vaultKp.publicKey) : null; }
+    get relayPubkey() { return this._relayKp ? b58encode(this._relayKp.publicKey) : null; }
+
+    // Provision both vault and relay. Returns relay address (what to show for Receive).
     async shieldOn() {
-      if (this.state !== STATE.OFF) {
+      if (this.state !== 'OFF') {
         throw new VantaError('Cannot shieldOn from state ' + this.state, 'invalid_state');
       }
-      this.state = STATE.PROVISIONING;
+      this.state = 'PROVISIONING';
       try {
         if (!root.nacl || !root.nacl.sign) {
           throw new VantaError('tweetnacl not loaded', 'dependency');
         }
 
-        const seed = getOrCreateSeed();
-        rotateSalt();
-        const saltN = getSalt();
-        const rootMaterial = concatBytes([
-          seed,
-          enc.encode('vanta-session-v1\0'),
-          enc.encode(String(saltN)),
-        ]);
-        const derivedSeed = new Uint8Array(
-          await root.crypto.subtle.digest('SHA-256', rootMaterial),
-        );
-        const kp = root.nacl.sign.keyPair.fromSeed(derivedSeed);
-        this._naclKp = kp;
-        const clientPubkey = b58encode(kp.publicKey);
-
-        this._internalSessionSigner = async (wireBytes) =>
-          root.nacl.sign.detached(wireBytes, kp.secretKey);
+        const vaultKp = this._getVaultKp();
+        const relayKp = this._getRelayKp();
+        const relayPub = b58encode(relayKp.publicKey);
+        const vaultPub = b58encode(vaultKp.publicKey);
 
         const issuedAt = nowSeconds();
         const message = VantaSessionEngine.buildCreateMessage({
-          clientPubkey,
-          mainPubkey: clientPubkey,
+          clientPubkey: relayPub,
+          mainPubkey: vaultPub,
           issuedAt,
         });
-        const createSignature = b58encode(root.nacl.sign.detached(message, kp.secretKey));
+        const createSignature = b58encode(root.nacl.sign.detached(message, relayKp.secretKey));
 
-        let sessionId = 'local-' + clientPubkey.slice(0, 8);
+        let sessionId = 'local-' + relayPub.slice(0, 8);
         let expiresAt = issuedAt + 3600;
         let spendCapLamports = 1000000000;
         let txCapLamports = 500000000;
 
         try {
           const res = await this._post('/v1/session', {
-            clientPubkey,
-            mainPubkey: clientPubkey,
+            clientPubkey: relayPub,
+            mainPubkey: vaultPub,
             issuedAt,
             createSignature,
           });
@@ -166,17 +183,19 @@
 
         this.session = {
           id: sessionId,
-          clientPubkey,
+          clientPubkey: relayPub,
+          vaultPubkey: vaultPub,
           expiresAt,
           spendCapLamports,
           txCapLamports,
           spentLamports: 0,
           startedAt: Date.now(),
         };
-        this.state = STATE.ACTIVE;
+        this.state = 'ACTIVE';
 
         return {
-          sessionPubkey: clientPubkey,
+          relayPubkey: relayPub,
+          vaultPubkey: vaultPub,
           sessionId,
           expiresAt,
           spendCapLamports,
@@ -184,51 +203,36 @@
         };
       } catch (err) {
         this._wipeLocalState();
-        this.state = STATE.OFF;
+        this.state = 'OFF';
         throw err;
       }
     }
 
-    async signSessionBytes(wireBytes) {
-      if (this.state !== STATE.ACTIVE || !this._internalSessionSigner) {
-        throw new VantaError('No active session key to sign with', 'invalid_state');
-      }
-      return this._internalSessionSigner(wireBytes);
+    // Sign as relay (for relay→recipient sends).
+    async signRelayBytes(wireBytes) {
+      if (!this._relayKp) throw new VantaError('No relay key', 'invalid_state');
+      return root.nacl.sign.detached(wireBytes, this._relayKp.secretKey);
+    }
+
+    // Sign as vault (for vault→relay internal transfers).
+    async signVaultBytes(wireBytes) {
+      if (!this._vaultKp) throw new VantaError('No vault key', 'invalid_state');
+      return root.nacl.sign.detached(wireBytes, this._vaultKp.secretKey);
     }
 
     async shieldOff() {
-      if (this.state === STATE.OFF) return { revoked: false };
-      if (this.state === STATE.PROVISIONING) {
-        this._wipeLocalState();
-        this.state = STATE.OFF;
-        return { revoked: false };
-      }
-      if (this.state === STATE.REVOKING) {
-        throw new VantaError('shieldOff already in progress', 'invalid_state');
-      }
-      this.state = STATE.REVOKING;
-      const sessionId = this.session ? this.session.id : null;
-      let revoked = false;
-      try {
-        if (sessionId && !sessionId.startsWith('local-')) {
-          try {
-            const res = await this._post('/v1/session/' + encodeURIComponent(sessionId) + '/revoke', {});
-            if (res.ok) revoked = true;
-          } catch {}
-        }
-      } finally {
-        this._wipeLocalState();
-        this.state = STATE.OFF;
-        rotateSalt();
-      }
-      return { revoked };
+      if (this.state === 'OFF') return { revoked: false };
+      this._wipeLocalState();
+      this.state = 'OFF';
+      rotateSalt();
+      return { revoked: false };
     }
 
     static buildNameClaimMessage({ name, ownerPubkey, issuedAt }) {
       return concatBytes([
-        enc.encode('vanta-name-claim-v1\0'),
+        enc.encode('\x00vanta-name-claim-v1\x00'),
         enc.encode(name),
-        enc.encode('\0'),
+        enc.encode('\x00'),
         b58decode(ownerPubkey),
         enc.encode(String(issuedAt)),
       ]);
@@ -236,9 +240,9 @@
 
     static buildReceiveUpdateMessage({ name, receivePubkey, issuedAt }) {
       return concatBytes([
-        enc.encode('vanta-name-receive-v1\0'),
+        enc.encode('\x00vanta-name-receive-v1\x00'),
         enc.encode(name),
-        enc.encode('\0'),
+        enc.encode('\x00'),
         b58decode(receivePubkey),
         enc.encode(String(issuedAt)),
       ]);
@@ -246,19 +250,17 @@
 
     async claimName(name) {
       if (!name || typeof name !== 'string') throw new VantaError('name is required', 'config');
-      if (!this.session || !this._internalSessionSigner) {
-        throw new VantaError('No active session', 'invalid_state');
-      }
+      if (!this.session) throw new VantaError('No active session', 'invalid_state');
       const issuedAt = nowSeconds();
       const message = VantaSessionEngine.buildNameClaimMessage({
         name,
-        ownerPubkey: this.session.clientPubkey,
+        ownerPubkey: this.session.relayPubkey || this.session.clientPubkey,
         issuedAt,
       });
-      const sigBytes = await this._internalSessionSigner(message);
+      const sigBytes = await this.signRelayBytes(message);
       const res = await this._post('/v1/names/claim', {
         name,
-        ownerPubkey: this.session.clientPubkey,
+        ownerPubkey: this.session.relayPubkey || this.session.clientPubkey,
         issuedAt,
         signature: b58encode(sigBytes),
       });
@@ -267,18 +269,16 @@
     }
 
     async setReceiveAddress(name, receivePubkey) {
-      if (!this.session || !this._internalSessionSigner) {
-        throw new VantaError('No active session', 'invalid_state');
-      }
+      if (!this.session) throw new VantaError('No active session', 'invalid_state');
       const clean = String(name || '').replace(/\.vanta$/, '');
       const issuedAt = nowSeconds();
       const message = VantaSessionEngine.buildReceiveUpdateMessage({ name: clean, receivePubkey, issuedAt });
-      const sigBytes = await this._internalSessionSigner(message);
+      const sigBytes = await this.signRelayBytes(message);
       const res = await this._post('/v1/names/' + encodeURIComponent(clean) + '/receive', {
         receivePubkey,
         issuedAt,
         signature: b58encode(sigBytes),
-        clientPubkey: this.session.clientPubkey,
+        clientPubkey: this.session.relayPubkey || this.session.clientPubkey,
       });
       if (!res.ok) throw new VantaError(res.error || 'Receive-address update refused', res.code || 'receive_failed');
       return res;
@@ -291,7 +291,7 @@
 
     static buildCreateMessage({ clientPubkey, mainPubkey, issuedAt }) {
       return concatBytes([
-        enc.encode('vanta-session-create-v1\0'),
+        enc.encode('\x00vanta-session-create-v1\x00'),
         b58decode(clientPubkey),
         b58decode(mainPubkey),
         enc.encode(String(issuedAt)),
@@ -299,9 +299,9 @@
     }
 
     _wipeLocalState() {
-      this._naclKp = null;
-      this._internalSessionSigner = null;
+      this._relayKp = null;
       this.session = null;
+      // Vault key persists — it's the user's permanent identity.
     }
 
     async _post(path, body) {
@@ -319,7 +319,7 @@
     }
   }
 
-  root.VantaEngine = { VantaSessionEngine, VantaError, STATE, b58encode, b58decode };
+  root.VantaEngine = { VantaSessionEngine, VantaError, STATE: { OFF: 'OFF', PROVISIONING: 'PROVISIONING', ACTIVE: 'ACTIVE', REVOKING: 'REVOKING' }, b58encode, b58decode };
   root.VantaSessionEngine = VantaSessionEngine;
   root.VantaError = VantaError;
 })(typeof window !== 'undefined' ? window : globalThis);

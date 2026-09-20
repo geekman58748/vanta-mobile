@@ -717,6 +717,7 @@
         }
 
         // ── session lifecycle (no wallet needed) ───────────────────────
+        function connectWallet() { provisionSession(); closeModal('connectSheet'); }
         async function openConnectModal() {
           playHapticTick();
           if (engine.session) { openDrawer(); return; }
@@ -734,6 +735,19 @@
           try {
             const res = await engine.shieldOn();
             renderShielded(res);
+            // Auto-sweep: if relay has funds, move them to vault.
+            try {
+              const relayBal = await VantaChain.getSolBalance(res.relayPubkey);
+              if (relayBal > 0.00001) {
+                showToast('Sweeping relay → vault…');
+                await VantaChain.sweepRelayToVault({
+                  relaySigner: (wire) => engine.signRelayBytes(wire),
+                  relayPubkey: res.relayPubkey,
+                  vaultPubkey: res.vaultPubkey,
+                });
+                showToast('Swept to vault ✓');
+              }
+            } catch {}
             startBalancePolling();
             if (claimedName) $('receiveName').textContent = claimedName;
           } catch (e) {
@@ -742,9 +756,9 @@
         }
 
         function renderShielded(res) {
-          const pk = res.sessionPubkey;
+          const pk = res.relayPubkey;
           $('mainBalanceDisplay').innerText = fmtSol(sessionBalance);
-          $('balanceLabel').textContent = 'Private Balance';
+          $('balanceLabel').textContent = 'Vault Balance';
           $('cardBrand').textContent = 'VANTA';
           $('sessionShort').textContent = short(pk);
           $('backSessionKey').textContent = short(pk);
@@ -757,59 +771,45 @@
           if (claimedName) $('receiveName').textContent = claimedName;
         }
 
-        // Manual BURN: sweeps everything to a destination, revokes,
-        // and rotates to a fresh private address next wake.
+        // Rotate relay: sweep relay→vault, get a fresh relay address.
         async function burnWallet() {
           if (uiBusy || !engine.session) return;
           playHapticTick();
-
-          // Ask for sweep destination
-          const dest = prompt('Enter destination address to sweep remaining balance:');
-          if (!dest || !dest.trim()) {
-            showToast('Burn cancelled — no destination entered');
-            return;
-          }
-          const destAddr = dest.trim();
-          try { b58decode(destAddr); } catch {
-            showToast('Invalid address');
-            return;
-          }
-
           uiBusy = true;
           try {
-            if (sessionBalance > 0) {
-              try {
-                const sig = await VantaChain.sweepBack({
-                  sessionSigner: (wire) => engine.signSessionBytes(wire),
-                  sessionPubkey: engine.session.clientPubkey,
-                  mainPubkey: destAddr,
-                });
-                if (sig) showToast('Swept ✓ ' + short(sig));
-              } catch (e) {
-                showToast('Sweep failed (' + String(e.message || e).slice(0, 40) + ')');
-              }
+            // Sweep any remaining relay funds to vault.
+            try {
+              const sig = await VantaChain.sweepRelayToVault({
+                relaySigner: (wire) => engine.signRelayBytes(wire),
+                relayPubkey: engine.session.clientPubkey,
+                vaultPubkey: engine.session.vaultPubkey,
+              });
+              if (sig) showToast('Swept to vault ✓');
+            } catch (e) {
+              showToast('Sweep failed (' + String(e.message || e).slice(0, 40) + ')');
             }
+            // Rotate salt → new relay address next provision.
             await engine.shieldOff();
             stopBalancePolling();
             sessionTxs.unshift({
-              title: 'Wallet burned',
+              title: 'Relay rotated',
               amount: 0,
               isPositive: false,
               time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              category: 'Burn',
+              category: 'Rotate',
               icon: 'shield',
               sig: null,
             });
             renderTransactions();
             $('mainBalanceDisplay').innerText = '◎0.00';
             $('sessionShort').textContent = '····';
-            showToast('Burned — next wake gets a fresh private address');
+            showToast('Relay rotated — fresh address next wake');
             await provisionSession();
           } finally { uiBusy = false; }
         }
 
         function copySessionKey() {
-          if (engine.session) { copyText(engine.session.clientPubkey); showToast('Session pubkey copied'); }
+          if (engine.session) { copyText(engine.session.relayPubkey || engine.session.clientPubkey); showToast('Relay address copied'); }
         }
 
         // ── balance polling ────────────────────────────────────────────────
@@ -824,7 +824,8 @@
         async function refreshBalance() {
           if (!engine.session) return;
           try {
-            sessionBalance = await VantaChain.getSolBalance(engine.session.clientPubkey);
+            // Show vault balance (the real money), not relay.
+            sessionBalance = await VantaChain.getSolBalance(engine.session.vaultPubkey);
             $('mainBalanceDisplay').innerText = fmtSol(sessionBalance);
           } catch { /* offline: keep last value */ }
         }
@@ -856,9 +857,11 @@
             }
             if (b58decode(to).length !== 32) throw new Error('invalid recipient pubkey');
 
-            const sig = await VantaChain.sendSol({
-              sessionSigner: (wire) => engine.signSessionBytes(wire),
-              sessionPubkey: engine.session.clientPubkey,
+            const sig = await VantaChain.sendViaRelay({
+              vaultSigner: (wire) => engine.signVaultBytes(wire),
+              vaultPubkey: engine.session.vaultPubkey,
+              relaySigner: (wire) => engine.signRelayBytes(wire),
+              relayPubkey: engine.session.clientPubkey,
               to,
               amountSol: amount,
             });
@@ -946,12 +949,22 @@
         async function faucetSession() {
           if (uiBusy) return;
           playHapticTick();
-          if (!engine.session) { showToast('Wallet asleep — connect once to activate'); return; }
+          if (!engine.session) {            showToast('Session not active — tap Receive to start'); return; }
           uiBusy = true;
           try {
             await VantaChain.requestAirdrop(engine.session.clientPubkey, 1);
-            showToast('Faucet request sent — balance updates shortly');
-            setTimeout(refreshBalance, 4000);
+            showToast('Faucet sent — sweeping to vault…');
+            setTimeout(async () => {
+              try {
+                await VantaChain.sweepRelayToVault({
+                  relaySigner: (wire) => engine.signRelayBytes(wire),
+                  relayPubkey: engine.session.clientPubkey,
+                  vaultPubkey: engine.session.vaultPubkey,
+                });
+                showToast('Swept to vault ✓');
+              } catch {}
+              refreshBalance();
+            }, 5000);
           } catch (e) {
             showToast('Faucet refused (rate-limited?) — send SOL to your receive address instead');
           } finally { uiBusy = false; }
