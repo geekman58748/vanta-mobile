@@ -1,0 +1,9 @@
+Swap Umbra for Helius zolana privacy rails: shield/shadow/ghost flows + self-hosted relayer with X session signer
+
+Snapshot of the in-progress Zolana integration so testing can't lose the
+three days of rework. Umbra SDK removed; @heliuslabs/zolana + @solana/kit 8.x
+added; relayer/server.js funds and fee-pays all privacy txs so user wallets
+never appear as fee payer.
+
+Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>

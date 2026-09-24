@@ -7,18 +7,21 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "relayer": "node relayer/server.js"
   },
   "dependencies": {
+    "@heliuslabs/zolana": "^0.2.0-alpha",
     "@noble/ciphers": "^2.4.0",
     "@noble/curves": "^2.4.0",
     "@noble/hashes": "^2.4.0",
+    "@solana/kit": "^8.3.0",
     "@solana/spl-token": "^0.4.15",
     "@solana/web3.js": "^1.99.0",
-    "@umbra-privacy/sdk": "^5.0.0-rc.10",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "snarkjs": "^0.7.6"
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
