@@ -1,0 +1,9 @@
+node_modules
+npm-debug.log*
+
+# Never ship a keypair in an image layer. Production must inject RELAYER_KEYPAIR.
+relayer-keypair.json
+
+.env
+.env.*
+*.md

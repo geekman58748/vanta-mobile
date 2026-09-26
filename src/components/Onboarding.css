@@ -1,0 +1,174 @@
+/* Onboarding.css — the one-time first-run flow.
+ *
+ * ── Provenance ───────────────────────────────────────────────────────────
+ * Ported from the standalone `onboardingflow (2).html` mock. That file is a
+ * stock fintech / NEOBANK template, not a Vanta design. Three things in it
+ * were wrong for this product, and all three are fixed here rather than
+ * carried over:
+ *
+ *   1. Royal blue (#2b6eff) on #03070f. That is a *different product's*
+ *      brand. Vanta's accent is amethyst #8b79f0 on a neutral #0a0a0c canvas
+ *      (see index.css) — the blue is what made the flow read as "not ours".
+ *   2. The "FŁUX" VISA card. Vanta has no card, and VISA is a trademark we
+ *      have no licence to. The *composition* (a floating, slightly 3D,
+ *      shimmer-lit panel) was the good part, so it is kept and re-bodied as
+ *      Vanta's own primitive: the private note.
+ *   3. "Secured by your biometrics" / "Secure with biometrics". Vanta is a
+ *      web + APK wallet with no biometric unlock. That claim was simply
+ *      false, which matters more than usual in a product whose entire thesis
+ *      is "we tell you exactly what we do and don't do".
+ *
+ * GSAP is deliberately NOT used. The original pulled it plus the Tailwind CDN
+ * from a <script> tag; this is a bundled SPA, so the motion is plain CSS
+ * keyframes and the layout is Tailwind utilities like every other component.
+ */
+
+/* ── Entrance choreography ─────────────────────────────────────────────
+   Every element rises in, staggered by its `--i` index. The delay is a
+   custom property rather than per-element rules so adding a line to a step
+   needs no CSS change. */
+@keyframes ob-rise {
+  from { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.ob-anim {
+  opacity: 0;
+  animation: ob-rise 0.62s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(var(--i, 0) * 90ms);
+}
+
+/* ── Step transition ───────────────────────────────────────────────────
+   Only the active step is mounted, so the slide is a single animation on the
+   incoming panel. Direction comes from the caller. */
+@keyframes ob-in-fwd {
+  from { opacity: 0; transform: translateX(28%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes ob-in-back {
+  from { opacity: 0; transform: translateX(-28%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.ob-step-fwd  { animation: ob-in-fwd  0.52s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.ob-step-back { animation: ob-in-back 0.52s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ── Ambient field ─────────────────────────────────────────────────────
+   Amethyst, not blue, and far weaker than the template's 0.18 wash — the
+   canvas has to stay a neutral room, per the note at the top of index.css. */
+.ob-glow {
+  background: radial-gradient(
+    circle at 50% 34%,
+    rgba(139, 121, 240, 0.16) 0%,
+    rgba(10, 10, 12, 0) 68%
+  );
+}
+
+/* The grid the template used for texture. Kept — it reads as engineering
+   paper rather than decoration, which suits a wallet that shows its work. */
+.ob-grid {
+  background-size: 96px 96px;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+}
+
+/* Slow drift so the topographic field breathes instead of sitting still. */
+@keyframes ob-drift {
+  0%   { transform: translate3d(0, 0, 0); }
+  50%  { transform: translate3d(-10px, 6px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+.ob-waves { animation: ob-drift 16s ease-in-out infinite; }
+
+/* ── Step 2: the scanner ───────────────────────────────────────────────
+   Kept from the template. The frame is a good piece of motion; only the claim
+   under it changed. */
+@keyframes ob-scan {
+  0%   { top: 14%; opacity: 0.15; }
+  50%  { opacity: 0.85; }
+  100% { top: 78%; opacity: 0.15; }
+}
+.ob-scanner {
+  animation: ob-scan 3.4s ease-in-out infinite;
+}
+
+/* ── Step 1 + 3: the floating objects ──────────────────────────────────
+   Same perspective/rotateY technique as the template, re-pointed at Vanta's
+   private note. The rotations are near-identical on purpose — that angle is
+   what made the originals feel like physical objects. */
+.ob-perspective {
+  perspective: 1000px;
+  transform-style: preserve-3d;
+}
+
+.ob-note-front {
+  transform: rotateY(-16deg) rotateX(11deg) rotateZ(-9deg) translate3d(-8px, -14px, 30px);
+  box-shadow:
+    -14px 22px 48px rgba(76, 58, 158, 0.55),
+    inset 0 1px 1px rgba(255, 255, 255, 0.16);
+}
+
+.ob-note-back {
+  transform: rotateY(15deg) rotateX(8deg) rotateZ(7deg) translate3d(18px, 10px, -40px);
+  box-shadow:
+    14px 24px 46px rgba(0, 0, 0, 0.9),
+    inset 0 1px 1px rgba(255, 255, 255, 0.08);
+}
+
+/* A single light pass across the front note. The template ran this every 6s
+   forever; once per entrance is enough and it stops competing with the
+   scanner, which is the only motion that should loop on step 2. */
+@keyframes ob-shimmer {
+  0%   { left: -140%; }
+  100% { left: 140%; }
+}
+.ob-shimmer-wrap {
+  position: relative;
+  overflow: hidden;
+}
+.ob-shimmer-wrap::after {
+  content: '';
+  position: absolute;
+  top: -60%;
+  left: -140%;
+  width: 90%;
+  height: 220%;
+  background: linear-gradient(
+    66deg,
+    transparent 34%,
+    rgba(255, 255, 255, 0.22) 50%,
+    transparent 66%
+  );
+  transform: rotate(22deg);
+  animation: ob-shimmer 2.6s ease-in-out 0.9s 1 forwards;
+  pointer-events: none;
+}
+
+/* The redaction bar on the private note. Deliberately NOT animated — it is
+   standing in for an amount the user cannot see, and a moving censor bar
+   invites the eye to try to read it. */
+.ob-redact {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.09) 65%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+}
+
+/* Honour reduced-motion: drop every loop, keep the layout. */
+@media (prefers-reduced-motion: reduce) {
+  .ob-anim,
+  .ob-step-fwd,
+  .ob-step-back {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .ob-scanner,
+  .ob-waves,
+  .ob-shimmer-wrap::after {
+    animation: none;
+  }
+}

@@ -1,55 +1,178 @@
 @import "tailwindcss";
 
-/* Custom Scrollbar & Interaction Tweaks */
-::-webkit-scrollbar { display: none; }
-* { 
-  -webkit-tap-highlight-color: transparent; 
-  user-select: none; 
-  touch-action: manipulation;
+/* ── VANTA DESIGN TOKENS ────────────────────────────────────────────────
+   The single source of truth for the app's skin. Every component reads these
+   (via Tailwind's generated `bg-*` / `text-*` / `border-*` utilities) instead
+   of hardcoding hex, so re-skinning is one file again.
+   Palette: neutral near-black canvas, hairline borders, ONE amethyst accent.
+
+   The canvas stays GREY. An earlier pass tinted every surface violet (canvas, card,
+   sunken, button, rail) plus violet spotlights and glows, and the whole screen read
+   as purple rather than as a neutral room with a purple lamp in it. Violet belongs
+   on the accent, active states and glows only — never on the base surfaces. */
+@theme {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Space Mono', SFMono-Regular, ui-monospace, monospace;
+
+  /* Surfaces — near-black, cooled a hair but deliberately NEUTRAL. Pure #000 is
+     never right for a UI, but neither is a tinted room: keep the hue out of these. */
+  --color-canvas: #0a0a0c;      /* main app canvas */
+  --color-ink: #060608;         /* body / page behind the device frame */
+  --color-card: #141417;        /* sheets, asset cards */
+  --color-card-lo: #0f0f12;     /* card gradient floor */
+  --color-sunken: #0c0c0f;      /* icon wells inside glass buttons */
+  --color-btn: #222226;         /* glass button top */
+  --color-btn-hi: #2b2b31;      /* glass button top, hover */
+  --color-rail: #17171a;        /* inactive chips / rails */
+
+  /* Accent + semantics.
+     Amethyst, not magenta: #8b79f0 is desaturated enough to read as jewellery and
+     still clears 6:1 against black, which matters because primary CTAs set BLACK
+     text on it. --color-accent-deep exists for gradients and glows, where a
+     darker violet reads richer than the flat accent at low alpha.
+     Danger is a deep rose — analogous to violet rather than a clashing crimson,
+     so outgoing amounts stay in the same family. */
+  --color-accent: #8b79f0;      /* private, success, primary CTA */
+  --color-accent-hi: #7a66e6;   /* primary CTA hover */
+  --color-accent-deep: #4c3a9e; /* gradients / glows */
+  --color-danger: #ec6a7a;      /* outgoing / failure */
+  --color-muted: #8e8e93;       /* secondary text */
+
+  /* Hairlines — white at low alpha, so they read on any surface */
+  --color-hair: rgba(255, 255, 255, 0.08);
+  --color-hair-hi: rgba(255, 255, 255, 0.15);
 }
 
-/* Blur Roll-Up Balance Animation */
-.blur-rollup {
-  animation: blurRollUp 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+/* ── BASE ────────────────────────────────────────────────────────────── */
+@layer base {
+  ::-webkit-scrollbar { display: none; }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    touch-action: manipulation;
+  }
+
+  /* Inputs must stay selectable — the send sheet pastes recipient addresses. */
+  input, textarea { user-select: text; -webkit-user-select: text; }
+
+  body {
+    background-color: var(--color-ink);
+    color: #fff;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
+
+/* ── COMPONENT GRAMMAR ───────────────────────────────────────────────────
+   In the components layer so Tailwind utilities (utilities layer) can still
+   override individual properties, e.g. `border-accent/40` on an .asset-card. */
+@layer components {
+
+  /* Topographic / wavy background vector overlay */
+  .topo-waves {
+    position: absolute;
+    top: -20px;
+    right: -20px;
+    width: 100%;
+    height: 380px;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.85;
+    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 30%, rgba(0, 0, 0, 0) 100%);
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 30%, rgba(0, 0, 0, 0) 100%);
+  }
+
+  /* Ambient spotlights */
+  .spotlight-left,
+  .spotlight-right {
+    position: absolute;
+    top: 15px;
+    width: 130px;
+    height: 130px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  /* Ambient light. Kept neutral: two violet washes behind the header are what
+     pushed the app from "accented" to "purple". */
+  .spotlight-left {
+    left: 20px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0) 70%);
+    filter: blur(20px);
+  }
+  .spotlight-right {
+    right: 20px;
+    width: 140px;
+    height: 140px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0) 75%);
+    filter: blur(25px);
+  }
+
+  /* Raised, tactile button used for the primary action row */
+  .glass-btn {
+    background: linear-gradient(180deg, rgba(42, 42, 46, 0.9) 0%, rgba(30, 30, 33, 0.9) 100%);
+    border: 1px solid var(--color-hair);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+  .glass-btn:hover {
+    background: linear-gradient(180deg, rgba(50, 50, 56, 0.95) 0%, rgba(38, 38, 42, 0.95) 100%);
+    border-color: var(--color-hair-hi);
+  }
+  .glass-btn:active { transform: scale(0.98); }
+
+  /* Flat asset row — lifts and picks up an accent-tinted halo on hover */
+  .asset-card {
+    background: linear-gradient(180deg, var(--color-card) 0%, var(--color-card-lo) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    /* Named properties, never `all` — `all` also animates layout properties and
+       leaks into children, which is what makes a UI feel loose. */
+    transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .asset-card:hover {
+    border-color: rgba(139, 121, 240, 0.35);
+    transform: translateY(-1px);
+    box-shadow: 0 0 35px -8px rgba(139, 121, 240, 0.16);
+  }
+
+  /* Accent halo for the focused balance card. Low alpha: a glow should be felt,
+     not seen. */
+  .card-glow { box-shadow: 0 0 35px -5px rgba(139, 121, 240, 0.2); }
+}
+
+/* ── UTILITIES ───────────────────────────────────────────────────────── */
+@layer utilities {
+  /* Blur Roll-Up Balance Animation */
+  .blur-rollup { animation: blurRollUp 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+  /* Privacy Blur Toggle Effect */
+  .balance-masked {
+    filter: blur(12px) !important;
+    user-select: none;
+    transition: filter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Drawer Transition Helpers */
+  .drawer-overlay { transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+  .drawer-sheet { transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1); }
+
+  /* Toast Notification Slide Animation */
+  .toast-anim { animation: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+  /* Hidden scrollbars for the horizontal chip rails and scrollable sheets */
+  .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+
+  /* Tabular figures — keeps balances from jittering as digits change */
+  .tnum { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
+}
+
 @keyframes blurRollUp {
-  0% {
-    opacity: 0;
-    filter: blur(14px);
-    transform: translateY(16px) scale(0.97);
-  }
-  100% {
-    opacity: 1;
-    filter: blur(0px);
-    transform: translateY(0) scale(1);
-  }
+  0% { opacity: 0; filter: blur(14px); transform: translateY(16px) scale(0.97); }
+  100% { opacity: 1; filter: blur(0px); transform: translateY(0) scale(1); }
 }
 
-/* Privacy Blur Toggle Effect */
-.balance-masked {
-  filter: blur(12px) !important;
-  user-select: none;
-  transition: filter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Drawer Transition Helpers */
-.drawer-overlay {
-  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.drawer-sheet {
-  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-/* Toast Notification Slide Animation */
-.toast-anim {
-  animation: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
 @keyframes toastIn {
   0% { transform: translateY(-100%) scale(0.9); opacity: 0; }
   100% { transform: translateY(0) scale(1); opacity: 1; }
-}
-
-/* Card Glow Hover */
-.card-glow {
-  box-shadow: 0 0 35px -5px rgba(91, 65, 244, 0.25);
 }

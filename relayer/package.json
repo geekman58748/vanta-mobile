@@ -1,0 +1,20 @@
+{
+  "name": "vanta-relayer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Vanta privacy relayer — sponsors fees/rent and serves the /fund gas float",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.99.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "pg": "^8.23.0"
+  }
+}

@@ -22,3 +22,53 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# e2e harness test identities (private keys)
+.e2e-identities.json
+
+# live-test agent identity (private keys)
+.agent-identity.json
+
+# agent A/B shadow-send test wallets (private keys)
+.vanta-test-wallets.json
+.vanta-test-wallets.json.tmp
+
+# test2-anonymity harness state: burner identities + deposit/payout addresses
+.test2-state.json
+
+# ── Android release signing — NEVER commit ──
+# Losing the release key means you can never update the dApp Store listing.
+deploy/vanta-release.jks
+deploy/.keystore-password
+*.jks
+*.keystore
+
+# Secrets — see .env.example. `.env` was NOT ignored before, so any local
+deploy credentials would have been staged by a `git add -A`.
+.env
+.env.*
+!.env.example
+
+# Relayer signing key. Was git-tracked; never commit it again.
+relayer/relayer-keypair.json
+
+# Test/device APKs — build outputs and third-party installs. 100MB+ each;
+# committing one permanently bloats the repo and the GitHub push for the
+# hackathon submission.
+*.apk
+*.apks
+*.aab
+deploy/apk-backup/
+
+# Android build output (the generated project itself IS committed)
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+# Staged web build bundled into the APK by `npm run bundle:android`.
+# Generated from dist/ — never edit by hand. Source of truth is src/.
+android/app/src/main/assets/www/
+android/.idea/
+
+# Solana Mobile webshell-managed toolchain
+.webshell/

@@ -1,0 +1,8 @@
+# landing/ is a standalone deployable, not a member of the wallet app's workspace.
+#
+# Without this file pnpm walks up the tree, finds vanta-mobile/pnpm-workspace.yaml
+# and installs landing's dependencies into the WALLET APP's node_modules — which
+# desyncs the app from its own lockfile. Declaring landing as its own workspace
+# root stops that traversal.
+packages:
+  - '.'

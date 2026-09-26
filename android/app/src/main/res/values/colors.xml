@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Vanta chrome.
+         The webshell template shipped Android green (#3DDC84) for BOTH the splash
+         background and the launcher icon background. That is the green that made
+         the app look unfinished on a real device: the splash is the first thing a
+         judge sees, and it was a colour that appears nowhere in the product.
+         Keep these in step with the ink and accent tokens in src/index.css. -->
+    <color name="launcher_icon_background">#2A2150</color>  <!-- deep violet tile -->
+    <color name="splash_background">#060509</color>         <!-- Vanta ink -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>

@@ -6,20 +6,25 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "bundle:android": "node scripts/bundle-android.mjs",
+    "build:android": "vite build && node scripts/bundle-android.mjs",
     "lint": "oxlint",
     "preview": "vite preview",
     "relayer": "node relayer/server.js"
   },
   "dependencies": {
-    "@heliuslabs/zolana": "^0.2.0-alpha",
+    "@heliuslabs/zolana": "file:../zolana-sdk-v0.3.0/sdk-libs/ts",
     "@noble/ciphers": "^2.4.0",
     "@noble/curves": "^2.4.0",
     "@noble/hashes": "^2.4.0",
+    "@pdf-lib/fontkit": "^1.1.1",
+    "@solana-mobile/wallet-standard-mobile": "0.6.0",
     "@solana/kit": "^8.3.0",
     "@solana/spl-token": "^0.4.15",
     "@solana/web3.js": "^1.99.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "pdf-lib": "^1.17.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

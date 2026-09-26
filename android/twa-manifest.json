@@ -1,0 +1,13 @@
+{
+  "packageId": "com.vanta.privacywallet",
+  "host": "localhost:3000",
+  "name": "Vanta",
+  "launcherName": "Vanta",
+  "startUrl": "/",
+  "fallbackType": "webview",
+  "generatorApp": "webshell-cli",
+  "signingKey": {
+    "path": "/Users/mac/vanta-mobile/deploy/vanta-release.jks",
+    "alias": "vanta"
+  }
+}

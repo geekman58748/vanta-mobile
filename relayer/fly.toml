@@ -1,0 +1,49 @@
+# Vanta relayer — Fly.io config.
+#
+#   cd relayer && fly launch --no-deploy   # then adjust `app` below to a unique name
+#   fly deploy
+#
+# The app name must be globally unique across Fly; if `vanta-relayer` is taken
+# pick something like `vanta-relayer-<yourhandle>` and update VITE_RELAYER_URL.
+#
+# ── COST (verified 2026-09-26 against fly.io/docs/about/pricing) ──────
+# There is NO free tier for new orgs. Fly discontinued plans for new customers
+# on 2024-10-07 and now bills all new organizations from the first machine.
+# The free trial cannot run this service: trial machines auto-stop after 5 min.
+#
+# One always-on shared-cpu-1x 256MB machine ≈ $0.0028/hr ≈ $2.02/month.
+# 2026-09-26 → 2026-11-11 is ~46 days, so budget ~$3 for the judging window.
+# Egress is $0.02/GB (NA/EU) and a relayer's JSON traffic is cents. The shared
+# IPv4 is free — do NOT allocate a dedicated one (+$2/mo).
+
+app = "vanta-relayer"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  RELAYER_PORT = "3001"
+  NODE_ENV = "production"
+  # Tighten this to your landing origin + the bundled APK origin once both exist.
+  CORS_ORIGINS = "https://appassets.androidplatform.net"
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  # ── The whole reason we're not on a free tier ──
+  # A relayer that cold-starts turns every Shield into a 30s spinner, and a
+  # suspended machine is indistinguishable from an outage mid-demo. Fly's older
+  # flyctl wanted a boolean here; `"off"` is the current spelling.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 60
+    soft_limit = 40
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

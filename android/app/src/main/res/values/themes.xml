@@ -1,0 +1,21 @@
+<resources>
+
+    <!-- Dark parent on purpose. The template used Theme.Material.Light.NoActionBar,
+         which flashes a white window behind the WebView during launch and on
+         rotation — on a near-black product that reads as a bug. -->
+    <style name="Theme.WebShell" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/splash_background</item>
+    </style>
+
+    <style name="Theme.WebShell.Splash" parent="Theme.SplashScreen.IconBackground">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <!-- The splash icon is the first thing that ever renders, and it was the
+             stock Android robot (the webshell template's drawable). Now it is the
+             real Vanta mark. The adaptive foreground is reused deliberately: its
+             glyph occupies ~60% of the 108dp canvas, which is exactly the safe area
+             Android 12+ expects for a splash icon, so no separate asset is needed. -->
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/launcher_icon_background</item>
+        <item name="postSplashScreenTheme">@style/Theme.WebShell</item>
+    </style>
+</resources>
