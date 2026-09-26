@@ -11,8 +11,9 @@
 import { Keypair, Connection, PublicKey } from '@solana/web3.js'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 
-const RPC_URL = 'https://devnet.helius-rpc.com/?api-key=REDACTED_HELIUS_KEY'
-const RPC_WSS = 'wss://devnet.helius-rpc.com/?api-key=REDACTED_HELIUS_KEY'
+const HELIUS_KEY = process.env.VITE_HELIUS_API_KEY ?? process.env.HELIUS_API_KEY ?? ''
+const RPC_URL = HELIUS_KEY ? `https://devnet.helius-rpc.com/?api-key=${HELIUS_KEY}` : 'https://api.devnet.solana.com'
+const RPC_WSS = HELIUS_KEY ? `wss://devnet.helius-rpc.com/?api-key=${HELIUS_KEY}` : 'wss://api.devnet.solana.com'
 const RELAYER = 'http://localhost:3001'
 const EXPLORER = 'https://explorer.solana.com/tx/'
 const PUBLIC_RPC = 'https://api.devnet.solana.com'

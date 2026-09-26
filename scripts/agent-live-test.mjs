@@ -14,8 +14,11 @@
 import { Keypair, Connection, PublicKey } from '@solana/web3.js'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 
-const RPC_URL = 'https://devnet.helius-rpc.com/?api-key=REDACTED_HELIUS_KEY'
-const RPC_WSS = 'wss://devnet.helius-rpc.com/?api-key=REDACTED_HELIUS_KEY'
+// Read the Helius key from the environment — never hardcode it (VITE_* lands in
+// the client bundle; this is the server/tool-side copy). Falls back to public devnet.
+const HELIUS_KEY = process.env.VITE_HELIUS_API_KEY ?? process.env.HELIUS_API_KEY ?? ''
+const RPC_URL = HELIUS_KEY ? `https://devnet.helius-rpc.com/?api-key=${HELIUS_KEY}` : 'https://api.devnet.solana.com'
+const RPC_WSS = HELIUS_KEY ? `wss://devnet.helius-rpc.com/?api-key=${HELIUS_KEY}` : 'wss://api.devnet.solana.com'
 const INDEXER_URL = 'https://d2xah7tnhdhcom.cloudfront.net'
 const PROVER_URL = 'https://d21ni15goiip6l.cloudfront.net'
 const PUBLIC_RPC = 'https://api.devnet.solana.com'

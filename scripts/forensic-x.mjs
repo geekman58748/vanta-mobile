@@ -2,7 +2,8 @@ import { readFileSync } from 'fs'
 
 const RELAYER = 'FhV7cyfVAC8gyQqSRYiw5oKdC95GVw83ukvxhhu7uRk7'
 const X = '7EE3GdX2UrT3tzsJqnD3FU3fxaMNnfQcYKtVdiVw2fUc'
-const RPC = `https://devnet.helius-rpc.com/?api-key=REDACTED_HELIUS_KEY`
+const HELIUS_KEY = process.env.VITE_HELIUS_API_KEY ?? process.env.HELIUS_API_KEY ?? ''
+const RPC = HELIUS_KEY ? `https://devnet.helius-rpc.com/?api-key=${HELIUS_KEY}` : 'https://api.devnet.solana.com'
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 async function rpc(method, params, tries = 5) {

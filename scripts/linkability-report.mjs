@@ -7,7 +7,8 @@
  * deanonymize users: who funded a deposit, who initiated a spend, who registered.
  * Any --watch address appearing in ANY of those txs is a live link.
  */
-const RPC = 'https://devnet.helius-rpc.com/?api-key=REDACTED_HELIUS_KEY'
+const HELIUS_KEY = process.env.VITE_HELIUS_API_KEY ?? process.env.HELIUS_API_KEY ?? ''
+const RPC = HELIUS_KEY ? `https://devnet.helius-rpc.com/?api-key=${HELIUS_KEY}` : 'https://api.devnet.solana.com'
 const POOL = 'sppU489D7A4U1exNo1oeMGZtLEofq3a6o2fR7UeoWB6'
 const REGISTRY = 'regyS5rkAcw2YzDJCmTwCTHs2s246FXxbmuRZ42u2PD'
 const SYSTEM_PROGRAM = '11111111111111111111111111111111'

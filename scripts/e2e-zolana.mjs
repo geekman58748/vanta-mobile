@@ -10,7 +10,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 const ID_STORE = '.e2e-identities.json'
 
 const RELAYER = 'http://localhost:3001'
-const HELIUS_KEY = 'REDACTED_HELIUS_KEY'
+const HELIUS_KEY = process.env.VITE_HELIUS_API_KEY ?? process.env.HELIUS_API_KEY ?? ''
 const RPC_URL = `https://devnet.helius-rpc.com/?api-key=${HELIUS_KEY}`
 const RPC_WSS = `wss://devnet.helius-rpc.com/?api-key=${HELIUS_KEY}`
 const INDEXER_URL = 'https://d2xah7tnhdhcom.cloudfront.net'

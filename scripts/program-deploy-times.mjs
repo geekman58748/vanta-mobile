@@ -1,6 +1,7 @@
 import { PublicKey } from '@solana/web3.js'
 
-const RPC = 'https://devnet.helius-rpc.com/?api-key=REDACTED_HELIUS_KEY'
+const HELIUS_KEY = process.env.VITE_HELIUS_API_KEY ?? process.env.HELIUS_API_KEY ?? ''
+const RPC = HELIUS_KEY ? `https://devnet.helius-rpc.com/?api-key=${HELIUS_KEY}` : 'https://api.devnet.solana.com'
 const PROGRAMS = {
   'shielded-pool (sppU489)': 'sppU489D7A4U1exNo1oeMGZtLEofq3a6o2fR7UeoWB6',
   'user-registry (regyS5rk)': 'regyS5rkAcw2YzDJCmTwCTHs2s246FXxbmuRZ42u2PD',
