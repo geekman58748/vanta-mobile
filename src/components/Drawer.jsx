@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { playHaptic } from '../lib/haptic'
+import { popSheet, pushSheet } from '../lib/shell'
 
 // The drawer system from gemini-code-1789825749253.html, rewritten as a real
 // React component: mount, then transition on the next frame, then unmount after
@@ -15,18 +16,18 @@ export default function Drawer({ open, onClose, title, subtitle, children, sheet
       return () => cancelAnimationFrame(frame)
     }
     setShown(false)
-    const timer = setTimeout(() => setMounted(false), 350)
+    const timer = setTimeout(() => setMounted(false), 300)
     return () => clearTimeout(timer)
   }, [open])
 
-  // Hold the page still while a sheet is up — the app body is a fixed canvas.
+  // Hold the page still while a sheet is up, and stand the native
+  // pull-to-refresh down. Both are ref-counted in lib/shell so a sheet handing
+  // off to the next one can never unlock them early (which used to leave the app
+  // permanently unscrollable, and reload the shell on a downward drag).
   useEffect(() => {
     if (!mounted) return
-    const previous = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = previous
-    }
+    pushSheet()
+    return () => popSheet()
   }, [mounted])
 
   useEffect(() => {
@@ -49,12 +50,12 @@ export default function Drawer({ open, onClose, title, subtitle, children, sheet
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
       <div
         onClick={close}
-        className={`absolute inset-0 bg-black/75 backdrop-blur-md transition-opacity duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`absolute inset-0 bg-black/80 transition-opacity duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           shown ? 'opacity-100' : 'opacity-0'
         }`}
       />
       <div
-        className={`relative z-10 w-full max-w-[440px] mx-auto bg-card border-t border-hair-hi rounded-t-[36px] px-6 pt-4 pb-10 flex flex-col gap-4 shadow-2xl max-h-[92vh] overflow-y-auto no-scrollbar transition-transform duration-[350ms] ease-[cubic-bezier(0.32,0.72,0,1)] ${
+        className={`relative z-10 w-full max-w-[440px] mx-auto bg-card border-t border-hair-hi rounded-t-[36px] px-6 pt-4 pb-10 flex flex-col gap-4 shadow-2xl max-h-[92vh] overflow-y-auto overscroll-contain transform-gpu no-scrollbar transition-transform duration-[300ms] ease-[cubic-bezier(0.32,0.72,0,1)] ${
           shown ? 'translate-y-0' : 'translate-y-full'
         } ${sheetClassName}`}
       >
@@ -71,7 +72,7 @@ export default function Drawer({ open, onClose, title, subtitle, children, sheet
           <button
             onClick={close}
             aria-label="Close"
-            className="w-8 h-8 shrink-0 rounded-full bg-white/10 text-muted flex items-center justify-center hover:text-white active:scale-90 transition-all"
+            className="w-8 h-8 shrink-0 rounded-full bg-white/10 text-muted flex items-center justify-center hover:text-white active:scale-90 tap"
           >
             ✕
           </button>

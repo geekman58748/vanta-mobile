@@ -30,7 +30,7 @@ export default function ReceiveDrawer({ open, onClose, wallet, vantaAddress, not
 
       <button
         onClick={() => copyText(wallet.publicKey, notify, 'Public address copied!', '📥')}
-        className="w-full py-3.5 rounded-2xl bg-white/10 border border-hair font-bold text-white hover:bg-white/20 active:scale-[0.98] transition-all text-sm"
+        className="w-full py-3.5 rounded-2xl bg-white/10 border border-hair font-bold text-white hover:bg-white/20 active:scale-[0.98] tap text-sm"
       >
         Copy public address
       </button>
@@ -53,7 +53,7 @@ export default function ReceiveDrawer({ open, onClose, wallet, vantaAddress, not
       <button
         disabled={!vantaAddress}
         onClick={() => copyText(vantaAddress, notify, 'Vanta address copied!', '🕳️')}
-        className="w-full py-3.5 rounded-2xl bg-accent/15 border border-accent/30 font-bold text-accent hover:bg-accent/25 active:scale-[0.98] transition-all text-sm disabled:opacity-40"
+        className="w-full py-3.5 rounded-2xl bg-accent/15 border border-accent/30 font-bold text-accent hover:bg-accent/25 active:scale-[0.98] tap text-sm disabled:opacity-40"
       >
         Copy Vanta address
       </button>

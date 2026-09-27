@@ -23,7 +23,7 @@ const addressRow = (label, value, onCopy, tone) => (
     <span className={`text-[11px] font-mono break-all ${tone}`}>{value}</span>
     <button
       onClick={onCopy}
-      className={`self-start mt-1 px-3 py-1.5 rounded-xl border font-semibold text-[11px] transition-all active:scale-95 flex items-center gap-1.5 ${
+      className={`self-start mt-1 px-3 py-1.5 rounded-xl border font-semibold text-[11px] tap active:scale-95 flex items-center gap-1.5 ${
         tone === 'text-muted'
           ? 'bg-white/10 border-hair text-white'
           : 'bg-accent/15 border-accent/30 text-accent hover:bg-accent/25'
@@ -158,13 +158,13 @@ export default function ProfileDrawer({
             <div className="flex gap-2 mt-3">
               <button
                 onClick={() => copyText(handle, notify, 'Handle copied!', '📋')}
-                className="flex-1 py-2.5 rounded-xl bg-accent/15 border border-accent/30 text-accent font-bold text-[13px] hover:bg-accent/20 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 rounded-xl bg-accent/15 border border-accent/30 text-accent font-bold text-[13px] hover:bg-accent/20 active:scale-95 tap flex items-center justify-center gap-1.5"
               >
                 {COPY_ICON} Copy handle
               </button>
               <button
                 onClick={() => copyText(vantaAddress, notify, 'Vanta address copied!', '📥')}
-                className="flex-1 py-2.5 rounded-xl bg-white/10 border border-hair text-white font-bold text-[13px] hover:bg-white/15 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 rounded-xl bg-white/10 border border-hair text-white font-bold text-[13px] hover:bg-white/15 active:scale-95 tap flex items-center justify-center gap-1.5"
               >
                 {COPY_ICON} Copy address
               </button>
@@ -231,7 +231,7 @@ export default function ProfileDrawer({
             <button
               onClick={submit}
               disabled={lookup.state !== 'ok' || claiming}
-              className="w-full mt-3 py-3 rounded-xl bg-accent hover:bg-accent-hi font-bold text-black text-sm active:scale-[0.98] transition-all disabled:opacity-40"
+              className="w-full mt-3 py-3 rounded-xl bg-accent hover:bg-accent-hi font-bold text-black text-sm active:scale-[0.98] tap disabled:opacity-40"
             >
               {claiming ? 'Signing…' : `Claim ${VANTA_NAME_SUFFIX} name`}
             </button>
@@ -278,7 +278,7 @@ export default function ProfileDrawer({
           playHaptic('tap')
           onOpenSettings?.()
         }}
-        className="w-full py-3.5 px-4 rounded-2xl bg-white/5 hover:bg-white/10 active:scale-[0.98] transition-all flex items-center justify-between text-white font-semibold text-left gap-3"
+        className="w-full py-3.5 px-4 rounded-2xl bg-white/5 hover:bg-white/10 active:scale-[0.98] tap flex items-center justify-between text-white font-semibold text-left gap-3"
       >
         <span className="text-sm">Settings & account</span>
         <span className="text-muted">→</span>

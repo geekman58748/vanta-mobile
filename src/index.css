@@ -1,5 +1,36 @@
 @import "tailwindcss";
 
+/* ── SELF-HOSTED TYPE ──────────────────────────────────────────────────
+   Inter and Space Mono ship inside the bundle instead of being fetched from
+   fonts.googleapis.com. That removes a network round-trip from first paint
+   (the old build showed fallback glyphs, then swapped — a visible reflow on
+   every cold start), and it means the wallet renders correctly with no network
+   at all, which matters for a privacy app.
+
+   Inter is served by Google as a VARIABLE font: one file covers 300–700, so it
+   is declared with a weight range rather than five static faces. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./assets/fonts/inter-var.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Space Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/space-mono-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Space Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./assets/fonts/space-mono-700.woff2') format('woff2');
+}
+
 /* ── VANTA DESIGN TOKENS ────────────────────────────────────────────────
    The single source of truth for the app's skin. Every component reads these
    (via Tailwind's generated `bg-*` / `text-*` / `border-*` utilities) instead
@@ -55,6 +86,15 @@
 
   /* Inputs must stay selectable — the send sheet pastes recipient addresses. */
   input, textarea { user-select: text; -webkit-user-select: text; }
+
+  /* Kill scroll-chaining / pull-to-refresh at the document root. The native
+     SwipeRefreshLayout is silenced from JS while a sheet is open (lib/shell.js),
+     but this also covers the plain-browser build and stops an inner sheet's
+     overscroll from dragging the page behind it. */
+  html,
+  body {
+    overscroll-behavior: none;
+  }
 
   body {
     background-color: var(--color-ink);
@@ -138,6 +178,21 @@
   /* Accent halo for the focused balance card. Low alpha: a glow should be felt,
      not seen. */
   .card-glow { box-shadow: 0 0 35px -5px rgba(139, 121, 240, 0.2); }
+
+  /* ── TAP ───────────────────────────────────────────────────────────────
+     The interaction transition, on named properties only. `transition-all`
+     also animates LAYOUT properties (width, padding, position), so a tap can
+     trigger a layout pass mid-transition — that is what makes a UI feel loose
+     and janky rather than crisp. Colors + transform + opacity covers every
+     hover / active state this app actually has.
+
+     180ms with an ease-out spring reads as immediate; the eye stops noticing
+     the transition and only registers the response. */
+  .tap {
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-duration: 180ms;
+    transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  }
 }
 
 /* ── UTILITIES ───────────────────────────────────────────────────────── */
@@ -157,7 +212,7 @@
   .drawer-sheet { transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1); }
 
   /* Toast Notification Slide Animation */
-  .toast-anim { animation: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  .toast-anim { animation: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; will-change: transform, opacity; }
 
   /* Hidden scrollbars for the horizontal chip rails and scrollable sheets */
   .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
@@ -165,6 +220,25 @@
 
   /* Tabular figures — keeps balances from jittering as digits change */
   .tnum { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
+
+  /* ── Action-confirmed overlay ──────────────────────────────────────────
+     The "it worked" moment after a Shield or a send. Three staged beats so it
+     reads as considered rather than a badge that simply appears: the disc
+     scales in, the ring is drawn, then the tick is drawn. `both` fill keeps the
+     pre-roll state from flashing on mount. */
+  .success-disc { animation: successDisc 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; will-change: transform, opacity; }
+  .success-ring {
+    stroke-dasharray: 166;
+    stroke-dashoffset: 166;
+    animation: successDraw 0.55s cubic-bezier(0.65, 0, 0.35, 1) 0.12s both;
+  }
+  .success-tick {
+    stroke-dasharray: 48;
+    stroke-dashoffset: 48;
+    animation: successDraw 0.4s cubic-bezier(0.65, 0, 0.35, 1) 0.5s both;
+  }
+  .success-body { animation: successBody 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.28s both; will-change: transform, opacity; }
+  .success-veil { animation: successVeil 0.25s ease-out both; will-change: opacity; }
 }
 
 @keyframes blurRollUp {
@@ -175,4 +249,24 @@
 @keyframes toastIn {
   0% { transform: translateY(-100%) scale(0.9); opacity: 0; }
   100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes successDisc {
+  0% { transform: scale(0.55); opacity: 0; }
+  60% { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes successDraw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes successBody {
+  0% { transform: translateY(10px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes successVeil {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }

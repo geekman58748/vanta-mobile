@@ -74,7 +74,7 @@ export default function ActivityDrawer({
             return (
               <div
                 key={b.start}
-                className={`w-full rounded-t-lg transition-all relative flex flex-col justify-end items-center ${
+                className={`w-full rounded-t-lg tap relative flex flex-col justify-end items-center ${
                   isToday
                     ? 'bg-accent shadow-lg shadow-accent/50'
                     : 'bg-accent/15 hover:bg-accent/30'
@@ -129,7 +129,7 @@ export default function ActivityDrawer({
               playHaptic('tap')
               setFilter(key)
             }}
-            className={`px-3.5 py-1.5 rounded-full text-[12px] transition-all whitespace-nowrap ${
+            className={`px-3.5 py-1.5 rounded-full text-[12px] tap whitespace-nowrap ${
               filter === key
                 ? 'bg-accent/15 text-accent border border-accent/30 font-semibold'
                 : 'bg-white/5 text-muted border border-hair font-medium hover:text-white'
@@ -140,7 +140,7 @@ export default function ActivityDrawer({
         ))}
       </div>
 
-      <div className="overflow-y-auto no-scrollbar flex flex-col divide-y divide-white/5 max-h-[38vh]">
+      <div className="overflow-y-auto overscroll-contain no-scrollbar flex flex-col divide-y divide-white/5 max-h-[38vh]">
         {visible.length === 0 ? (
           <div className="py-8 text-center text-muted text-sm">
             No activity yet.

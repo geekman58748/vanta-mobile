@@ -126,7 +126,7 @@ export default function ReceiptDrawer({ open, onClose, txn, notify }) {
                 href={link}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="mt-0.5 self-start px-3.5 py-2 rounded-xl bg-white/10 border border-hair text-white font-semibold text-[12px] hover:bg-white/15 active:scale-95 transition-all"
+                className="mt-0.5 self-start px-3.5 py-2 rounded-xl bg-white/10 border border-hair text-white font-semibold text-[12px] hover:bg-white/15 active:scale-95 tap"
               >
                 View on Solana Explorer →
               </a>
@@ -187,7 +187,7 @@ export default function ReceiptDrawer({ open, onClose, txn, notify }) {
           <button
             onClick={exportPdf}
             disabled={exporting}
-            className="w-full py-3.5 rounded-2xl bg-accent hover:bg-accent-hi font-bold text-black active:scale-[0.98] transition-all text-sm disabled:opacity-50"
+            className="w-full py-3.5 rounded-2xl bg-accent hover:bg-accent-hi font-bold text-black active:scale-[0.98] tap text-sm disabled:opacity-50"
           >
             {exporting ? 'Building receipt…' : 'Download PDF receipt'}
           </button>
@@ -195,13 +195,13 @@ export default function ReceiptDrawer({ open, onClose, txn, notify }) {
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={copyReceipt}
-              className="py-3.5 rounded-2xl bg-white/10 font-bold text-white hover:bg-white/15 active:scale-95 transition-all text-sm"
+              className="py-3.5 rounded-2xl bg-white/10 font-bold text-white hover:bg-white/15 active:scale-95 tap text-sm"
             >
               Copy details
             </button>
             <button
               onClick={onClose}
-              className="py-3.5 rounded-2xl bg-white/10 border border-hair font-bold text-muted hover:bg-white/15 active:scale-95 transition-all text-sm"
+              className="py-3.5 rounded-2xl bg-white/10 border border-hair font-bold text-muted hover:bg-white/15 active:scale-95 tap text-sm"
             >
               Close
             </button>

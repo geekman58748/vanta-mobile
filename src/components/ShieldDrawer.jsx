@@ -133,7 +133,7 @@ export default function ShieldDrawer({
               playHaptic('tap')
               setValue(preset)
             }}
-            className={`flex-1 py-2.5 rounded-xl border font-bold text-[13px] transition-all active:scale-95 ${
+            className={`flex-1 py-2.5 rounded-xl border font-bold text-[13px] tap active:scale-95 ${
               value === preset
                 ? 'bg-accent/20 border-accent/40 text-accent'
                 : 'bg-white/5 border-hair text-white/80 hover:bg-white/10'
@@ -146,7 +146,7 @@ export default function ShieldDrawer({
           <button
             onClick={setMax}
             disabled={maxSol <= 0}
-            className="flex-1 py-2.5 rounded-xl border border-accent/30 bg-accent/10 text-accent font-bold text-[13px] hover:bg-accent/20 active:scale-95 transition-all disabled:opacity-40"
+            className="flex-1 py-2.5 rounded-xl border border-accent/30 bg-accent/10 text-accent font-bold text-[13px] hover:bg-accent/20 active:scale-95 tap disabled:opacity-40"
           >
             Max
           </button>
@@ -158,7 +158,7 @@ export default function ShieldDrawer({
           <button
             key={key}
             onClick={() => press(key)}
-            className={`py-3.5 text-2xl font-bold bg-white/5 border border-hair rounded-2xl active:bg-accent/20 active:scale-95 transition-all ${
+            className={`py-3.5 text-2xl font-bold bg-white/5 border border-hair rounded-2xl active:bg-accent/20 active:scale-95 tap ${
               key === 'del' ? 'text-xl text-danger active:bg-danger/30' : 'text-white'
             }`}
           >
@@ -178,7 +178,7 @@ export default function ShieldDrawer({
       <button
         onClick={confirm}
         disabled={blocked}
-        className="w-full py-4 rounded-2xl bg-accent hover:bg-accent-hi font-bold text-black shadow-lg shadow-accent/20 active:scale-[0.98] transition-all text-base disabled:opacity-50"
+        className="w-full py-4 rounded-2xl bg-accent hover:bg-accent-hi font-bold text-black shadow-lg shadow-accent/20 active:scale-[0.98] tap text-base disabled:opacity-50"
       >
         {shielding ? 'Shielding…' : `Shield ${value} ${token.symbol}`}
       </button>

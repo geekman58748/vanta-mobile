@@ -10,6 +10,7 @@ import ReceiptDrawer from './components/ReceiptDrawer'
 import ActivityDrawer from './components/ActivityDrawer'
 import SettingsDrawer from './components/SettingsDrawer'
 import Onboarding from './components/Onboarding'
+import SuccessOverlay from './components/SuccessOverlay'
 // The Vanta mark, trimmed from the 1254px master to a 256px luminance+alpha PNG
 // (the logo is pure monochrome, so LA is lossless here and ~6x smaller than RGBA).
 // Vite hashes it into dist/assets and rewrites the URL relatively, which is what
@@ -22,8 +23,9 @@ import { TOKENS, SOL_MINT, SHIELD_FEE_RESERVE } from './lib/tokens'
 import { relayerFetch } from './lib/config'
 import { recordSend, lookupProof } from './lib/txHistory'
 import {
-  bytesToBase58, connectMwa, disconnectMwa, initMwa, isMwaAvailable,
-  serializeCompiledTx, signAndSendTransactionWithMwa,
+  bytesToBase58, bytesToBase64, connectMwa, disconnectMwa, initMwa, isMwaAvailable,
+  serializeCompiledTx, signatureFromSignedTx, signAndSendTransactionWithMwa,
+  signTransactionWithMwa,
 } from './lib/mwa'
 
 // ── Runtime config (see .env.example) ────────────────────────────────
@@ -109,11 +111,27 @@ function shieldErrorMessage(err) {
   if (/insufficient/i.test(raw)) {
     return `Not enough SOL: ${raw}`
   }
+  // A dead network used to surface as a bare "Failed to fetch" or an SDK
+  // "client rpc" string, which reads like a broken app rather than a dropped
+  // connection. Say which it is.
+  if (/failed to fetch|network|unknown host|load failed|fetch failed|client rpc|rpc/i.test(raw)) {
+    return 'Could not reach the network. Check your connection and try again.'
+  }
   return `Shield failed: ${raw}`
 }
 
 export default function App() {
-  const [wallet, setWallet] = useState(null)
+  // Read the saved wallet SYNCHRONOUSLY in the initializer, not from the boot
+  // effect. With a null first render the app painted the connect-wallet screen
+  // for one frame on every reload before the effect restored the wallet and
+  // bounced to the dashboard. That flash read as a glitch on returning visits.
+  const [wallet, setWallet] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('vanta-wallet') || 'null')
+    } catch {
+      return null
+    }
+  })
   const [balance, setBalance] = useState(0)
   const [privateBalances, setPrivateBalances] = useState([])
   const [isPrivacyOn, setIsPrivacyOn] = useState(false)
@@ -155,6 +173,9 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [receiptOpen, setReceiptOpen] = useState(false)
   const [receiptTxn, setReceiptTxn] = useState(null)
+  // The action-confirmed overlay. Null when closed; otherwise the details of the
+  // Shield / send that just landed, so the overlay can show the amount and proof.
+  const [success, setSuccess] = useState(null)
   const [txnFilter, setTxnFilter] = useState('all')
   // Bumping this remounts the balance figure so the roll-up animation replays.
   const [balanceKey, setBalanceKey] = useState(0)
@@ -166,6 +187,11 @@ export default function App() {
   const shieldedKeypairRef = useRef(null)
   const relayerAddressRef = useRef(null) // relayer fee payer address
   const solMintRef = useRef(SOL_MINT)     // set from zk.SOL_MINT at init
+  // Resolves once the privacy engine has finished coming up (or failed). Private
+  // actions await it so tapping Shield during the deferred warm-up waits a beat
+  // instead of hitting a half-built engine.
+  const engineReadyRef = useRef(Promise.resolve())
+  const engineResolveRef = useRef(null)
 
   // ============================================================
   // ZOLANA CORE — client, keys, wallet persistence
@@ -620,6 +646,8 @@ export default function App() {
   // Supports SOL and dUSDC (full-shield mode)
   // ============================================================
   const shield = useCallback(async (amount, token = 'SOL') => {
+    // Wait out the deferred engine warm-up if the user beat it to the tap.
+    await engineReadyRef.current
     const zk = await import('@heliuslabs/zolana')
     const kit = await import('@solana/kit')
     const client = clientRef.current
@@ -629,13 +657,15 @@ export default function App() {
     setStatus(`🛡️ Shielding ${amount} ${tokenInfo.symbol}...`)
     const before = privateStateSignature()
 
-    // Device-wallet path: the connected wallet is both depositor and fee payer,
-    // so it signs the whole deposit — no relayer in the trust path. The in-app
-    // path keeps the relayer-sponsored fee payer.
+    // The relayer fee-pays every deposit, in-app AND device-wallet: the wallet
+    // signs only as depositor — sign-only MWA, relayer cosigns slot 0 and
+    // broadcasts. The wallet→pool edge stays visible (depositor must sign), but
+    // a tracker starting from the recipient side lands on the relayer as fee
+    // payer, never on the user's wallet as the tx initiator.
     const useMwa = !!wallet.mwa
     const depositParams = {
       client,
-      feePayer: useMwa ? wallet.publicKey : relayerAddressRef.current,
+      feePayer: relayerAddressRef.current,
       depositor: wallet.publicKey,
       recipient: shieldedKeypairRef.current.shieldedAddress(),
       amount: rawAmount,
@@ -657,10 +687,17 @@ export default function App() {
     const deposit = await zk.buildDepositTransaction(depositParams)
     let sig
     if (useMwa) {
-      // Sign + broadcast with the device wallet; Vanta never sees the key.
-      const { bytes } = serializeCompiledTx(deposit)
-      const sigBytes = await signAndSendTransactionWithMwa(bytes)
-      sig = await bytesToBase58(sigBytes)
+      // Relayer fee-pays; the device wallet signs ONLY as depositor (sign-only
+      // MWA — it is never asked to authorize a fee it does not pay). The relayer
+      // fills its own slot and broadcasts, so the wallet never appears as fee
+      // payer and never broadcasts the tx itself.
+      const { bytes, order, v1 } = serializeCompiledTx(deposit)
+      const signed = await signTransactionWithMwa(bytes)
+      const walletSlot = order.indexOf(wallet.publicKey)
+      const presigned = new Map([
+        [wallet.publicKey, bytesToBase64(signatureFromSignedTx(signed, walletSlot, v1))],
+      ])
+      sig = await relayTx(kit, client, deposit, [], presigned)
     } else {
       sig = await relayTx(kit, client, deposit, [
         { address: wallet.publicKey, seed: new Uint8Array(wallet.secretKey.slice(0, 32)) },
@@ -676,7 +713,11 @@ export default function App() {
     await recordSend({
       signature: sig,
       mode: 'Shield',
-      amount: amt,
+      // `amount` here, not `amt` — the parameter is `amount`. This was `amt`,
+      // a ReferenceError thrown AFTER the deposit already confirmed on chain:
+      // the user saw their wallet debited and the private balance rise, but no
+      // history row and no confirmation, because the throw skipped both.
+      amount,
       decimals: tokenInfo.decimals,
       actor: wallet.publicKey,
       addresses: [wallet.publicKey, signerRef.current?.address],
@@ -689,6 +730,7 @@ export default function App() {
   // Recipient must be registered (any Vanta user is, automatically)
   // ============================================================
   const shadowSend = useCallback(async (recipient, amount, token = 'SOL') => {
+    await engineReadyRef.current
     const zk = await import('@heliuslabs/zolana')
     const kit = await import('@solana/kit')
     const client = clientRef.current
@@ -730,6 +772,7 @@ export default function App() {
   // Recipient does NOTHING. Funds arrive FROM THE POOL.
   // ============================================================
   const ghostSend = useCallback(async (recipient, amount, token = 'SOL') => {
+    await engineReadyRef.current
     const zk = await import('@heliuslabs/zolana')
     const kit = await import('@solana/kit')
     const client = clientRef.current
@@ -827,7 +870,72 @@ export default function App() {
             setStatus('Reconnect your wallet to sign')
           })
       : Promise.resolve()
-    ready.then(() => initZolana(data)).catch(() => {})
+
+    // ── Defer the engine off the critical path ──────────────────────────
+    // The privacy engine (zolana + crypto) is a ~4.8 MB chunk. It is already
+    // code-split, but it used to be fetched the instant the app booted, so the
+    // main thread spent the first frames downloading and parsing it. The
+    // dashboard — public balance, history, addresses — needs none of it.
+    //
+    // So: paint first, then load. The gate is the REAL first-contentful-paint
+    // entry, not requestAnimationFrame — rAF fires on the browser's first frame
+    // (an empty page, before React has painted anything), so a double-rAF gate
+    // still started the engine before the dashboard appeared. Measured twice.
+    // PerformanceObserver on 'paint' fires exactly when content lands, and with
+    // `buffered: true` it also resolves immediately on a warm start where the
+    // paint already happened. The timeout is the floor: if a paint entry never
+    // arrives we load anyway, because a wallet that never boots beats one that
+    // boots a beat late.
+    engineReadyRef.current = new Promise((resolve) => {
+      engineResolveRef.current = resolve
+    })
+    let released = false
+    const releaseEngine = () => {
+      if (released) return
+      released = true
+      engineResolveRef.current?.()
+    }
+    let started = false
+    const startEngine = () => {
+      if (started) return
+      started = true
+      ready
+        .then(() => initZolana(data))
+        .catch(() => {})
+        .finally(releaseEngine)
+    }
+
+    let painted = false
+    const afterFirstPaint = () => {
+      if (painted) return
+      painted = true
+      // Now that something is on screen, hand the ~4.8 MB parse to idle time.
+      if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(startEngine, { timeout: 1200 })
+      } else {
+        startEngine()
+      }
+    }
+
+    let observer
+    try {
+      observer = new PerformanceObserver((list) => {
+        if (list.getEntries().some((e) => e.name === 'first-contentful-paint')) {
+          observer.disconnect()
+          afterFirstPaint()
+        }
+      })
+      observer.observe({ type: 'paint', buffered: true })
+    } catch {
+      observer = null
+    }
+
+    // Floor, so the engine always comes up even if no paint entry ever arrives.
+    const fallback = setTimeout(afterFirstPaint, 1500)
+    return () => {
+      clearTimeout(fallback)
+      observer?.disconnect()
+    }
   }, [fetchBalance, initZolana])
 
   // ============================================================
@@ -955,8 +1063,7 @@ export default function App() {
         signature: sig,
         status: 'Confirmed',
       })
-      notify('Shielded! Now private.', '🛡️')
-      playHaptic('success')
+      setSuccess({ kind: 'shield', amount: amt, symbol, signature: sig, mode: 'Shield' })
     } catch (err) {
       notify(shieldErrorMessage(err), '⚠️')
       console.error(err)
@@ -1012,7 +1119,26 @@ export default function App() {
     .toUpperCase()
 
   // ============================================================
-  // ONBOARDING
+  // FIRST RUN
+  // ============================================================
+  // Onboarding comes BEFORE the connect screen. The gate below used to sit above
+  // it, so a first install opened on "Connect device wallet" and only showed the
+  // intro after the wallet existed. The intro is what frames the product, so it
+  // has to be the first thing a new user sees. All hooks are declared above this
+  // point, so an early return is safe.
+  if (!onboarded) {
+    return (
+      <Onboarding
+        onDone={() => {
+          localStorage.setItem('vanta-onboarded', '1')
+          setOnboarded(true)
+        }}
+      />
+    )
+  }
+
+  // ============================================================
+  // CONNECT
   // ============================================================
   if (!wallet) {
     return (
@@ -1043,14 +1169,14 @@ export default function App() {
           <button
             onClick={() => { playHaptic('pop'); connectWalletMwa() }}
             disabled={loading}
-            className="w-full max-w-[300px] py-4 rounded-2xl bg-accent hover:bg-accent-hi font-bold text-black shadow-lg shadow-accent/20 active:scale-[0.98] transition-all text-base disabled:opacity-50"
+            className="w-full max-w-[300px] py-4 rounded-2xl bg-accent hover:bg-accent-hi font-bold text-black shadow-lg shadow-accent/20 active:scale-[0.98] tap text-base disabled:opacity-50"
           >
             {loading ? 'Connecting…' : 'Connect device wallet'}
           </button>
           <button
             onClick={() => { playHaptic('tap'); createWallet() }}
             disabled={loading}
-            className="w-full max-w-[300px] py-3.5 rounded-2xl bg-white/5 border border-hair font-semibold text-white/80 hover:bg-white/10 active:scale-[0.98] transition-all text-sm disabled:opacity-50"
+            className="w-full max-w-[300px] py-3.5 rounded-2xl bg-white/5 border border-hair font-semibold text-white/80 hover:bg-white/10 active:scale-[0.98] tap text-sm disabled:opacity-50"
           >
             Use a throwaway in-app wallet
           </button>
@@ -1065,24 +1191,6 @@ export default function App() {
           {status && <p className="text-xs text-muted">{status}</p>}
         </div>
       </div>
-    )
-  }
-
-  // ============================================================
-  // FIRST RUN
-  // ============================================================
-  // Rendered instead of the wallet until the intro is dismissed. The effects
-  // above still run, so the engine is warming up behind the intro rather than
-  // starting only once the user taps through. All hooks are declared above
-  // this point, so an early return is safe.
-  if (!onboarded) {
-    return (
-      <Onboarding
-        onDone={() => {
-          localStorage.setItem('vanta-onboarded', '1')
-          setOnboarded(true)
-        }}
-      />
     )
   }
 
@@ -1104,7 +1212,7 @@ export default function App() {
         <button
           onClick={() => { playHaptic('tap'); setReceiveOpen(true) }}
           aria-label="Receive — show QR code"
-          className="w-12 h-12 rounded-2xl bg-white/[0.03] backdrop-blur-md border border-hair flex items-center justify-center text-white/90 hover:bg-white/10 transition-all duration-200 active:scale-95 shadow-lg"
+          className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-hair flex items-center justify-center text-white/90 hover:bg-white/10 tap duration-200 active:scale-95 shadow-lg"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <rect x="3" y="3" width="7" height="7" rx="2.5" stroke="currentColor" strokeWidth="2" />
@@ -1130,14 +1238,14 @@ export default function App() {
             onClick={() => { playHaptic('tap'); setLeakOpen(true) }}
             aria-label="Engine status — tap for what Vanta hides and what it exposes"
             title="Tap for what Vanta hides and what it exposes"
-            className="h-12 px-3.5 rounded-2xl bg-white/[0.03] backdrop-blur-md border border-hair flex items-center gap-2 shadow-lg hover:bg-white/10 transition-colors active:scale-95"
+            className="h-9 pl-2.5 pr-3 rounded-full bg-white/[0.03] border border-hair flex items-center gap-1.5 hover:bg-white/10 transition-colors active:scale-95"
           >
             <span
-              className={`w-2 h-2 rounded-full ${
+              className={`w-1.5 h-1.5 rounded-full ${
                 zolanaReady ? (registered ? 'bg-accent' : 'bg-amber-400') : 'bg-white/30'
               }`}
             />
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+            <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
               {zolanaReady ? (registered ? 'Shielded' : 'Shield only') : 'Starting'}
             </span>
           </button>
@@ -1145,7 +1253,7 @@ export default function App() {
           <button
             onClick={() => { playHaptic('pop'); setProfileOpen(true) }}
             aria-label="Profile and Vanta name"
-            className="w-12 h-12 rounded-full bg-white/[0.03] backdrop-blur-md border border-hair flex items-center justify-center text-white font-bold text-base hover:bg-white/10 transition-all duration-200 active:scale-95 shadow-lg"
+            className="w-12 h-12 rounded-full bg-white/[0.03] border border-hair flex items-center justify-center text-white font-bold text-base hover:bg-white/10 tap duration-200 active:scale-95 shadow-lg"
           >
             V
           </button>
@@ -1171,7 +1279,7 @@ export default function App() {
             <div className="flex items-center gap-3 mt-4">
               <button
                 onClick={() => copyText(wallet.publicKey, notify, 'Public address copied!', '📥')}
-                className="flex items-center gap-2 text-left active:scale-[0.98] transition-all"
+                className="flex items-center gap-2 text-left active:scale-[0.98] tap"
                 title="Copy public address"
               >
                 <span className="text-[15px] font-mono text-muted tracking-tight">
@@ -1191,14 +1299,14 @@ export default function App() {
           <div className="absolute top-1 right-0 flex items-center gap-2">
             <button
               onClick={() => { playHaptic('tap'); syncPrivate() }}
-              className="w-10 h-10 rounded-full bg-white/[0.03] backdrop-blur-md border border-hair flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 active:scale-90 transition-all shadow-lg"
+              className="w-10 h-10 rounded-full bg-white/[0.03] border border-hair flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 active:scale-90 tap shadow-lg"
               title="Sync private balance"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
             </button>
             <button
               onClick={togglePrivacy}
-              className="w-10 h-10 rounded-full bg-white/[0.03] backdrop-blur-md border border-hair flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 active:scale-90 transition-all shadow-lg"
+              className="w-10 h-10 rounded-full bg-white/[0.03] border border-hair flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 active:scale-90 tap shadow-lg"
               title="Toggle balance visibility"
             >
               {isPrivacyOn ? (
@@ -1223,7 +1331,7 @@ export default function App() {
           <button
             onClick={() => { playHaptic('pop'); setShieldOpen(true) }}
             disabled={loading}
-            className="glass-btn h-[60px] rounded-[22px] px-3 flex items-center gap-2.5 transition-all duration-200 disabled:opacity-50"
+            className="glass-btn h-[60px] rounded-[22px] px-3 flex items-center gap-2.5 tap duration-200 disabled:opacity-50"
           >
             <div className="w-8 h-8 shrink-0 rounded-[10px] bg-sunken border border-hair flex items-center justify-center">
               {/* Shield + keyhole. The plain shield silhouette read as stock clip-art;
@@ -1242,7 +1350,7 @@ export default function App() {
 
           <button
             onClick={() => { playHaptic('pop'); setSendOpen(true) }}
-            className="glass-btn h-[60px] rounded-[22px] px-3 flex items-center gap-2.5 transition-all duration-200"
+            className="glass-btn h-[60px] rounded-[22px] px-3 flex items-center gap-2.5 tap duration-200"
           >
             <div className="w-8 h-8 shrink-0 rounded-[10px] bg-sunken border border-hair flex items-center justify-center">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1258,7 +1366,7 @@ export default function App() {
           <button
             onClick={() => { playHaptic('pop'); setReceiveOpen(true) }}
             aria-label="Receive — show QR code"
-            className="glass-btn h-[60px] w-[60px] rounded-[22px] flex items-center justify-center transition-all duration-200"
+            className="glass-btn h-[60px] w-[60px] rounded-[22px] flex items-center justify-center tap duration-200"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 4v16m0 0l-6-6m6 6l6-6" />
@@ -1269,7 +1377,7 @@ export default function App() {
         {/* SEND MODE — Shadow (Vanta→Vanta) or Ghost (→ any wallet) */}
         <div
           onClick={toggleMode}
-          className={`w-full rounded-[20px] p-4 mb-6 flex items-center justify-between border transition-all cursor-pointer ${
+          className={`w-full rounded-[20px] p-4 mb-6 flex items-center justify-between border tap cursor-pointer ${
             isPrivateMode ? 'bg-accent/10 border-accent/30' : 'bg-card border-hair'
           }`}
         >
@@ -1285,7 +1393,7 @@ export default function App() {
                   : 'Vanta → any wallet · arrives from the pool, not you'}
               </span>
             </div>
-          </div>            <div className={`w-12 h-7 shrink-0 rounded-full transition-all flex items-center px-0.5 ${isPrivateMode ? 'bg-accent' : 'bg-white/10'}`}>
+          </div>            <div className={`w-12 h-7 shrink-0 rounded-full tap flex items-center px-0.5 ${isPrivateMode ? 'bg-accent' : 'bg-white/10'}`}>
             <div className={`w-6 h-6 rounded-full bg-white shadow-md transition-transform ${isPrivateMode ? 'translate-x-5' : 'translate-x-0'}`} />
           </div>
         </div>
@@ -1324,7 +1432,7 @@ export default function App() {
                 <button
                   key={asset.key}
                   onClick={() => { playHaptic('pop'); setSelectedToken(asset.key) }}
-                  className={`asset-card rounded-[22px] p-4 flex items-center justify-between text-left active:scale-[0.99] transition-all ${
+                  className={`asset-card rounded-[22px] p-4 flex items-center justify-between text-left active:scale-[0.99] tap ${
                     active ? 'border-accent/40 card-glow' : ''
                   }`}
                 >
@@ -1398,6 +1506,7 @@ export default function App() {
         ghostSend={ghostSend}
         sendSol={sendSol}
         mwaAddress={mwaAccount?.address ?? null}
+        onSuccess={(details) => setSuccess({ kind: 'send', ...details })}
       />
 
       {/* SHIELD SHEET — amount picker; the guard and tx stay in shieldNow */}
@@ -1410,6 +1519,9 @@ export default function App() {
         onRequestAirdrop={requestAirdrop}
         onShield={shieldNow}
       />
+
+      {/* ACTION CONFIRMED — the animated check that ends a Shield or a send */}
+      <SuccessOverlay {...(success ?? {})} open={!!success} onClose={() => setSuccess(null)} />
 
       {/* RECEIVE SHEET */}
       <ReceiveDrawer

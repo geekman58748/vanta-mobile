@@ -2,9 +2,12 @@ package com.vanta.privacywallet
 
 import android.annotation.SuppressLint
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -27,13 +30,11 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -72,8 +73,13 @@ fun WebShellScreen() {
     val refreshIndicatorColor = MaterialTheme.colorScheme.primary.toArgb()
     val refreshIndicatorBackgroundColor = MaterialTheme.colorScheme.surface.toArgb()
 
-    var progress by remember { mutableFloatStateOf(0f) }
-    var isLoading by remember { mutableStateOf(true) }
+    // Pull-to-refresh is a native SwipeRefreshLayout wrapping the WebView. It is
+    // correct on the dashboard, but while a sheet is open the WebView itself
+    // cannot scroll up, so every downward drag inside a sheet is stolen by the
+    // refresh gesture and reloads the whole app. The web app therefore tells the
+    // shell to stand down (`window.VantaShell.setPullToRefreshEnabled`) whenever
+    // a Drawer mounts, and to stand back up when it closes.
+    var pullToRefreshEnabled by remember { mutableStateOf(true) }
     var isRefreshing by remember { mutableStateOf(false) }
     var hasError by remember { mutableStateOf(false) }
     var showSplash by remember { mutableStateOf(true) }
@@ -116,12 +122,24 @@ fun WebShellScreen() {
 
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
+                // Marshal to the UI thread: the bridge call arrives on a WebView
+                // background thread, but `pullToRefreshEnabled` is Compose state.
+                val mainHandler = Handler(Looper.getMainLooper())
+                addJavascriptInterface(
+                    VantaShellBridge { enabled ->
+                        mainHandler.post { pullToRefreshEnabled = enabled }
+                    },
+                    "VantaShell",
+                )
+
                 webChromeClient =
                     WebShellChromeClient(
+                        // No top progress bar. A full-width bar sweeping in on
+                        // every load is the single loudest "this is a web page"
+                        // tell in a wallet. The splash already covers the one
+                        // load that genuinely needs covering.
                         onProgressChanged = { newProgress ->
-                            progress = newProgress / 100f
                             if (newProgress > 0) showSplash = false
-                            isLoading = newProgress < 100
                         },
                         isDebug = BuildConfig.DEBUG,
                     )
@@ -166,10 +184,11 @@ fun WebShellScreen() {
                     refreshIndicatorColor,
                 )
                 setProgressBackgroundColorSchemeColor(refreshIndicatorBackgroundColor)
-                setOnChildScrollUpCallback { _, _ -> webView.canScrollVertically(-1) }
+                setOnChildScrollUpCallback { _, _ ->
+                    !pullToRefreshEnabled || webView.canScrollVertically(-1)
+                }
                 setOnRefreshListener {
                     hasError = false
-                    isLoading = true
                     isRefreshing = true
                     webView.reload()
                 }
@@ -195,14 +214,12 @@ fun WebShellScreen() {
                 .background(MaterialTheme.colorScheme.background)
                 .windowInsetsPadding(WindowInsets.systemBars),
         swipeRefreshLayout = swipeRefreshLayout,
+        pullToRefreshEnabled = pullToRefreshEnabled,
         isRefreshing = isRefreshing,
-        isLoading = isLoading,
-        progress = progress,
         hasError = hasError,
         showSplash = showSplash,
         onRetry = {
             hasError = false
-            isLoading = true
             isRefreshing = false
             webView.reload()
         },
@@ -213,9 +230,8 @@ fun WebShellScreen() {
 private fun WebViewLayer(
     modifier: Modifier,
     swipeRefreshLayout: SwipeRefreshLayout,
+    pullToRefreshEnabled: Boolean,
     isRefreshing: Boolean,
-    isLoading: Boolean,
-    progress: Float,
     hasError: Boolean,
     showSplash: Boolean,
     onRetry: () -> Unit,
@@ -230,20 +246,10 @@ private fun WebViewLayer(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
-                view.isEnabled = !hasError
+                view.isEnabled = pullToRefreshEnabled && !hasError
                 view.isRefreshing = isRefreshing
             },
         )
-
-        if (isLoading && !hasError) {
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.TopCenter),
-            )
-        }
 
         if (hasError) {
             Box(
@@ -327,6 +333,22 @@ private fun normalizeHttpUrl(): String? {
     if (scheme != "http" && scheme != "https") return null
     if (uri.host.isNullOrBlank()) return null
     return uri.toString()
+}
+
+/**
+ * JS → native channel exposed to the web app as `window.VantaShell`.
+ *
+ * Only one job for now: let a mount/unmount of a web Drawer turn the native
+ * pull-to-refresh gesture off and on. Without it, the SwipeRefreshLayout steals
+ * a downward drag meant for the open sheet and reloads the entire WebView.
+ */
+private class VantaShellBridge(
+    private val onPullToRefreshChanged: (Boolean) -> Unit,
+) {
+    @JavascriptInterface
+    fun setPullToRefreshEnabled(enabled: Boolean) {
+        onPullToRefreshChanged(enabled)
+    }
 }
 
 private const val TAG = "WebShell"

@@ -3,7 +3,7 @@ import { playHaptic } from '../lib/haptic'
 import { copyText } from '../lib/clipboard'
 
 const row =
-  'w-full py-3.5 px-4 rounded-2xl bg-white/5 hover:bg-white/10 active:scale-[0.98] transition-all flex items-center justify-between text-white font-semibold text-left gap-3'
+  'w-full py-3.5 px-4 rounded-2xl bg-white/5 hover:bg-white/10 active:scale-[0.98] tap flex items-center justify-between text-white font-semibold text-left gap-3'
 
 // Settings & account sheet. Uses gemini-code's row grammar (label left, status
 // pill / chevron right) but every row is a real Vanta action — none of the
@@ -59,7 +59,7 @@ export default function SettingsDrawer({
             </span>
           </span>
           <span
-            className={`w-12 h-7 shrink-0 rounded-full transition-all flex items-center px-0.5 ${
+            className={`w-12 h-7 shrink-0 rounded-full tap flex items-center px-0.5 ${
               autoShield ? 'bg-accent' : 'bg-white/10'
             }`}
           >
@@ -130,7 +130,7 @@ export default function SettingsDrawer({
                 playHaptic('tap')
                 onDisconnect?.()
               }}
-              className="shrink-0 px-3 py-1.5 rounded-xl bg-danger/15 border border-danger/30 text-danger font-semibold text-[11px] hover:bg-danger/25 active:scale-95 transition-all"
+              className="shrink-0 px-3 py-1.5 rounded-xl bg-danger/15 border border-danger/30 text-danger font-semibold text-[11px] hover:bg-danger/25 active:scale-95 tap"
             >
               Disconnect
             </button>
@@ -140,7 +140,7 @@ export default function SettingsDrawer({
                 playHaptic('tap')
                 onConnect?.()
               }}
-              className="shrink-0 px-3 py-1.5 rounded-xl bg-accent/15 border border-accent/30 text-accent font-semibold text-[11px] hover:bg-accent/25 active:scale-95 transition-all"
+              className="shrink-0 px-3 py-1.5 rounded-xl bg-accent/15 border border-accent/30 text-accent font-semibold text-[11px] hover:bg-accent/25 active:scale-95 tap"
             >
               Connect
             </button>
@@ -158,7 +158,7 @@ export default function SettingsDrawer({
           <span className="text-[11px] font-mono text-white/90 break-all">{wallet.publicKey}</span>
           <button
             onClick={() => copyText(wallet.publicKey, notify, 'Public address copied!', '📥')}
-            className="self-start mt-1 px-3 py-1.5 rounded-xl bg-white/10 border border-hair font-semibold text-white text-[11px] hover:bg-white/20 active:scale-95 transition-all"
+            className="self-start mt-1 px-3 py-1.5 rounded-xl bg-white/10 border border-hair font-semibold text-white text-[11px] hover:bg-white/20 active:scale-95 tap"
           >
             Copy
           </button>
@@ -176,7 +176,7 @@ export default function SettingsDrawer({
           <button
             disabled={!vantaAddress}
             onClick={() => copyText(vantaAddress, notify, 'Vanta address copied!', '🕳️')}
-            className="self-start mt-1 px-3 py-1.5 rounded-xl bg-accent/15 border border-accent/30 font-semibold text-accent text-[11px] hover:bg-accent/25 active:scale-95 transition-all disabled:opacity-40"
+            className="self-start mt-1 px-3 py-1.5 rounded-xl bg-accent/15 border border-accent/30 font-semibold text-accent text-[11px] hover:bg-accent/25 active:scale-95 tap disabled:opacity-40"
           >
             Copy
           </button>

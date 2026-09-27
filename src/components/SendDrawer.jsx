@@ -23,6 +23,7 @@ export default function SendDrawer({
   ghostSend,
   sendSol,
   mwaAddress,
+  onSuccess,
 }) {
   const token = TOKENS[selectedToken]
   const [recipient, setRecipient] = useState('')
@@ -159,6 +160,7 @@ export default function SendDrawer({
         status: 'Confirmed',
       })
       playHaptic('success')
+      onSuccess?.({ mode, amount, symbol: sym, signature: sig, counterparty: to })
       setRecipient('')
       setValue('0')
       onClose()
@@ -188,8 +190,8 @@ export default function SendDrawer({
         signature: sig,
         status: 'Confirmed',
       })
-      notify('SOL sent!', '✓')
       playHaptic('success')
+      onSuccess?.({ mode: 'Public', amount, symbol: 'SOL', signature: sig, counterparty: to })
       setRecipient('')
       setValue('0')
       onClose()
@@ -266,7 +268,7 @@ export default function SendDrawer({
               playHaptic('tap')
               setRecipient(mwaAddress)
             }}
-            className="self-start mt-2 px-3 py-1.5 rounded-xl bg-accent/10 border border-accent/25 text-accent font-semibold text-[11px] hover:bg-accent/20 active:scale-95 transition-all"
+            className="self-start mt-2 px-3 py-1.5 rounded-xl bg-accent/10 border border-accent/25 text-accent font-semibold text-[11px] hover:bg-accent/20 active:scale-95 tap"
           >
             Use my connected wallet
           </button>
@@ -291,7 +293,7 @@ export default function SendDrawer({
           <button
             key={key}
             onClick={() => press(key)}
-            className={`py-3.5 text-2xl font-bold bg-white/5 border border-hair rounded-2xl active:bg-accent/20 active:scale-95 transition-all ${
+            className={`py-3.5 text-2xl font-bold bg-white/5 border border-hair rounded-2xl active:bg-accent/20 active:scale-95 tap ${
               key === 'del' ? 'text-xl text-danger active:bg-danger/30' : 'text-white'
             }`}
           >
@@ -303,7 +305,7 @@ export default function SendDrawer({
       <button
         onClick={handlePrivateSend}
         disabled={busy}
-        className="w-full py-4 rounded-2xl bg-accent hover:bg-accent-hi font-bold text-black shadow-lg shadow-accent/20 active:scale-[0.98] transition-all text-base disabled:opacity-50"
+        className="w-full py-4 rounded-2xl bg-accent hover:bg-accent-hi font-bold text-black shadow-lg shadow-accent/20 active:scale-[0.98] tap text-base disabled:opacity-50"
       >
         {sending ? 'Proving...' : isPrivateMode ? '🕳️ Confirm Shadow Send' : '👻 Confirm Ghost Send'}
       </button>
@@ -312,7 +314,7 @@ export default function SendDrawer({
         <button
           onClick={handlePublicSend}
           disabled={busy}
-          className="w-full py-3 rounded-2xl bg-white/10 border border-hair font-semibold text-muted hover:bg-white/20 active:scale-[0.98] transition-all text-sm disabled:opacity-50"
+          className="w-full py-3 rounded-2xl bg-white/10 border border-hair font-semibold text-muted hover:bg-white/20 active:scale-[0.98] tap text-sm disabled:opacity-50"
         >
           or send plain public SOL →
         </button>

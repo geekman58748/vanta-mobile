@@ -43,6 +43,10 @@ deploy/.keystore-password
 *.jks
 *.keystore
 
+# Device data pulled off a phone before an uninstall. Contains the shielded
+# wallet key from localStorage — a private key, not a build artifact.
+deploy/device-backup/
+
 # Secrets — see .env.example. `.env` was NOT ignored before, so any local
 deploy credentials would have been staged by a `git add -A`.
 .env
