@@ -1,6 +1,7 @@
 package com.vanta.privacywallet
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -125,8 +126,9 @@ fun WebShellScreen() {
                 // Marshal to the UI thread: the bridge call arrives on a WebView
                 // background thread, but `pullToRefreshEnabled` is Compose state.
                 val mainHandler = Handler(Looper.getMainLooper())
+                val appContext = context.applicationContext
                 addJavascriptInterface(
-                    VantaShellBridge { enabled ->
+                    VantaShellBridge(appContext) { enabled ->
                         mainHandler.post { pullToRefreshEnabled = enabled }
                     },
                     "VantaShell",
@@ -338,17 +340,33 @@ private fun normalizeHttpUrl(): String? {
 /**
  * JS → native channel exposed to the web app as `window.VantaShell`.
  *
- * Only one job for now: let a mount/unmount of a web Drawer turn the native
- * pull-to-refresh gesture off and on. Without it, the SwipeRefreshLayout steals
- * a downward drag meant for the open sheet and reloads the entire WebView.
+ * Two jobs:
+ *   · Let a mount/unmount of a web Drawer turn the native pull-to-refresh
+ *     gesture off and on. Without it, the SwipeRefreshLayout steals a downward
+ *     drag meant for the open sheet and reloads the entire WebView.
+ *   · Save a base64 file (the PDF receipt) and report where it landed. The
+ *     shell has no DownloadListener, so this is the only path that actually
+ *     writes a file — see FileSaver.
+ *
+ * Both are called from the WebView's JS bridge thread, never the UI thread, so
+ * the synchronous file write in `saveBase64File` blocks only the bridge call.
  */
 private class VantaShellBridge(
+    private val appContext: Context,
     private val onPullToRefreshChanged: (Boolean) -> Unit,
 ) {
     @JavascriptInterface
     fun setPullToRefreshEnabled(enabled: Boolean) {
         onPullToRefreshChanged(enabled)
     }
+
+    /**
+     * @return a JSON string — `{ok, path}` or `{ok:false, error}` — that the web
+     *         layer must check before telling the user the receipt was saved.
+     */
+    @JavascriptInterface
+    fun saveBase64File(fileName: String, mimeType: String, base64Data: String): String =
+        FileSaver.saveBase64(appContext, fileName, mimeType, base64Data)
 }
 
 private const val TAG = "WebShell"

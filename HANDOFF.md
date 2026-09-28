@@ -8,6 +8,10 @@
 > ⚠️ The archived handoff is **actively misleading** if read as current. See §1.
 > This file was reconciled with the working tree on 2026-09-26 ~14:15 — if the tree is
 > ahead of this table again, trust `git status`, not this doc.
+>
+> 🔧 **2026-09-28:** the whole of `docs/AUDIT-2026-09-27.md` (C1→L5) was remediated.
+> The finding-by-finding table with device evidence is **PLAN.md §19**; §13 below is the
+> short version of what changed and what it means for the next agent.
 
 ---
 
@@ -284,7 +288,7 @@ it will render on a real phone.
 
 | # | Item | Severity |
 |---|---|---|
-| 7.1 | **A v1 parse failure should be a first-class user-visible error**, not a generic signing error. Partially done in `mwa.js`. | P0 (§5) |
+| 7.1 | ✅ **Resolved** — v1 parse failures are matched explicitly (`V1_UNSUPPORTED`) and named the wallet, and **connect** now has a 120 s timeout to match signing's. | done |
 | 7.2 | **Stale-session duplicate spend:** on the emulator, two Shields landed 66s apart against one harness click — most plausibly a leftover pending sign session being approved by later AUTHORIZE taps. Phone timeline reconciles with nothing unexplained. Mitigations: Shield disables while `loading`, sign calls time out after 90s. Verify, and add a visible "retry association" affordance. | P0 — verify |
 | 7.3 | ✅ **Resolved** — Shield amount comes from `ShieldDrawer.jsx` (presets, fee-aware Max, keypad); `SHIELD_FEE_RESERVE` is shared with `shieldNow`'s guard. | done |
 | 7.4 | ✅ **Resolved** — `ProfileDrawer.jsx` claims a handle with a client-side Ed25519 proof over `vanta-name-claim:<name>`, signed by the identity seed. Linked Settings ↔ Profile. | done |
@@ -308,13 +312,20 @@ it will render on a real phone.
   per-request and per-window; `/relay` refuses non-allowlisted programs; CORS is
   origin-listed. See `relayer/README.md`.
 - ✅ `.gitignore` covers test identities, `.env*`, keystores, APKs, build output.
+- ✅ **(2026-09-28, audit C1/C2)** history reads/writes are **identity-signed**
+  (`src/lib/identityProof.js`), so the shipped `VITE_RELAYER_TOKEN` **no longer unlocks the
+  payment graph**, and the relayer stores **no amount and no counterparty** — those columns
+  are dropped from `schema.sql`, `db.js` and the live Neon database. The token is now a
+  relay/faucet credential only.
 
 **Still open:**
 - ❌ **Git history** still contains the old keypair + Helius key (`028544f`).
 - ❌ **No public deploy yet** — Dockerfile/`fly.toml`/README exist, the deploy does not.
   A distributable build needs public HTTPS (mixed content is blocked, and on a phone
   `localhost` is the phone).
-- ❌ **Rotate both keys** regardless of history scrubbing.
+- ❌ **Rotate the keys** regardless of history scrubbing — the old relayer keypair and the
+  Helius key. (The relayer **token** is lower-stakes now that it no longer unlocks history,
+  but `.env.local` still holds the live one and it still funds `/fund`.)
 
 ## 9. Claims language — hard rules
 
@@ -456,3 +467,109 @@ the robot — catch it with a grep for the drawable name, not just the mipmap XM
 `unzip` hangs on an interactive overwrite prompt. Release builds also shorten resource
 paths (`ic_launcher_foreground.xml` → `res/E4.xml`), so never grep the APK for resource
 names — use `aapt2 dump badging`, or grep for asset *content*.
+
+---
+
+## 13. UPDATE LOG — 2026-09-28: audit remediation
+
+`docs/AUDIT-2026-09-27.md` was an adversarial pass over the live app. **All of it was
+worked.** Full table + device evidence: **`PLAN.md` §19**. The parts a next agent must know:
+
+### 13.1 The trust boundary moved off the shared token
+
+The audit's three critical findings were all the same story: the app promised the server
+could not see payments, and the server could. Both halves are now real.
+
+- **Reads and writes are identity-signed.** `src/lib/identityProof.js` builds an Ed25519
+  proof over a domain-separated message; `txHistory.js` sends **no amount and no
+  counterparty**; `relayer/server.js` verifies the proof against the address it is filed
+  under, with a 5-minute freshness window and a refusal to accept a report for a tx the
+  actor is not part of. **The shipped `VITE_RELAYER_TOKEN` no longer unlocks history.**
+- **The columns are gone**, not just unread: `amount_atomic` and `counterparty` were dropped
+  from `schema.sql`, `db.js` and the live Neon database, and the old `client_report` JSON
+  was scrubbed. `relayer/test-db.mjs` asserts both facts and self-cleans.
+- **MWA cannot sign history proofs, deliberately.** Only the identity or the in-app session
+  wallet can. Do not "fix" that — it is what keeps a device wallet from becoming a second
+  way to mint history under someone else's identity.
+
+### 13.2 Receipts and history now survive a restart
+
+`src/lib/localHistory.js`: XChaCha20-Poly1305 under `sha256(seed ‖ "vanta-history-v1")`,
+500-row cap, and — the important bit — **a blob that will not decrypt is left untouched on
+disk** and reads back as empty. (Losing rows is bad; silently overwriting the only copy of
+someone's receipts is worse.) Verified on-device: restart restores the row. `App.jsx`
+guards persistence behind `historyLoaded` so the empty initial state can never overwrite it.
+
+⚠️ `@noble/ciphers` **v2 takes the nonce at the factory**: `xchacha20poly1305(key, nonce)`,
+then `.encrypt(data)`. The v1 per-call form fails with `"nonce" expected Uint8Array`.
+
+### 13.3 PDF receipts actually write now
+
+`android/app/src/main/java/com/vanta/privacywallet/FileSaver.kt` + the `saveBase64File`
+bridge in `MainActivity.kt`. The WebView **silently drops** a data-URL anchor download, so
+the old toast was a lie. The bridge writes through MediaStore to `Downloads/Vanta/` on
+API 29+ (legacy fallback otherwise, 20 MB cap, sanitised names) and returns a JSON result
+that the toast now tells the truth about. Device-verified: 5147-byte `%PDF-`.
+
+### 13.4 Backup/restore and two-slot custody
+
+- `src/lib/backup.js` — scrypt (N=2¹⁴) → XChaCha20-Poly1305, one base64 line, carrying the
+  identity, the session wallet, the note snapshot **and history**. Device-verified export +
+  restore (reload rebuilds the same identity, private balance and history).
+- `src/lib/walletStore.js` — **two slots** (`vanta-wallet-session`, `vanta-wallet-device`)
+  plus a `vanta-wallet-active` pointer and a legacy migration. Connecting MWA used to
+  silently overwrite `vanta-wallet` and strand the old balance (audit H6); switching now
+  names the wallet it replaces **and reads its on-chain balance first**.
+
+### 13.5 Small but user-visible
+
+QR is generated **on-device** (`qrcode`) — the address is no longer sent to
+`api.qrserver.com` and the sheet now works offline. Activity rows are real `<button>`s.
+Send errors walk the **error cause** (the SDK throws `WALLET_BUILD_TRANSFER` *over*
+`RECIPIENT_NOT_REGISTERED`, which is why the documented Ghost fallback never fired). Unknown
+relayer paths return JSON, not Express HTML. The Settings footer now discloses *how* the
+seed is stored, not just *where*.
+
+### 13.6 ⚠️ The bug that only a real send could find
+
+**Read this before touching `txHistory.js`.** `reportTx` declared its verdict as
+`const proof` inside the same block whose request body reads the **outer** `proof` (the
+signature). The inner declaration put that outer binding in its **temporal dead zone**, so
+building the body threw `ReferenceError: cannot access 'proof' before initialization` on
+**every single report** — the send landed, the report never did, and because the catch is
+deliberately silent ("nothing here may ever fail a send") every receipt quietly sat at
+"Not checked". Renamed to `proofKey`.
+
+Why nothing caught it: the relayer harness tests the *server* and the server was correct;
+the minifier just renamed the two bindings, so the bundle looked plausible; and the failure
+is swallowed by design. **The `recordSend` path is only proven by a real send on a device.**
+
+Two more things surfaced the same way: the report ceiling was **5 s**, but
+`POST /tx/report` does an on-chain `getTransaction` to decide `verified_on_chain` and a
+just-confirmed signature is often not indexed yet (measured 1366–1946 ms, cold) — raised to
+**12 s** as `REPORT_TIMEOUT_MS`. And a client-side abort **does not cancel the server's
+work**: the row still landed with `verified_on_chain: true`.
+
+### 13.7 Verification state when the session ended
+
+`oxlint` **0 errors**; `relayer/test-db.mjs` **32/32** green against live Neon;
+`scripts/{history-store-check,backup-check}.mjs` green. **Device-verified on the final build:**
+history survives a restart, QR is local/offline, PDF writes a real `%PDF-`, backup
+export + restore, wallet slots, and **Ghost sends that reach the relayer as
+`verified_on_chain: true, flow_source: client`**. Also confirmed directly: an
+**identity-signed** `GET /tx/:id` returns rows while the **shared token alone returns 401**
+(C1), and the stored rows contain **no `amount_atomic` and no `counterparty`** (C2).
+
+**Not re-verified on this build:** Shadow to a *registered* recipient, public send, MWA
+connect (no wallet app on the emulator), name resolution. The emulator's network was flaky
+(~50% packet loss) all session.
+
+### 13.8 Recommended next actions
+
+1. Finish the send-path re-tests: Shadow (needs a registered handle) and public send.
+2. **Add a test for `reportTx`** — it is the one path with real logic and no coverage, and
+   its failure mode is silent. Stub `import.meta.env` and the fetch, and assert the body
+   carries the signature proof.
+3. Rotate the token + old keypair before anything goes public (§8).
+4. First-run intro (still the biggest untouched P1), then packaging: deploy → README/LICENSE
+   → video → deck.

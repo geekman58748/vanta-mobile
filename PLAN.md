@@ -5,8 +5,9 @@
 > The Umbra-era handoff is archived at `docs/handoff-umbra-era-2026-09-20.md` —
 > it predates the Zolana pivot and is actively misleading if read as current.
 >
-> Last updated: **2026-09-26 ~22:20** (signed release APK, first-run onboarding shipped,
-> hosting decision corrected to Northflank — see §18)
+> Last updated: **2026-09-28 ~14:30** — full remediation pass over
+> `docs/AUDIT-2026-09-27.md`: every finding C1–L5 is now fixed, or explicitly disclosed
+> where a fix is impossible in-architecture (C3/L5). Session log: **§19**.
 > Owner: Maxx · Hackathon deadline: **2026-10-08** (CLOCK IN, Solana Mobile × RadiantsDAO)
 
 ---
@@ -669,12 +670,19 @@ buildWithdrawalTransaction({ client, wallet, keys, feePayer, recipient, amount }
    Wire contract for future reference: `POST /names/claim { name, ownerAddress, signature }`,
    signature = base58 Ed25519 over `vanta-name-claim:<name>`; `/names/available/:name` and
    `/names/owned/:address` are public; **one handle per owner**.
-3. **Honest receipt UI** — per-leg public/hidden/linkable + `verified_on_chain` (P1, flagship).
-4. **3-page first-run intro** (P1).
-5. Then packaging: ~~sign APK~~ ✅ (§18.1), deploy relayer → **Northflank** (B2),
+3. ✅ **Honest receipt UI** — per-leg public/hidden/linkable + `verified_on_chain`.
+4. ✅ **Audit remediation** — every finding in `docs/AUDIT-2026-09-27.md` (C1→L5) is
+   fixed or disclosed. Full table + device evidence in **§19**.
+5. **3-page first-run intro** (P1) — still open.
+6. Then packaging: ~~sign APK~~ ✅ (§18.1), deploy relayer → **Northflank** (B2),
    README/deck/video (B3–B6).
-6. **Rebuild the APK after the relayer URL exists** — one `npm run build:android` +
+7. **Rebuild the APK after the relayer URL exists** — one `npm run build:android` +
    `gradlew assembleRelease` (the command is in §18.1).
+
+⚠️ **Before the repo or the APK goes public:** the `VITE_RELAYER_TOKEN` build arg no
+longer unlocks history (C1 is closed — history reads are identity-signed), but the
+Northflank deploy in `.env.local` still holds the **live** token. Rotate it, and rotate
+the old keypair reachable in git history (`028544f`).
 
 > Rebuild before any demo: `npx vite build` — the server serves `dist/`, not `src/`.
 
@@ -893,3 +901,90 @@ concluded "no launcher icons in the APK" for exactly this reason and was wrong.
 
 Also note `unzip` on this APK collides on a duplicate `res/hq.xml` and will hang on an
 interactive prompt — always use `unzip -oq`.
+
+---
+
+## 19. SESSION LOG — 2026-09-28: full audit remediation
+
+Every finding in `docs/AUDIT-2026-09-27.md` was worked, in the audit's own order.
+A snapshot was taken first (`~/vanta-pre-audit-fix-*.tar`, plus commit `2f3f110`), so the
+pre-fix tree is recoverable.
+
+### 19.1 Finding-by-finding
+
+| ID | Finding | Status | Where |
+|---|---|---|---|
+| **C1** | Relayer token in the APK unlocks the private payment graph | ✅ **Fixed** | History reads/writes are now **identity-signed** (`src/lib/identityProof.js`), not shared-token. The token no longer unlocks `/tx/:address`. The token still ships — it gates `/relay`/`/fund` only. |
+| **C2** | Server stores the linkage the pool hides | ✅ **Fixed** | `amount_atomic` + `counterparty` **dropped** from `relayer/schema.sql` / `db.js`; live DB columns dropped and old `client_report` scrubbed. Harness asserts `amount is NOT stored` / `counterparty is NOT stored`. |
+| **C3** | Spend key plaintext in `localStorage` | ⚠️ **Disclosed, not eliminated** | The prover needs the seed readable, so it stays plaintext. Settings now states the *how*, not just the *where*: the seed is plaintext, and the note/history stores are encrypted with a key **derived from it** — so their encryption defends against a storage dump, not a device compromise. Backup (H4) is the actual answer; Seed Vault is the real fix. |
+| **H1** | All history/receipts vanish on restart | ✅ **Fixed + device-verified** | `src/lib/localHistory.js` — XChaCha20-Poly1305 under `sha256(seed ‖ "vanta-history-v1")`, capped at 500 rows, **preserved untouched** when it cannot be decrypted. |
+| **H2** | "Download PDF receipt" reports success, writes nothing | ✅ **Fixed + device-verified** | New native `FileSaver.kt` + `saveBase64File` bridge (MediaStore `Downloads/Vanta/` on API 29+, legacy fallback, 20 MB cap). The toast now reports what actually happened. |
+| **H3** | Advertised Ghost fallback never fires | ✅ **Fixed** | `SendDrawer.jsx` now **walks the error cause** — the SDK throws `WALLET_BUILD_TRANSFER` *over* `RECIPIENT_NOT_REGISTERED`, so matching `err.message` alone never matched. |
+| **H4** | No backup path — `pm clear` destroys the balance | ✅ **Fixed + device-verified** | `src/lib/backup.js` (scrypt N=2¹⁴ → XChaCha20-Poly1305, one base64 line) + `BackupDrawer.jsx`, wired into Settings. |
+| **H5** | Incoming funds never update the balance | ✅ **Fixed** | Public balance polls every 20 s, on `visibilitychange` and on a `vanta:refresh-public` event; private notes resync on foreground. |
+| **H6** | MWA connect silently replaces the stranded wallet | ✅ **Fixed + device-verified** | `src/lib/walletStore.js` — two custody slots (`session` / `device`) + an active pointer + legacy migration. Switching now names the wallet it is about to replace **and reads its on-chain balance** to warn about stranded funds. |
+| **M1** | Receive QR sends your address to `api.qrserver.com` | ✅ **Fixed + device-verified** | QR generated on-device via `qrcode` (data-URL PNG). Zero QR-related network requests; works offline. |
+| **M2** | Claims vs behaviour (three lies) | ✅ **Fixed** | Activity copy now describes what the relayer actually keeps ("a receipt anchor — the signature, the flow and the time — never the amount or the recipient"); `lib/honesty.js` adapts the Ghost-to-self note; the Shadow fallback promise now matches H3's real behaviour. |
+| **M3** | Raw internals shown to users | ✅ **Fixed** | Send/shield paths translate SDK codes into actionable text. |
+| **M4** | Test data in the production database | ✅ **Fixed** | Audit-era harness rows purged from Neon; the harness now self-cleans (removes its own name + tx rows). |
+| **M5** | Receipts unreachable without touch | ✅ **Fixed** | Activity rows are real `<button>`s — focusable, keyboard-operable, screen-reader labelled. |
+| **M6** | Privacy toggle resets / public downgrade unconfirmed | ✅ **Fixed** | Ghost→public downgrade gets an explicit confirm card naming the consequence; toggle is guarded. |
+| **L1** | `+0.000 / -0.000` header on empty history | ✅ **Fixed** | Zero-state header. |
+| **L2** | `.vanta` handle absent from Receive | ✅ **Fixed** | ReceiveDrawer surfaces the claimed handle (this test identity has none registered, so the row is correctly absent). |
+| **L3** | `navigator.vibrate` console noise | ✅ **Fixed** | `src/lib/haptic.js` guards the call. |
+| **L4** | Unknown API paths return Express HTML 404 | ✅ **Fixed** | JSON 404 + JSON terminal error handler; verified `GET /etc/passwd` → `{"ok":false,"error":"Not found: GET /etc/passwd"}`. |
+| **L5** | `autoShield` labelled "not wired yet" | ⚠️ **Left as-is, deliberately** | The label is true, and it errs toward disclosure. |
+
+**Also closed from the audit's own footnote:** the MWA **connect** path had no timeout
+(`withTimeout` wrapped only signing) — connect now has a 120 s timeout with the same
+wallet-naming error treatment as signing.
+
+### 19.2 Device evidence (emulator-5554, debug APK)
+
+| Check | Result |
+|---|---|
+| Restart with a funded Shield in history | Row restored from the encrypted store — **exactly one** row, no phantom duplicate |
+| Receive drawer offline | QR is `data:image/png;base64`; `performance.getEntriesByType('resource')` contains **no** QR/external request |
+| PDF receipt | Toast ⇒ `Saved … to Download/Vanta/…`; file on disk = 5147 bytes, `%PDF-` magic |
+| Backup export | 7480-char single-line blob produced |
+| Backup restore | Blob opened → confirm screen (wallet + "cached notes · history") → **Reload** → same address, identity, private 0.050, history intact |
+| Wallet slots | `vanta-wallet-session` / `vanta-wallet-device` + `vanta-wallet-active` pointer + legacy mirror all written correctly |
+| **Ghost send** | Landed twice (private 0.050 → 0.030 → 0.020); both rows reached the relayer as **`verified_on_chain: true, flow_source: client`** |
+| **Report + signed read** | Identity-signed `GET /tx/:id` → 200 `count=3`; identity-signed `POST /tx/report` → `{"ok":true,"stored":true,"verified_on_chain":true}` in 1366 ms; **shared token alone → 401** (C1); stored rows have **no `amount_atomic`, no `counterparty`** (C2) |
+| Shadow → unregistered | Correctly detects the unregistered recipient and shows the downgrade-confirm card before any public send — **no raw `WALLET_BUILD_TRANSFER`** |
+| Relayer harness | `relayer/test-db.mjs` **32/32** green, self-cleaning (live Neon) |
+| Lint | `oxlint` — **0 errors** (28 pre-existing warnings, all in `scripts/` and old `App.jsx` code) |
+
+> ⚠️ **A real bug was caught by this device pass, not by any harness.** `reportTx` declared
+> the verdict as `const proof` inside the same block that builds the request body — and the
+> body reads the **outer** `proof` (the signature). The inner declaration put that binding in
+> its temporal dead zone, so **every report threw `ReferenceError: cannot access before
+> initialization` and no send ever recorded `verified_on_chain`**. The harness could not see
+> it (it tests the server, and the server was fine), the send still landed, and the failure
+> was swallowed by the "never fail a send" catch — silently degrading every receipt to
+> "Not checked". Renamed to `proofKey`. **Lesson: the `recordSend` path is only proven by a
+> real send on a device.** Two more issues surfaced the same way: the 5 s report ceiling was
+> too tight (the endpoint does an on-chain `getTransaction`; measured 1.4–2.0 s, and a
+> just-confirmed signature may not be indexed yet) — raised to 12 s and named.
+
+### 19.3 Still open
+
+- **Shadow send (registered recipient) and public send re-test** — Ghost is verified, these two
+  are the same `recordSend` path but were not re-run on the final build. Note the emulator did
+  not have a registered `.vanta` handle to send to.
+- **MWA connect + authorize re-test** — needs a wallet app installed on the emulator.
+- **No automated test covers the client report path.** `scripts/` has round-trip checks for
+  `localHistory` and `backup`, and the harness covers the relayer, but nothing exercises
+  `reportTx` — which is exactly why the TDZ above survived to a device. A test would need
+  `import.meta.env` stubbed (that is all `src/lib/config.js` blocks plain-node import).
+- The emulator's network was **flaky** all session (≈50% packet loss to
+  `api.devnet.solana.com`), surfacing as `Balance read error: TypeError: Failed to fetch`.
+  Environmental, not code.
+
+### 19.4 New/renamed files this pass
+
+New: `src/lib/{walletStore,identityProof,localHistory,backup}.js`,
+`src/components/BackupDrawer.jsx`,
+`android/app/src/main/java/com/vanta/privacywallet/FileSaver.kt`,
+`scripts/{history-store-check,backup-check}.mjs` (the last two are the promoted round-trip
+tests — they ship as permanent checks, not temp files).

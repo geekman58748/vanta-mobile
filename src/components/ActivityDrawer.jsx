@@ -149,10 +149,14 @@ export default function ActivityDrawer({
           </div>
         ) : (
           visible.map((tx, i) => (
-            <div
+            // A button, not a clickable div: this row is the only route to the
+            // on-chain reference, so it has to be focusable and announce itself.
+            <button
               key={`${tx.at}-${i}`}
+              type="button"
               onClick={() => openReceipt(tx)}
-              className="py-3 px-2 flex justify-between items-center gap-3 cursor-pointer hover:bg-white/5 active:bg-white/10 rounded-xl transition-colors"
+              aria-label={`${tx.title}, ${tx.amount}, ${tx.isPrivate ? 'private' : 'public'}. Open the on-chain reference.`}
+              className="py-3 px-2 flex justify-between items-center gap-3 cursor-pointer hover:bg-white/5 active:bg-white/10 rounded-xl transition-colors w-full text-left"
             >
               <div className="flex flex-col min-w-0">
                 <span className="font-semibold text-white text-[13px] truncate">{tx.title}</span>
@@ -168,14 +172,16 @@ export default function ActivityDrawer({
               >
                 {tx.amount}
               </span>
-            </div>
+            </button>
           ))
         )}
       </div>
 
       <span className="text-[10px] text-muted leading-relaxed">
-        Charts are built from activity in this browser session. Vanta keeps no server-side
-        history, so a reload starts the week over. Tap any row for its on-chain reference.
+        Charts and totals cover what this device remembers — the history is stored here,
+        encrypted, and survives a restart. The relayer keeps only a receipt anchor — the
+        signature, the flow and the time — never the amount or the recipient — so it can
+        confirm a send landed on chain. Tap any row for its on-chain reference.
         {transactions.length ? ` Last stamped ${stampToTime(transactions[0].at)}.` : ''}
       </span>
     </Drawer>

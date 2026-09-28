@@ -38,10 +38,8 @@ CREATE TABLE IF NOT EXISTS transactions (
   -- Forensics: the programs the transaction actually touched.
   programs          text[]      NOT NULL DEFAULT '{}',
 
-  -- Display metadata. Amount is kept as lamports/atomic units in numeric to
-  -- avoid float drift; counterparty is a free-text label or address.
-  amount_atomic     numeric(30, 0),
-  counterparty      text,
+  -- The client's own note about what it sent (currently just the mode).
+  -- Deliberately NOT an amount and NOT a recipient: see the AUDIT note below.
   client_report     jsonb,
 
   slot              bigint,
@@ -49,6 +47,25 @@ CREATE TABLE IF NOT EXISTS transactions (
   created_at        timestamptz NOT NULL DEFAULT now(),
   confirmed_at      timestamptz
 );
+
+-- ── Privacy migration: the relayer must not hold the payment graph ───────────
+-- AUDIT-2026-09-27 C2. `amount_atomic` and `counterparty` were written by
+-- POST /tx/report (the amounts and recipients of Shadow/Ghost sends — exactly
+-- what the shielded pool hides) and by POST /fund. Rows are keyed by an
+-- identity address and were readable by anyone holding the RELAYER_TOKEN that
+-- ships inside the APK, so unzipping the app handed over the graph the product
+-- is built to hide.
+--
+-- The client no longer sends them and the relayer no longer accepts them; these
+-- statements drop the stored copies on the next boot. initSchema runs this file
+-- every time, so they are also the reason a future re-add cannot silently
+-- resurrect the columns' contents.
+ALTER TABLE transactions DROP COLUMN IF EXISTS amount_atomic;
+ALTER TABLE transactions DROP COLUMN IF EXISTS counterparty;
+-- Scrub the same facts from older rows' client_report payloads.
+UPDATE transactions
+   SET client_report = client_report - 'amount' - 'counterparty'
+ WHERE client_report ?| array['amount', 'counterparty'];
 
 -- The app's main read is "my history, newest first".
 CREATE INDEX IF NOT EXISTS transactions_primary_actor_idx

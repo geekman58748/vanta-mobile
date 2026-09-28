@@ -1,5 +1,5 @@
 import { relayerFetch } from './config'
-import { bytesToBase58 } from './mwa'
+import { signForAddress } from './identityProof'
 
 // ── .vanta handle registry (client side) ─────────────────────────────────────
 // A handle is a lookup convenience: it maps `ai.vanta` → the Vanta *shielded
@@ -18,29 +18,9 @@ import { bytesToBase58 } from './mwa'
 //   400 validation · 401 proof mismatch · 409 taken/reserved/already-owned
 
 const CLAIM_PREFIX = 'vanta-name-claim:'
-const EPHEMERAL_KEY = 'vanta-ephemeral'
 
 /** The exact string the server verifies. */
 export const claimMessage = (handle) => `${CLAIM_PREFIX}${handle}`
-
-/**
- * 32-byte seed behind the shielded identity.
- *
- * Read straight from `vanta-ephemeral` — the same store App.jsx derives X from.
- * It is plaintext by design (the ZK prover is JS-only, so it must be readable by
- * the app); returning `null` when it is absent rather than throwing, so a profile
- * sheet on a not-yet-initialised wallet degrades instead of crashing.
- */
-function identitySeed() {
-  try {
-    const data = JSON.parse(localStorage.getItem(EPHEMERAL_KEY) || 'null')
-    const secret = data?.secretKey
-    if (!Array.isArray(secret) || secret.length < 32) return null
-    return new Uint8Array(secret.slice(0, 32))
-  } catch {
-    return null
-  }
-}
 
 /** Availability + the reason when unavailable ('taken', 'reserved', or a format problem). */
 export async function checkName(rawName) {
@@ -88,14 +68,12 @@ export async function claimName({ name, ownerAddress }) {
   if (!handle) return { ok: false, error: 'Enter a name first' }
   if (!ownerAddress) return { ok: false, error: 'Your Vanta identity is not ready yet' }
 
-  const seed = identitySeed()
-  if (!seed) return { ok: false, error: 'No signing identity in this browser yet' }
+  // Signed with the same on-device seed that owns the shielded identity — see
+  // lib/identityProof.js, which the relayer's history endpoints use too.
+  const signature = await signForAddress(ownerAddress, claimMessage(handle))
+  if (!signature) return { ok: false, error: 'No signing identity in this browser yet' }
 
   try {
-    const { ed25519 } = await import('@noble/curves/ed25519.js')
-    const bytes = new TextEncoder().encode(claimMessage(handle))
-    const signature = await bytesToBase58(ed25519.sign(bytes, seed))
-
     const res = await relayerFetch('/names/claim', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

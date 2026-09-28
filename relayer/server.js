@@ -13,14 +13,34 @@
  * GET  /healthz — liveness for the platform probe (public, no RPC call)
  *
  * ── SECURITY MODEL ────────────────────────────────────────────────────
- * /relay and /fund are *spending* endpoints and are gated by a shared token
- * (RELAYER_TOKEN). Without it deployed publicly, /fund is an open faucet —
- * anyone can drain the relayer by POSTing an address.
+ * Two different kinds of gate, deliberately:
+ *
+ *  1. SPENDING (/relay, /fund, /names/claim) → shared RELAYER_TOKEN. Without it
+ *     deployed publicly, /fund is an open faucet: anyone can drain the relayer
+ *     by POSTing an address. The token is abuse-deterrence, not authentication.
+ *
+ *  2. PER-IDENTITY DATA (/tx/report, /tx/:address) → an Ed25519 signature by the
+ *     address the row belongs to, with no shared secret involved. This is the
+ *     fix for AUDIT-2026-09-27 C1: the history endpoints used to be token-gated,
+ *     but the token ships inside the APK, so anyone who unzipped it could read
+ *     the recipient and amount of every Shadow send. Because the read/write
+ *     proof uses the identity's OWN key — which never leaves the device — an
+ *     extracted bundle grants nothing.
+ *     · POST /tx/report  { signature, flow, actor, proof }
+ *       proof signs  "vanta-report:<signature>:<actor>"
+ *     · GET  /tx/:address?ts=<ms>&sig=<b58>
+ *       sig signs    "vanta-history:<address>:<ts>"  (ts must be < 5 min old)
+ *
+ *  3. Nothing here stores an amount or a recipient any more. The relayer keeps
+ *     a receipt ANCHOR — signature, flow, actor, time, verified_on_chain — which
+ *     is all the receipt UI needs and all ActivityDrawer promises its users
+ *     ("never the amount or the recipient"). See schema.sql.
  *
  * Deliberate limitations, stated so nobody mistakes this for hardened infra:
  *  - The token is a shared secret embedded in the client bundle, so it deters
- *    scanners and casual abuse, not a determined attacker. Real auth needs a
- *    per-user session the client can't forge.
+ *    scanners and casual abuse, not a determined attacker. It now protects only
+ *    the spending endpoints; the data endpoints are identity-signed. A leaked
+ *    token is a capped faucet drain (see the /fund caps), not a privacy breach.
  *  - Rate limits are per-process and in-memory: they reset on redeploy and do
  *    not coordinate across machines. Run one machine.
  *  - Program-ID validation parses the v1 message's static account keys. If the
@@ -56,6 +76,12 @@ const ENFORCE_PROGRAMS = process.env.RELAYER_ENFORCE_PROGRAMS !== '0'
 // flow of a relayed tx: registration touches the registry, a shield does not.
 const POOL_PROGRAM = 'sppU489D7A4U1exNo1oeMGZtLEofq3a6o2fR7UeoWB6'
 const REGISTRY_PROGRAM = 'regyS5rkAcw2YzDJCmTwCTHs2s246FXxbmuRZ42u2PD'
+
+// Signed-data proof prefixes. MUST match src/lib/identityProof.js — these strings
+// are the whole wire contract between the app and this verification.
+const REPORT_PREFIX = 'vanta-report:'
+const HISTORY_PREFIX = 'vanta-history:'
+const PROOF_MAX_AGE_MS = 5 * 60 * 1000
 
 // Programs the relayer is willing to co-sign for. Anything else is refused.
 const ALLOWED_PROGRAMS = (
@@ -184,6 +210,29 @@ function staticAccountKeysFromV1Message(msg) {
   return keys
 }
 
+// ── Per-identity proofs ───────────────────────────────────────────
+/**
+ * True when `signature` (base58, 64 bytes) is a valid Ed25519 signature of
+ * `message` by `address` (base58, 32 bytes). Never throws.
+ */
+function verifyProof(address, message, signature) {
+  if (!address || !signature) return false
+  try {
+    const publicKey = Buffer.from(bs58Decode(String(address)))
+    const sigBytes = Buffer.from(bs58Decode(String(signature)))
+    if (publicKey.length !== 32 || sigBytes.length !== 64) return false
+    return db.verifyEd25519(publicKey, message, sigBytes)
+  } catch {
+    return false
+  }
+}
+
+/** A proof timestamp must be recent, so a captured one expires. */
+function isFreshTs(ts) {
+  const value = Number(ts)
+  return Number.isFinite(value) && Math.abs(Date.now() - value) <= PROOF_MAX_AGE_MS
+}
+
 // ── In-memory per-IP sliding window for /fund ─────────────────────
 const fundWindows = new Map()
 let globalFundLamports = 0
@@ -273,20 +322,20 @@ app.post('/relay', requireToken, async (req, res) => {
   try {
     const { message, slots } = req.body
     if (!message || !Array.isArray(slots) || slots.length === 0) {
-      return res.status(400).json({ error: 'Expected { message: base64, slots: [{addr, sig}] }' })
+      return res.status(400).json({ ok: false, error: 'Expected { message: base64, slots: [{addr, sig}] }' })
     }
     if (slots.length > 8) {
-      return res.status(400).json({ error: 'Too many signer slots' })
+      return res.status(400).json({ ok: false, error: 'Too many signer slots' })
     }
 
     const msgBytes = new Uint8Array(Buffer.from(message, 'base64'))
     if (msgBytes.length === 0 || msgBytes.length > 1400) {
-      return res.status(400).json({ error: 'Message size out of range' })
+      return res.status(400).json({ ok: false, error: 'Message size out of range' })
     }
 
     // The relayer must be the fee payer, or it has no reason to co-sign.
     if (slots[0].addr !== RELAYER_ADDR) {
-      return res.status(400).json({ error: 'Relayer must be the fee payer (slot 0)' })
+      return res.status(400).json({ ok: false, error: 'Relayer must be the fee payer (slot 0)' })
     }
 
     // Only relay for the programs Vanta actually uses. The parsed key list is
@@ -298,7 +347,7 @@ app.post('/relay', requireToken, async (req, res) => {
         touchedPrograms = keys.filter((k) => allowedProgramSet.has(k))
         if (touchedPrograms.length === 0) {
           console.warn(`  ✗ refused: no allowlisted program among ${keys.length} static keys`)
-          return res.status(400).json({ error: 'Transaction does not touch an allowed program' })
+          return res.status(400).json({ ok: false, error: 'Transaction does not touch an allowed program' })
         }
       } catch (err) {
         // Fail open: a parser bug must not brick the demo. See the header note.
@@ -322,7 +371,7 @@ app.post('/relay', requireToken, async (req, res) => {
       throw new Error(`Unfilled slot for ${addr} — not the relayer, refusing`)
     })
     if (!slots.some(({ addr, sig }) => addr === RELAYER_ADDR && !sig)) {
-      return res.status(400).json({ error: `Relayer ${RELAYER_ADDR} has no empty slot in this tx` })
+      return res.status(400).json({ ok: false, error: `Relayer ${RELAYER_ADDR} has no empty slot in this tx` })
     }
 
     // Assemble trailing-sig wire
@@ -369,31 +418,31 @@ app.post('/relay', requireToken, async (req, res) => {
 app.post('/fund', requireToken, async (req, res) => {
   try {
     const { address, amount } = req.body
-    if (!address) return res.status(400).json({ error: 'Missing address' })
+    if (!address) return res.status(400).json({ ok: false, error: 'Missing address' })
 
     let toPubkey
     try {
       toPubkey = new PublicKey(address)
     } catch {
-      return res.status(400).json({ error: 'Invalid address' })
+      return res.status(400).json({ ok: false, error: 'Invalid address' })
     }
 
     const requested = Number(amount ?? 0.05)
     if (!Number.isFinite(requested) || requested <= 0) {
-      return res.status(400).json({ error: 'Invalid amount' })
+      return res.status(400).json({ ok: false, error: 'Invalid amount' })
     }
     if (requested > MAX_FUND_SOL) {
-      return res.status(400).json({ error: `Amount exceeds per-request cap of ${MAX_FUND_SOL} SOL` })
+      return res.status(400).json({ ok: false, error: `Amount exceeds per-request cap of ${MAX_FUND_SOL} SOL` })
     }
     const lamports = Math.round(requested * LAMPORTS_PER_SOL)
 
     const ip = req.ip || req.socket?.remoteAddress || 'unknown'
     const slot = takeFundSlot(ip, lamports)
-    if (!slot.ok) return res.status(429).json({ error: slot.error })
+    if (!slot.ok) return res.status(429).json({ ok: false, error: slot.error })
 
     const balance = await connection.getBalance(relayerKeypair.publicKey)
     if (balance < lamports + 10000) {
-      return res.status(400).json({ error: `Relayer insufficient: ${balance / LAMPORTS_PER_SOL} SOL` })
+      return res.status(400).json({ ok: false, error: `Relayer insufficient: ${balance / LAMPORTS_PER_SOL} SOL` })
     }
 
     const tx = new Transaction().add(
@@ -409,6 +458,7 @@ app.post('/fund', requireToken, async (req, res) => {
     await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed')
     console.log(`Funded ${address.slice(0, 8)}... with ${requested} SOL`)
 
+    // No amount, no counterparty — the anchor is enough (AUDIT-2026-09-27 C2).
     recordSafe({
       signature: sig,
       status: 'confirmed',
@@ -417,8 +467,6 @@ app.post('/fund', requireToken, async (req, res) => {
       relayerFeePayer: RELAYER_ADDR,
       actors: [address],
       primaryActor: address,
-      amountAtomic: String(lamports),
-      counterparty: RELAYER_ADDR,
     })
 
     res.json({ ok: true, signature: sig, amount: requested })
@@ -473,13 +521,31 @@ async function lookupSignature(signature) {
 }
 
 /**
- * History for one address. Token-gated: this is a per-user data endpoint, and
- * leaving it open would expose who is using Vanta.
+ * History for one address.
+ *
+ * Identity-gated, not token-gated: the caller must sign with the very key whose
+ * history it is. A token would be useless here because the token ships in the
+ * APK — that is exactly how the amounts and recipients of Shadow sends used to
+ * be readable by anyone who unzipped the bundle (AUDIT-2026-09-27 C1).
+ *
+ * Auth is checked BEFORE the configured check so an unsigned request gets an
+ * honest 401 whether or not a database is attached.
  */
-app.get('/tx/:address', requireToken, async (req, res) => {
+app.get('/tx/:address', async (req, res) => {
+  const address = req.params.address
+  const { ts, sig } = req.query
+  if (!sig || !isFreshTs(ts)) {
+    return res.status(401).json({
+      ok: false,
+      error: 'This endpoint requires a recent signature by the key it reads (ts, sig)',
+    })
+  }
+  if (!verifyProof(address, `${HISTORY_PREFIX}${address}:${ts}`, sig)) {
+    return res.status(401).json({ ok: false, error: 'Proof signature does not match the requested address' })
+  }
   if (!db.isEnabled()) return res.json({ ok: true, configured: false, transactions: [] })
   try {
-    const transactions = await db.listTransactions(req.params.address, { limit: req.query.limit })
+    const transactions = await db.listTransactions(address, { limit: req.query.limit })
     res.json({ ok: true, configured: true, count: transactions.length, transactions })
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message })
@@ -491,42 +557,47 @@ app.get('/tx/:address', requireToken, async (req, res) => {
  * relayer (X pays its own fees), so this is how they reach the history — and it
  * is why they are stored as client-reported until the chain lookup confirms
  * them. `verified_on_chain` is the honest flag for the receipt UI.
+ *
+ * Identity-signed, and it carries no amount and no recipient (AUDIT C1/C2). The
+ * body is deliberately tiny: a signature, which flow it was, the address it
+ * belongs to, and a proof that the reporter holds that address's key.
  */
-app.post('/tx/report', requireToken, async (req, res) => {
+app.post('/tx/report', async (req, res) => {
+  const { signature, flow, actor, proof, intent } = req.body ?? {}
+  if (!signature || typeof signature !== 'string') {
+    return res.status(400).json({ ok: false, error: 'Missing signature' })
+  }
+  if (flow && !db.FLOWS.includes(flow)) {
+    return res.status(400).json({ ok: false, error: `Unknown flow '${flow}'` })
+  }
+  if (!actor || !proof) {
+    return res.status(401).json({ ok: false, error: 'A report must be signed by the address it is filed under' })
+  }
+  if (!verifyProof(actor, `${REPORT_PREFIX}${signature}:${actor}`, proof)) {
+    return res.status(401).json({ ok: false, error: 'Proof signature does not match actor' })
+  }
   if (!db.isEnabled()) return res.json({ ok: true, configured: false, stored: false })
-  try {
-    const { signature, flow, amount, counterparty, actor, intent } = req.body ?? {}
-    if (!signature || typeof signature !== 'string') {
-      return res.status(400).json({ error: 'Missing signature' })
-    }
-    if (flow && !db.FLOWS.includes(flow)) {
-      return res.status(400).json({ error: `Unknown flow '${flow}'` })
-    }
 
+  try {
     const onChain = await lookupSignature(signature)
 
-    // Attribution guard: only let the caller tag this row with an address that
-    // actually appears in the transaction. Otherwise anyone with the token could
-    // file a random tx under someone else's history.
-    let primaryActor = null
-    let verified = false
-    if (onChain) {
-      const claimed = actor && onChain.accounts.includes(actor) ? actor : null
-      primaryActor = claimed ?? onChain.accounts[0] ?? null
-      verified = true
-    } else if (actor) {
-      primaryActor = actor
+    // The proof says who is reporting; the chain says whether the claim is real.
+    // A transaction that does not include the signer is REFUSED rather than
+    // attributed to whoever its first signer happens to be — otherwise anyone
+    // could file a stranger's signature and plant a row in their history.
+    if (onChain && !onChain.accounts.includes(actor)) {
+      return res.status(403).json({ ok: false, error: 'That transaction does not involve the reporting address' })
     }
+    const verified = Boolean(onChain)
+    const primaryActor = actor
 
     await db.recordTransaction({
       signature,
       status: onChain ? 'confirmed' : 'submitted',
       flow: flow ?? null,
       flowSource: 'client',
-      actors: primaryActor ? [primaryActor] : [],
+      actors: [primaryActor],
       primaryActor,
-      amountAtomic: amount != null && amount !== '' ? String(amount) : null,
-      counterparty: counterparty ?? null,
       clientReport: intent ?? null,
       slot: onChain?.slot ?? null,
     })
@@ -593,16 +664,16 @@ app.get('/names/owned/:address', async (req, res) => {
  * arrive as base58 strings.
  */
 app.post('/names/claim', requireToken, async (req, res) => {
-  if (!db.isEnabled()) return res.status(503).json({ error: 'Name registry is not configured' })
+  if (!db.isEnabled()) return res.status(503).json({ ok: false, error: 'Name registry is not configured' })
   try {
     const { name: rawName, ownerAddress, signature, claimSignature, skrPaid } = req.body ?? {}
-    if (!ownerAddress) return res.status(400).json({ error: 'Missing ownerAddress' })
+    if (!ownerAddress) return res.status(400).json({ ok: false, error: 'Missing ownerAddress' })
 
     const problem = db.describeNameProblem(rawName)
-    if (problem) return res.status(400).json({ error: problem })
+    if (problem) return res.status(400).json({ ok: false, error: problem })
     const name = db.normalizeName(rawName)
 
-    if (!signature) return res.status(400).json({ error: 'Missing proof signature' })
+    if (!signature) return res.status(400).json({ ok: false, error: 'Missing proof signature' })
     const message = `vanta-name-claim:${name}`
 
     // bs58Decode returns a plain array; node:crypto wants Buffers, so coerce and
@@ -613,20 +684,20 @@ app.post('/names/claim', requireToken, async (req, res) => {
       publicKey = Buffer.from(bs58Decode(ownerAddress))
       sigBytes = Buffer.from(bs58Decode(signature))
     } catch (err) {
-      return res.status(400).json({ error: `Malformed proof input: ${err.message}` })
+      return res.status(400).json({ ok: false, error: `Malformed proof input: ${err.message}` })
     }
     if (publicKey.length !== 32) {
-      return res.status(400).json({ error: 'ownerAddress is not a 32-byte key' })
+      return res.status(400).json({ ok: false, error: 'ownerAddress is not a 32-byte key' })
     }
     if (sigBytes.length !== 64) {
-      return res.status(400).json({ error: 'Malformed proof signature' })
+      return res.status(400).json({ ok: false, error: 'Malformed proof signature' })
     }
     if (!db.verifyEd25519(publicKey, message, sigBytes)) {
-      return res.status(401).json({ error: 'Proof signature does not match ownerAddress' })
+      return res.status(401).json({ ok: false, error: 'Proof signature does not match ownerAddress' })
     }
 
     const result = await db.claimName({ name, ownerAddress, claimSignature, skrPaid })
-    if (!result.ok) return res.status(409).json({ error: result.error, code: result.code })
+    if (!result.ok) return res.status(409).json({ ok: false, error: result.error, code: result.code })
 
     console.log(`  ⟡ claimed @${name}.vanta for ${ownerAddress.slice(0, 8)}…`)
     res.json({ ok: true, handle: `${name}.vanta`, ...result.record })
@@ -634,6 +705,22 @@ app.post('/names/claim', requireToken, async (req, res) => {
     console.error('names/claim error:', err.message)
     res.status(500).json({ ok: false, error: err.message })
   }
+})
+
+// Unknown paths answer JSON, not Express's HTML `Cannot GET /x` page
+// (AUDIT-2026-09-27 L4). Two reasons it matters: every other surface of this
+// service is JSON, so a client that parses the body should never have to special
+// case one response shape; and an HTML error page leaks the framework and the
+// fact that path normalisation — not auth — is what rejected the request.
+app.use((req, res) => {
+  res.status(404).json({ ok: false, error: `Not found: ${req.method} ${req.path}` })
+})
+
+// Last-resort handler: a thrown route error must still be JSON, never the
+// default Express stack page.
+app.use((err, req, res, _next) => {
+  console.error('unhandled route error:', err?.message ?? err)
+  res.status(500).json({ ok: false, error: 'Internal error' })
 })
 
 // Bootstrap the schema before accepting traffic. A failure here is logged but

@@ -62,7 +62,11 @@ export const MODE_HONESTY = {
     ],
     onChain: {
       linkable: true,
-      note: 'The explorer shows the pool paying your recipient, and the amount. Your public wallet is absent from this leg, but your spend identity paid the fee.',
+      // True whether the recipient is a stranger or the user's own wallet: the
+      // old wording ("your public wallet is absent from this leg") was false for
+      // the Ghost-to-self case the beta test actually runs. `onChainNote()`
+      // sharpens this further once the receipt knows the counterparty.
+      note: 'The explorer shows the pool paying the recipient, and the amount. Your spend identity paid the fee, so your wallet is not the sender. When the recipient is your own public wallet, that payout is public by definition.',
     },
   },
 
@@ -127,6 +131,26 @@ export const RESIDUALS = [
   'The spend identity is the fee payer on every send and is reused, so someone you have paid can count your sends.',
   'A small pool makes amount and timing correlatable. Pool depth is the fix.',
 ]
+
+/**
+ * The on-chain note, adapted to who was actually paid.
+ *
+ * Ghost is the one mode whose static wording can go wrong: a Ghost send to your
+ * own public wallet makes "your public wallet is absent from this leg" false, and
+ * the beta test does exactly that (Ghost to self). Deriving the sentence from the
+ * counterparty keeps the receipt from contradicting the chain it links to.
+ *
+ * Deliberately dependency-free, like the rest of this file: `receiptPdf.js`
+ * imports the vocabulary and runs under plain Node.
+ */
+export function onChainNote(mode, { counterparty, wallet } = {}) {
+  if (mode === 'Ghost') {
+    if (counterparty && wallet && counterparty === wallet) {
+      return 'The explorer shows the pool paying this address, and the amount. This address is your own public wallet, so the payout is public to you and to everyone else. Your spend identity paid the fee.'
+    }
+  }
+  return MODE_HONESTY[mode]?.onChain?.note ?? null
+}
 
 /** Explorer link for a devnet signature, or null when a link would be misleading. */
 export function explorerLink(mode, signature) {

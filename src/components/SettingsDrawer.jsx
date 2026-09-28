@@ -23,9 +23,14 @@ export default function SettingsDrawer({
   loading,
   notify,
   mwaAccount,
+  inactiveWallet,
+  onSwitchWallet,
   onDisconnect,
   onConnect,
+  onBackup,
+  onRestore,
 }) {
+  const deviceActive = Boolean(wallet?.mwa) || Boolean(mwaAccount && !inactiveWallet)
   const engine = !zolanaReady
     ? { label: 'Starting', tone: 'text-amber-300 bg-amber-500/10 border-amber-500/20' }
     : registered
@@ -105,6 +110,41 @@ export default function SettingsDrawer({
           <span className="text-muted">＋</span>
         </button>
 
+        <button
+          onClick={() => {
+            playHaptic('tap')
+            onBackup?.()
+          }}
+          disabled={loading}
+          className={`${row} disabled:opacity-50`}
+        >
+          <span className="flex flex-col gap-0.5">
+            <span className="text-sm">Back up this device</span>
+            <span className="text-[10px] font-medium text-muted leading-snug">
+              Encrypt your shielded identity and in-app wallet into one text blob. Without it, a
+              reinstall loses the private balance for good.
+            </span>
+          </span>
+          <span className="text-muted">🔐</span>
+        </button>
+
+        <button
+          onClick={() => {
+            playHaptic('tap')
+            onRestore?.()
+          }}
+          disabled={loading}
+          className={`${row} disabled:opacity-50`}
+        >
+          <span className="flex flex-col gap-0.5">
+            <span className="text-sm">Restore from backup</span>
+            <span className="text-[10px] font-medium text-muted leading-snug">
+              Paste a backup from this or another phone to rebuild the same identity here.
+            </span>
+          </span>
+          <span className="text-muted">↺</span>
+        </button>
+
         <div className="w-full py-3.5 px-4 rounded-2xl bg-white/5 flex items-center justify-between gap-3">
           <span className="text-sm font-semibold text-white">Privacy engine</span>
           <span className={`text-[11px] font-bold px-2 py-1 rounded border ${engine.tone}`}>
@@ -116,7 +156,11 @@ export default function SettingsDrawer({
           <span className="flex flex-col gap-0.5 min-w-0">
             <span className="text-sm font-semibold text-white">Device wallet (MWA)</span>
             <span className="text-[10px] font-medium text-muted leading-snug">
-              {mwaAccount ? 'Connected — signs your public funds' : 'Not connected'}
+              {mwaAccount
+                ? deviceActive
+                  ? 'Connected — active, signs your public funds'
+                  : 'Connected — bound, not currently active'
+                : 'Not connected'}
             </span>
             {mwaAccount && (
               <span className="text-[10px] font-mono text-white/70 break-all">
@@ -146,6 +190,35 @@ export default function SettingsDrawer({
             </button>
           )}
         </div>
+
+        {/* Switching wallets is a pointer move: the wallet you leave keeps its
+            key and its funds, so nothing can be stranded by connecting or
+            switching. That was the H6 bug — connecting used to overwrite the
+            session key outright. */}
+        {inactiveWallet && (
+          <button
+            onClick={() => {
+              playHaptic('tap')
+              onSwitchWallet?.(inactiveWallet.mwa ? 'device' : 'session')
+            }}
+            disabled={loading}
+            className={`${row} disabled:opacity-50`}
+          >
+            <span className="flex flex-col gap-0.5 min-w-0">
+              <span className="text-sm">
+                Switch to {inactiveWallet.mwa ? 'device wallet' : 'in-app wallet'}
+              </span>
+              <span className="text-[10px] font-mono text-white/70 break-all">
+                {inactiveWallet.publicKey}
+              </span>
+              <span className="text-[10px] font-medium text-muted leading-snug">
+                Both wallets stay stored. Switching moves which one pays — switch back any time to
+                move funds out of the other.
+              </span>
+            </span>
+            <span className="shrink-0 text-accent">⇄</span>
+          </button>
+        )}
       </div>
 
       <div className="w-full rounded-2xl p-4 bg-black/40 border border-white/10 flex flex-col gap-3">
@@ -187,6 +260,10 @@ export default function SettingsDrawer({
         {mwaAccount
           ? 'Devnet build — unaudited, not for real funds. Your public funds are signed by your device wallet; Vanta stores only the shielded spending key.'
           : 'Devnet build — unaudited, not for real funds. Keys live in this browser’s localStorage only.'}
+        {' '}The shielded spending key is stored in plaintext so the in-app prover can read it; the
+        note and history stores are encrypted with a key derived from it, so their encryption
+        protects against a stray storage dump, not against anyone holding this device’s seed. Back
+        up before you wipe.
       </span>
     </Drawer>
   )

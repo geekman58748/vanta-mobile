@@ -107,18 +107,22 @@ export function verifyEd25519(publicKey, message, signature) {
 export async function recordTransaction(row) {
   const pool = getPool()
   if (!pool) return null
+  // Note the absence of an amount and a counterparty: the relayer records THAT
+  // a signature exists, which flow it was, who it is attributed to, and whether
+  // the chain confirms it. The money graph stays on the user's device
+  // (AUDIT-2026-09-27 C2). Adding them back here would recreate the leak even if
+  // no caller passes them, so the columns are dropped in schema.sql too.
   const {
     signature, status = 'submitted', error = null, flow = null,
     flowSource = 'relayer', relayerFeePayer = null, actors = [],
-    primaryActor = null, programs = [], amountAtomic = null,
-    counterparty = null, clientReport = null, slot = null,
+    primaryActor = null, programs = [], clientReport = null, slot = null,
   } = row
 
   const { rows } = await pool.query(
     `insert into transactions
        (signature, status, error, flow, flow_source, relayer_fee_payer,
-        actors, primary_actor, programs, amount_atomic, counterparty, client_report, slot)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        actors, primary_actor, programs, client_report, slot)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      on conflict (signature) do update set
        status         = excluded.status,
        error          = coalesce(excluded.error, transactions.error),
@@ -126,8 +130,6 @@ export async function recordTransaction(row) {
        flow_source    = excluded.flow_source,
        programs       = case when array_length(excluded.programs,1) > 0
                              then excluded.programs else transactions.programs end,
-       amount_atomic  = coalesce(excluded.amount_atomic, transactions.amount_atomic),
-       counterparty   = coalesce(excluded.counterparty, transactions.counterparty),
        client_report  = coalesce(excluded.client_report, transactions.client_report),
        slot           = coalesce(excluded.slot, transactions.slot),
        confirmed_at   = case when excluded.status = 'confirmed' then now()
@@ -135,7 +137,7 @@ export async function recordTransaction(row) {
      returning id`,
     [
       signature, status, error, flow, flowSource, relayerFeePayer,
-      actors, primaryActor, programs, amountAtomic, counterparty,
+      actors, primaryActor, programs,
       clientReport ? JSON.stringify(clientReport) : null, slot,
     ],
   )
@@ -180,7 +182,7 @@ export async function listTransactions(actor, { limit = 100 } = {}) {
   if (!pool) return []
   const { rows } = await pool.query(
     `select signature, status, error, flow, flow_source, verified_on_chain,
-            actors, primary_actor, programs, amount_atomic, counterparty,
+            actors, primary_actor, programs,
             client_report, slot, block_time, created_at, confirmed_at
        from transactions
       where primary_actor = $1 or $1 = any(actors)

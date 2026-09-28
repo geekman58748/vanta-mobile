@@ -9,6 +9,7 @@ import ReceiveDrawer from './components/ReceiveDrawer'
 import ReceiptDrawer from './components/ReceiptDrawer'
 import ActivityDrawer from './components/ActivityDrawer'
 import SettingsDrawer from './components/SettingsDrawer'
+import BackupDrawer from './components/BackupDrawer'
 import Onboarding from './components/Onboarding'
 import SuccessOverlay from './components/SuccessOverlay'
 // The Vanta mark, trimmed from the 1254px master to a 256px luminance+alpha PNG
@@ -21,11 +22,16 @@ import { copyText } from './lib/clipboard'
 import { shortAddr, splitLeadingGlyph } from './lib/format'
 import { TOKENS, SOL_MINT, SHIELD_FEE_RESERVE } from './lib/tokens'
 import { relayerFetch } from './lib/config'
-import { recordSend, lookupProof } from './lib/txHistory'
+import { recordSend, lookupProof, checkProof } from './lib/txHistory'
 import {
-  bytesToBase58, bytesToBase64, connectMwa, disconnectMwa, initMwa, isMwaAvailable,
-  serializeCompiledTx, signatureFromSignedTx, signAndSendTransactionWithMwa,
-  signTransactionWithMwa,
+  clearPendingShield, findLandedDeposit, loadPendingShield, readSlot, savePendingShield,
+} from './lib/pendingShield'
+import {
+  readSlots, readInactive, saveSessionWallet, saveDeviceWallet, activateSlot, clearSlots,
+} from './lib/walletStore'
+import {
+  bytesToBase58, connectMwa, disconnectMwa, initMwa, isMwaAvailable,
+  serializeCompiledTx, signAndSendTransactionWithMwa,
 } from './lib/mwa'
 
 // ── Runtime config (see .env.example) ────────────────────────────────
@@ -117,7 +123,72 @@ function shieldErrorMessage(err) {
   if (/failed to fetch|network|unknown host|load failed|fetch failed|client rpc|rpc/i.test(raw)) {
     return 'Could not reach the network. Check your connection and try again.'
   }
+  // Some errors are already addressed to the user and carry the action — the MWA
+  // path ones name the wallet, and an unknown outcome says what to check. Running
+  // those through the "Shield failed:" prefix buries the instruction.
+  if (err?.userFacing || err?.outcomeUnknown) return raw
   return `Shield failed: ${raw}`
+}
+
+// The one outcome the app must never round off. A wallet that never answers, or
+// a chain lookup that itself failed, is NOT evidence that the deposit did not
+// happen — the wallet may have broadcast it and lost the reply. Claiming failure
+// here invites a second Shield, so say what is true and what to do.
+function unknownOutcomeError(cause) {
+  const err = new Error(
+    'Your wallet did not reply, so this deposit is still unconfirmed. Check your private ' +
+    'balance before trying again — if it rose, the Shield did land.',
+    { cause },
+  )
+  err.outcomeUnknown = true
+  return err
+}
+
+// ── The wallet's reply vs. the chain ──────────────────────────────────────
+//
+// MWA's answer comes back over a localhost socket between the WebView and the
+// wallet app. While the wallet is in the foreground Android stops servicing it,
+// so a deposit can land on chain while its reply never arrives — and the Shield
+// button then sits on "Shielding…" until the 90s timeout, with no success
+// screen, no history row and a balance that only catches up on a manual reload.
+// The chain loses nothing: poll it in parallel and take the first answer.
+const CHAIN_WATCH_INTERVAL_MS = 2_000
+const CHAIN_WATCH_TIMEOUT_MS = 90_000
+
+async function raceWalletReply(walletReply, { depositor, sinceSlot }) {
+  let done = false
+  const watch = (async () => {
+    const deadline = Date.now() + CHAIN_WATCH_TIMEOUT_MS
+    while (!done && Date.now() < deadline) {
+      const landed = await findLandedDeposit({
+        rpcUrl: PUBLIC_RPC,
+        depositor,
+        sinceSlot,
+        notBeforeMs: Date.now() - 120_000,
+      })
+      if (done) return null
+      if (landed) return landed.signature
+      await new Promise((resolve) => setTimeout(resolve, CHAIN_WATCH_INTERVAL_MS))
+    }
+    return null
+  })()
+
+  try {
+    const winner = await Promise.race([
+      walletReply.then((sig) => sig),
+      watch.then((sig) => sig),
+    ])
+    if (winner) return winner
+    // The chain found nothing inside the window and the wallet has not answered
+    // yet — keep waiting on the wallet, whose rejection or timeout should be the
+    // error the user sees (shield's own reconciler checks the chain on the way
+    // out, so a lost reply still resolves rather than failing).
+    return walletReply
+  } finally {
+    // Stop the poll whichever way we resolved; otherwise it keeps hitting the
+    // RPC for the next 90 seconds after the Shield already finished.
+    done = true
+  }
 }
 
 export default function App() {
@@ -125,13 +196,12 @@ export default function App() {
   // effect. With a null first render the app painted the connect-wallet screen
   // for one frame on every reload before the effect restored the wallet and
   // bounced to the dashboard. That flash read as a glitch on returning visits.
-  const [wallet, setWallet] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('vanta-wallet') || 'null')
-    } catch {
-      return null
-    }
-  })
+  //
+  // Custody is two-slot (session + device) with an active pointer — see
+  // lib/walletStore.js. `wallet` is whichever slot is active; `inactiveWallet`
+  // is the other one, kept alive so its funds stay reachable.
+  const [wallet, setWallet] = useState(() => readSlots().wallet)
+  const [inactiveWallet, setInactiveWallet] = useState(() => readInactive())
   const [balance, setBalance] = useState(0)
   const [privateBalances, setPrivateBalances] = useState([])
   const [isPrivacyOn, setIsPrivacyOn] = useState(false)
@@ -171,6 +241,8 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false)
   const [leakOpen, setLeakOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [backupOpen, setBackupOpen] = useState(false)
+  const [backupMode, setBackupMode] = useState('export')
   const [receiptOpen, setReceiptOpen] = useState(false)
   const [receiptTxn, setReceiptTxn] = useState(null)
   // The action-confirmed overlay. Null when closed; otherwise the details of the
@@ -192,6 +264,30 @@ export default function App() {
   // instead of hitting a half-built engine.
   const engineReadyRef = useRef(Promise.resolve())
   const engineResolveRef = useRef(null)
+  // Incoming-credit watch. See the effect next to addTxn: `synced` arms it only
+  // after the first indexer sync has finished, and `armed` then swallows that
+  // first snapshot as the baseline — otherwise a cold start would "discover" the
+  // user's whole existing private balance and file it as one giant receipt.
+  // `expect` lists private-balance increases this app caused itself (a Shield is
+  // a deposit into your own private balance, not a payment received) — the effect
+  // consumes those entries instead of writing a receipt for them.
+  const incomingWatchRef = useRef({ synced: false, armed: false, totals: null, expect: [] })
+  // A pre-loaded Shield record is reconciled once, not on every render.
+  const pendingShieldCheckedRef = useRef(false)
+
+  // Registered BEFORE a local deposit runs, so it is already there when the
+  // balance moves — the effect may fire in a render that happens mid-await.
+  // Entries expire so an abandoned Shield cannot swallow a real payment later.
+  const expectPrivateCredit = (symbol, value) => {
+    const watch = incomingWatchRef.current
+    watch.expect = [...(watch.expect ?? []).filter((e) => Date.now() - e.at < 300_000), { symbol, value, at: Date.now() }]
+  }
+
+  const dropPrivateCreditExpectation = (symbol, value) => {
+    const watch = incomingWatchRef.current
+    const index = (watch.expect ?? []).findIndex((e) => e.symbol === symbol && Math.abs(e.value - value) < 1e-6)
+    if (index >= 0) watch.expect = watch.expect.filter((_, i) => i !== index)
+  }
 
   // ============================================================
   // ZOLANA CORE — client, keys, wallet persistence
@@ -328,6 +424,10 @@ export default function App() {
         cipher: zk.walletSnapshotCipher(shieldedKeypairRef.current),
       })
       refreshPrivateBalances()
+      // Arm the incoming-credit watch (see the effect by addTxn). Set after the
+      // sync, so the notes this sync just loaded become the baseline rather than
+      // a receipt.
+      incomingWatchRef.current.synced = true
       const found = walletRef.current.balances().length
       setStatus(found ? 'Private balance synced ✓' : 'Synced — no private notes found')
       setTimeout(() => setStatus(''), 3500)
@@ -346,11 +446,19 @@ export default function App() {
     try {
       const zk = await import('@heliuslabs/zolana')
       if (!shieldedKeypairRef.current) { setStatus('Engine not ready'); return }
+      // A rescan re-derives every note from the indexer, so the totals go to zero
+      // and come back. That is not a payment: re-arm the watch from scratch so
+      // the recovery is not filed as an incoming receipt.
+      incomingWatchRef.current = { synced: false, armed: false, totals: null }
       localStorage.removeItem('vanta-zwallet')
       walletRef.current = new zk.Wallet({ identity: shieldedKeypairRef.current.shieldedAddress() })
       setPrivateBalances([])
       console.log('[vanta] force resync — cleared local snapshot, rescanned from chain')
       await syncPrivate()
+      // The notes are only half of what can look wrong. A user presses this button
+      // because a number is stale, and the stale number is often the public one,
+      // so the resync asks for a fresh balance read too.
+      document.dispatchEvent(new Event('vanta:refresh-public'))
     } catch (err) {
       console.error('resync error:', err)
       setStatus('Resync failed: ' + (err?.message || err))
@@ -474,6 +582,13 @@ export default function App() {
   // ============================================================
   // WALLET CORE (localStorage)
   // ============================================================
+  // Re-read both slots after any custody change so the dashboard and Settings
+  // agree with storage without a reload.
+  const refreshWalletSlots = useCallback(() => {
+    setWallet(readSlots().wallet)
+    setInactiveWallet(readInactive())
+  }, [])
+
   const createWallet = useCallback(async () => {
     setLoading(true)
     setStatus('Generating wallet...')
@@ -481,8 +596,9 @@ export default function App() {
       const { Keypair } = await import('@solana/web3.js')
       const keypair = Keypair.generate()
       const data = { publicKey: keypair.publicKey.toBase58(), secretKey: Array.from(keypair.secretKey) }
-      localStorage.setItem('vanta-wallet', JSON.stringify(data))
-      setWallet(data)
+      const replaced = saveSessionWallet(data)
+      if (replaced) console.warn('[vanta] replaced in-app wallet parked:', replaced.publicKey)
+      refreshWalletSlots()
       setStatus('Wallet created!')
       await fetchBalance(data.publicKey)
       await initZolana(data)
@@ -490,18 +606,57 @@ export default function App() {
       setStatus('Error: ' + err.message)
     }
     setLoading(false)
-  }, [initZolana])
+  }, [initZolana, refreshWalletSlots])
 
-  const fetchBalance = useCallback(async (pubKey) => {
+  // Read-only balance lookup (no state write) — used by the custody guard, which
+  // needs the *outgoing* wallet's balance while the active one is unchanged.
+  const readBalance = useCallback(async (pubKey) => {
     try {
       const { Connection, PublicKey } = await import('@solana/web3.js')
       const conn = new Connection(PUBLIC_RPC, 'confirmed')
-      const bal = await conn.getBalance(new PublicKey(pubKey))
-      setBalance(bal / 1e9)
+      return (await conn.getBalance(new PublicKey(pubKey))) / 1e9
     } catch (err) {
-      console.error('Balance error:', err)
+      console.error('Balance read error:', err)
+      return null
     }
   }, [])
+
+  const fetchBalance = useCallback(async (pubKey) => {
+    const bal = await readBalance(pubKey)
+    if (bal !== null) setBalance(bal)
+  }, [readBalance])
+
+  // The public balance has no push channel: it was read once at boot. Without this,
+  // SOL that arrives from a faucet, the relayer's gas float or a Ghost payout stayed
+  // invisible until the app restarted, and the Shield sheet quoted (and sized its
+  // fee-aware Max from) a balance the chain disagreed with. Poll while visible,
+  // refresh on return to the foreground, and refresh on demand when Settings resyncs.
+  useEffect(() => {
+    const pubKey = wallet?.publicKey
+    if (!pubKey) return undefined
+    let cancelled = false
+    const refreshPublic = () => {
+      if (cancelled || document.visibilityState === 'hidden') return
+      fetchBalance(pubKey)
+    }
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      refreshPublic()
+      // Notes can land while the app is backgrounded, so the private side gets the
+      // same treatment as the public one.
+      syncPrivate()
+    }
+    refreshPublic()
+    const timer = setInterval(refreshPublic, 20_000)
+    document.addEventListener('visibilitychange', onVisible)
+    document.addEventListener('vanta:refresh-public', refreshPublic)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+      document.removeEventListener('vanta:refresh-public', refreshPublic)
+    }
+  }, [wallet?.publicKey, fetchBalance, syncPrivate])
 
   // ── Connect a real device wallet via MWA ────────────────────────────────
   // This becomes Vanta's public wallet: it funds Shielding and receives Ghosts.
@@ -513,19 +668,77 @@ export default function App() {
     try {
       const account = await connectMwa()
       const data = { publicKey: account.address, mwa: true, label: account.label ?? null }
-      localStorage.setItem('vanta-wallet', JSON.stringify(data))
-      setWallet(data)
+      // Binds the device slot and moves the pointer — the session key survives
+      // in its own slot (it used to be overwritten here, stranding its funds).
+      const previous = saveDeviceWallet(data)
+      refreshWalletSlots()
       setMwaAccount({ address: account.address, label: account.label ?? null })
       setStatus('Wallet connected')
       playHaptic('success')
       await fetchBalance(account.address)
       await initZolana(data)
+      // Name the funds we are leaving behind instead of switching silently.
+      if (previous?.secretKey && previous.publicKey !== data.publicKey) {
+        const stranded = await readBalance(previous.publicKey)
+        if (stranded > 0) {
+          notify(
+            `In-app wallet still holds ${stranded.toFixed(4)} SOL — kept safe, switch back in Settings to move it.`,
+            '⚠️',
+          )
+        }
+      }
     } catch (err) {
       setStatus('Connect failed: ' + (err?.message || err))
       console.error('MWA connect error:', err)
     }
     setLoading(false)
-  }, [fetchBalance, initZolana])
+    // `notify` is deliberately NOT in this list: it is declared further down this
+    // component, and naming it here would evaluate it during render — before its
+    // `const` exists — and throw "cannot access before initialization", which
+    // takes the whole app down. It is a stable useCallback([]) either way.
+  }, [fetchBalance, initZolana, readBalance, refreshWalletSlots])
+
+  // ── Switch the active public wallet ────────────────────────────────────
+  // A pointer move, not a re-bind: nothing is deleted, so the wallet you leave
+  // keeps its funds and can be switched back to at any time. The private side
+  // (identity X, encrypted notes) is keyed separately and does not move.
+  const switchWallet = useCallback(async (mode) => {
+    const next = activateSlot(mode)
+    if (!next) {
+      notify('That wallet is no longer available.', '⚠️')
+      refreshWalletSlots()
+      return
+    }
+    playHaptic('tap')
+    refreshWalletSlots()
+    setLoading(true)
+    setStatus('Switching wallet…')
+    try {
+      // The device wallet stays bound either way — only the pointer moved — so
+      // the MWA row keeps showing it. Re-authorize the grant so it can sign.
+      if (next.mwa) {
+        try {
+          const account = await connectMwa()
+          setMwaAccount({ address: account.address, label: account.label ?? null })
+        } catch (err) {
+          console.warn('Wallet switch re-auth failed:', err)
+          setMwaAccount((prev) => prev ?? { address: next.publicKey, label: next.label ?? null })
+          setStatus('Reconnect your device wallet to sign')
+        }
+      }
+      await fetchBalance(next.publicKey)
+      if (next.mwa) {
+        setStatus('Device wallet active')
+        notify('Now spending from your device wallet.', '🔁')
+      } else {
+        setStatus('In-app wallet active')
+        notify('Now spending from your in-app wallet.', '🔁')
+      }
+    } finally {
+      setLoading(false)
+    }
+    // Same reasoning as connectWalletMwa above: notify is declared later.
+  }, [fetchBalance, refreshWalletSlots])
 
   const disconnectWallet = useCallback(async () => {
     try {
@@ -533,10 +746,19 @@ export default function App() {
     } catch (err) {
       console.warn('MWA disconnect error:', err)
     }
-    localStorage.removeItem('vanta-wallet')
+    // Explicit user action → drop every wallet slot (including any parked
+    // copy). The private identity and its encrypted notes go too — and so does
+    // the history, which is encrypted for that identity and unreadable without
+    // it.
+    clearSlots()
     localStorage.removeItem('vanta-zwallet')
+    incomingWatchRef.current = { synced: false, armed: false, totals: null }
+    import('./lib/localHistory.js')
+      .then(({ clearHistory }) => clearHistory())
+      .catch(() => {})
     setMwaAccount(null)
     setWallet(null)
+    setInactiveWallet(null)
     setBalance(0)
     setPrivateBalances([])
     setVantaAddress(null)
@@ -657,15 +879,27 @@ export default function App() {
     setStatus(`🛡️ Shielding ${amount} ${tokenInfo.symbol}...`)
     const before = privateStateSignature()
 
-    // The relayer fee-pays every deposit, in-app AND device-wallet: the wallet
-    // signs only as depositor — sign-only MWA, relayer cosigns slot 0 and
-    // broadcasts. The wallet→pool edge stays visible (depositor must sign), but
-    // a tracker starting from the recipient side lands on the relayer as fee
-    // payer, never on the user's wallet as the tx initiator.
+    // ⚠ DO NOT put the relayer back in this branch (trialed 2026-09-27 → 09-28).
+    // With the relayer as fee payer the deposit needs TWO signatures, and the
+    // wallet's one has to be lifted back out of whatever payload it returns.
+    // On a real phone that payload's signature did not verify against the
+    // message we relay (Solflare, devnet, 3/3 attempts): every Shield died as
+    // the RPC's nameless "Transaction did not pass signature verification",
+    // which names no signer and points at nothing. Worse, the relayer's only
+    // check is `length === 64`, so 64 bytes of not-a-signature passed the client,
+    // passed the relayer, and only failed on chain.
+    //
+    // Sign-and-send costs the device wallet its own ~5,000 lamports of fee and
+    // leaves it as the deposit's initiator. That is a real disclosure, but the
+    // deposit is public by design (it names the depositor and the amount — see
+    // HANDOFF §9), the relayer is out of the trust path entirely, and this is the
+    // shape that was verified on a physical phone on 2026-09-26. The in-app
+    // wallet — whose seed this app holds, so it can sign a slot we asked for —
+    // keeps the relayer-sponsored fee payer below.
     const useMwa = !!wallet.mwa
     const depositParams = {
       client,
-      feePayer: relayerAddressRef.current,
+      feePayer: useMwa ? wallet.publicKey : relayerAddressRef.current,
       depositor: wallet.publicKey,
       recipient: shieldedKeypairRef.current.shieldedAddress(),
       amount: rawAmount,
@@ -685,45 +919,102 @@ export default function App() {
     }
 
     const deposit = await zk.buildDepositTransaction(depositParams)
+
+    // Written down BEFORE anything is broadcast and cleared only once the outcome
+    // is known. If the wallet's reply is lost — or the page does not survive it —
+    // this is what lets the deposit be found on chain instead of reported as a
+    // failure it never was. See lib/pendingShield.js.
+    const sinceSlot = await readSlot(PUBLIC_RPC)
+    savePendingShield({ amount, symbol: tokenInfo.symbol, depositor: wallet.publicKey, sinceSlot })
+
     let sig
-    if (useMwa) {
-      // Relayer fee-pays; the device wallet signs ONLY as depositor (sign-only
-      // MWA — it is never asked to authorize a fee it does not pay). The relayer
-      // fills its own slot and broadcasts, so the wallet never appears as fee
-      // payer and never broadcasts the tx itself.
-      const { bytes, order, v1 } = serializeCompiledTx(deposit)
-      const signed = await signTransactionWithMwa(bytes)
-      const walletSlot = order.indexOf(wallet.publicKey)
-      const presigned = new Map([
-        [wallet.publicKey, bytesToBase64(signatureFromSignedTx(signed, walletSlot, v1))],
-      ])
-      sig = await relayTx(kit, client, deposit, [], presigned)
-    } else {
-      sig = await relayTx(kit, client, deposit, [
-        { address: wallet.publicKey, seed: new Uint8Array(wallet.secretKey.slice(0, 32)) },
-      ])
+    try {
+      if (useMwa) {
+        // One signer (the wallet is depositor AND fee payer), so it signs the whole
+        // deposit and broadcasts it itself — Vanta never sees the key, and there is
+        // no foreign signature to recover from its reply.
+        const { bytes } = serializeCompiledTx(deposit)
+        // Whichever arrives first: the wallet's signature, or the deposit itself
+        // landing on chain. See raceWalletReply.
+        sig = await raceWalletReply(
+          signAndSendTransactionWithMwa(bytes).then(bytesToBase58),
+          { depositor: wallet.publicKey, sinceSlot },
+        )
+      } else {
+        sig = await relayTx(kit, client, deposit, [
+          { address: wallet.publicKey, seed: new Uint8Array(wallet.secretKey.slice(0, 32)) },
+        ])
+      }
+    } catch (err) {
+      // The call failed. That is not the same as the deposit not happening: the
+      // wallet can broadcast and lose its answer, and a relay can answer with an
+      // error for a transaction the node already has. Ask the chain.
+      let landed
+      try {
+        landed = await findLandedDeposit({
+          rpcUrl: PUBLIC_RPC,
+          depositor: wallet.publicKey,
+          sinceSlot,
+          notBeforeMs: Date.now() - 120_000,
+        })
+      } catch (lookupErr) {
+        // The lookup failed, which tells us nothing either way. Leave the record
+        // alone so the next load can try again.
+        console.warn('[vanta] could not check the chain for this deposit:', lookupErr?.message ?? lookupErr)
+        throw unknownOutcomeError(err)
+      }
+      if (!landed) {
+        // The chain is the authority: nothing of ours landed, so this really did
+        // fail and the record has no business surviving.
+        clearPendingShield()
+        throw err
+      }
+      console.warn('[vanta] wallet reply lost — the deposit is on chain anyway:', landed.signature)
+      sig = landed.signature
     }
-    const slot = await client.confirmTransaction(sig)
-    await syncAfterSend(slot, zk, before)
-    await fetchBalance(wallet.publicKey)
-    // Shield is the one flow the relayer fee-pays, so it already owns a row with
-    // flow_source='relayer'. Re-posting this signature would upsert that back to
-    // 'client' and erase the fact that the relayer observed it directly, so this
-    // only re-reads the server's verdict.
-    await recordSend({
-      signature: sig,
-      mode: 'Shield',
-      // `amount` here, not `amt` — the parameter is `amount`. This was `amt`,
-      // a ReferenceError thrown AFTER the deposit already confirmed on chain:
-      // the user saw their wallet debited and the private balance rise, but no
-      // history row and no confirmation, because the throw skipped both.
-      amount,
-      decimals: tokenInfo.decimals,
-      actor: wallet.publicKey,
-      addresses: [wallet.publicKey, signerRef.current?.address],
+    clearPendingShield()
+
+    // ── Everything below is bookkeeping, and it runs in the background ──
+    // The deposit is on chain the moment we hold its signature. The success
+    // screen, the history row and the balance are what the user is waiting for,
+    // and none of them may wait on a confirm round-trip, on the private-balance
+    // settle (up to ~20s of retries by design), or on a relayer report that took
+    // ~10s to answer on its own status endpoint. Holding the receipt hostage to
+    // them is what left a CONFIRMED Shield staring at a spinner with no row and a
+    // stale balance until the page was reloaded by hand.
+    ;(async () => {
+      const slot = await client.confirmTransaction(sig)
+      await syncAfterSend(slot, zk, before)
+      await fetchBalance(wallet.publicKey)
+      // Shield history: the relayer observed this one only when it paid for it.
+      // A device-wallet Shield never touches the relayer, so it has to be reported
+      // like a Shadow — otherwise the row exists only on this device and its
+      // receipt can never say "On chain". `actor` is the shielded identity, whose
+      // seed is here, so the report can be signed without a phone approval prompt.
+      await recordSend({
+        signature: sig,
+        mode: 'Shield',
+        actor: signerRef.current?.address,
+        addresses: [signerRef.current?.address],
+        relayerObserved: !useMwa,
+      })
+    })().catch((err) => {
+      // The money moved, so this is never a Shield failure: the row and the
+      // success screen are already up. Report it as a receipt problem and force
+      // both balances so nothing depends on the user finding the refresh gesture.
+      //
+      // Deliberately `setStatus`, not `notify`: `notify` is declared further down
+      // this file, so naming it in this callback's deps array is a temporal-dead-
+      // zone crash on every render (it was, and it blanked the app). `setStatus`
+      // is the stable setter and drives the same banner.
+      console.warn('[vanta] Shield landed but bookkeeping failed:', err?.message ?? err)
+      setStatus('🛡️ Shield landed. Your receipt could not be attached yet — it will be attached on the next refresh.')
+      fetchBalance(wallet.publicKey).catch(() => {})
+      syncPrivate().catch(() => {})
     })
+
     return sig
-  }, [wallet, fetchBalance, refreshPrivateBalances, privateStateSignature, syncAfterSend])
+  }, [wallet, fetchBalance, privateStateSignature, syncAfterSend, syncPrivate])
 
   // ============================================================
   // SHADOW SEND — private → private (Vanta to Vanta)
@@ -755,12 +1046,11 @@ export default function App() {
     // The relayer never sees a Shadow (X pays its own fee), so this report is the
     // only route its signature takes into the history — and the only way a
     // receipt can say "confirmed" instead of "your device says so".
+    // No amount, no recipient: the relayer is told a signature exists and asked
+    // whether it landed, nothing more. Those two facts stay on this device.
     await recordSend({
       signature: sig,
       mode: 'Shadow',
-      amount,
-      decimals,
-      counterparty: recipient,
       actor: signerRef.current.address,
       addresses: [signerRef.current.address],
     })
@@ -799,9 +1089,6 @@ export default function App() {
     await recordSend({
       signature: sig,
       mode: 'Ghost',
-      amount,
-      decimals,
-      counterparty: recipient,
       actor: signerRef.current.address,
       addresses: [signerRef.current.address],
     })
@@ -840,9 +1127,6 @@ export default function App() {
     await recordSend({
       signature: sig,
       mode: 'Public',
-      amount,
-      decimals: 9,
-      counterparty: recipient,
       actor: wallet.publicKey,
       addresses: [wallet.publicKey],
     })
@@ -855,10 +1139,10 @@ export default function App() {
   useEffect(() => {
     initMwa()
     setMwaAvailable(isMwaAvailable())
-    const saved = localStorage.getItem('vanta-wallet')
-    if (!saved) return
-    const data = JSON.parse(saved)
+    const data = readSlots().wallet
+    if (!data) return
     setWallet(data)
+    setInactiveWallet(readInactive())
     fetchBalance(data.publicKey)
     // A saved device-wallet connection re-authorizes from the cached grant when
     // the wallet still holds it; otherwise this resolves on the next connect.
@@ -960,6 +1244,110 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [status])
 
+  // ── History persistence ──────────────────────────────────────────────
+  // Rows are written to an encrypted on-device store so Activity and its
+  // receipts survive a restart (AUDIT-2026-09-27 H1 — they used to live in React
+  // state only and vanished on every reload while the relayer kept the anchors).
+  // It is also the only place an amount or a recipient is kept at all now that
+  // the relayer stores neither (C2).
+  //
+  // `historyLoaded` is the guard that matters: persisting before hydration would
+  // write the empty initial state over the real history on every cold start.
+  const [historyLoaded, setHistoryLoaded] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    // Lazy import: the cipher is not needed for the first paint. If the identity
+    // does not exist yet, loadHistory returns [] without touching the store.
+    import('./lib/localHistory.js')
+      .then(({ loadHistory }) => {
+        if (cancelled) return
+        const rows = loadHistory()
+        if (rows.length) setTransactions((prev) => (prev.length ? prev : rows))
+      })
+      .catch((err) => console.warn('[history] hydrate failed:', err?.message ?? err))
+      .finally(() => {
+        if (!cancelled) setHistoryLoaded(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!historyLoaded) return
+    import('./lib/localHistory.js')
+      .then(({ saveHistory }) => saveHistory(transactions))
+      .catch((err) => console.warn('[history] persist failed:', err?.message ?? err))
+  }, [transactions, historyLoaded])
+
+  // ── A Shield from before this page load ────────────────────────────────
+  // The reconcile inside `shield` covers a lost wallet reply while the page is
+  // alive. This covers the same failure when the page did not survive it — a
+  // reload, a pull-to-refresh, or Android reclaiming the WebView. On 2026-09-28
+  // exactly that pairing left a real 0.05 SOL deposit with no row at all: the
+  // money was on chain, the private balance had risen, and Activity said "No
+  // transactions yet". The record outlives the page, so the deposit gets its row
+  // and its receipt instead of vanishing.
+  //
+  // Gated on `vantaAddress`: that is set once the shielded identity exists, which
+  // is what the relayer report needs to be signed.
+  useEffect(() => {
+    if (!vantaAddress || pendingShieldCheckedRef.current) return
+    const pending = loadPendingShield()
+    if (!pending) return
+    pendingShieldCheckedRef.current = true
+    let cancelled = false
+    ;(async () => {
+      try {
+        const landed = await findLandedDeposit({
+          rpcUrl: PUBLIC_RPC,
+          depositor: pending.depositor,
+          sinceSlot: pending.sinceSlot,
+          // A minute of slack on the record's own timestamp: the deposit is sent
+          // after it is written, so its block time is always later.
+          notBeforeMs: (pending.at ?? 0) - 60_000,
+        })
+        if (cancelled) return
+        clearPendingShield()
+        if (!landed) {
+          console.log('[vanta] pending Shield did not land — nothing to restore')
+          return
+        }
+        console.log('[vanta] restored a pending Shield from chain:', landed.signature)
+        // Same reservation as a live Shield: the note this deposit created is
+        // ours, so the credit watch must not file it as a payment received.
+        expectPrivateCredit(pending.symbol, pending.amount)
+        addTxn(
+          `Shielded ${pending.amount} ${pending.symbol}`,
+          `+${pending.amount} ${pending.symbol}`,
+          'income',
+          true,
+          {
+            mode: 'Shield',
+            symbol: pending.symbol,
+            value: pending.amount,
+            signature: landed.signature,
+            status: 'Confirmed',
+          },
+        )
+        notify(`Your earlier Shield of ${pending.amount} ${pending.symbol} did land — receipt restored.`, '🛡️')
+        await recordSend({
+          signature: landed.signature,
+          mode: 'Shield',
+          actor: signerRef.current?.address,
+          addresses: [signerRef.current?.address],
+          relayerObserved: false,
+        })
+      } catch (err) {
+        // Nothing here may break the app: the balance sync is the real source of
+        // truth and it has already run.
+        console.warn('[vanta] pending Shield could not be reconciled:', err?.message ?? err)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [vantaAddress])
+
   const addTxn = (title, amount, type, isPrivate, meta = {}) => {
     setTransactions(prev => [
       {
@@ -980,9 +1368,88 @@ export default function App() {
     ])
   }
 
+  // ── Incoming private credits ──────────────────────────────────────────
+  // A Shadow send used to be invisible on the receiving side: the notes landed,
+  // the private balance rose, and Activity stayed empty (the 2026-09-27 audit
+  // filled a counterparty wallet and found zero rows on it). Which makes the
+  // two-party story — the reason a handle and a private address exist — the one
+  // thing the app could not show.
+  //
+  // The sync path already produces the only signal there is: spendable private
+  // totals per mint. A credit is a strictly positive delta after a sync. There is
+  // deliberately no signature on such a row — a note is found by scanning the
+  // pool, not by following a link, so the sender's transaction is not known to
+  // this device and inventing a reference would be a lie on a receipt.
+  useEffect(() => {
+    const watch = incomingWatchRef.current
+    const synced = watch.synced
+    const next = Object.fromEntries(privateBalances.map((row) => [row.symbol, row.amount]))
+    if (!synced) return
+    if (!watch.armed) {
+      watch.armed = true
+      watch.totals = next
+      return
+    }
+    const before = watch.totals ?? {}
+    watch.totals = next
+    for (const [symbol, amount] of Object.entries(next)) {
+      const delta = Number(amount) - Number(before[symbol] ?? 0)
+      if (delta > 1e-9) {
+        const rounded = Number(delta.toFixed(6))
+        // A deposit this app just made into its own private balance is not a
+        // payment received. Caught live on 2026-09-28: a single 0.05 Shield
+        // produced a phantom "Received 0.05 SOL privately" row, which would put
+        // a lie on a receipt.
+        const expected = (watch.expect ?? []).findIndex(
+          (e) => e.symbol === symbol && Math.abs(e.value - rounded) < 1e-6 && Date.now() - e.at < 300_000,
+        )
+        if (expected >= 0) {
+          watch.expect = watch.expect.filter((_, i) => i !== expected)
+          continue
+        }
+        addTxn(`Received ${rounded} ${symbol} privately`, `+${rounded} ${symbol}`, 'income', true, {
+          mode: 'Shadow',
+          symbol,
+          value: rounded,
+          status: 'Confirmed',
+          incoming: true,
+        })
+        notify(`Received ${rounded} ${symbol} into your private balance`, '🎁')
+      }
+    }
+  }, [privateBalances, addTxn, notify])
+
   const openReceipt = (txn) => {
     setReceiptTxn(txn)
     setReceiptOpen(true)
+
+    // The receipt sheet only READS a cached proof key — it never queries
+    // anything. A row whose one report failed (history unreachable when it was
+    // recorded) therefore had no path back to "Confirmed on chain": it was
+    // grey for the life of the install while the transaction sat there
+    // confirmed. Ask now, and update the row so the open sheet upgrades in
+    // place instead of staying "Not checked".
+    // Logged because "why is this receipt still Not checked" cannot be answered
+    // from the sheet itself, and this only ever runs once per tap.
+    const cached = txn?.signature ? lookupProof(txn.signature) : 'no-signature'
+    console.log('[tx] receipt opened', {
+      sig: txn?.signature ? txn.signature.slice(0, 12) : null,
+      rowProof: txn?.proof ?? null,
+      cached,
+      signable: [vantaAddress, wallet?.publicKey].filter(Boolean).length,
+    })
+    if (!txn?.signature || txn?.proof || cached) return
+    checkProof(txn.signature, [vantaAddress, wallet?.publicKey])
+      .then((proof) => {
+        if (!proof) return
+        setTransactions((prev) =>
+          prev.map((t) => (t.signature === txn.signature ? { ...t, proof } : t)),
+        )
+        setReceiptTxn((current) =>
+          current?.signature === txn.signature ? { ...current, proof } : current,
+        )
+      })
+      .catch((err) => console.warn('[tx] receipt re-check failed:', err?.message ?? err))
   }
 
   const tokenBalance = (token) => {
@@ -1054,6 +1521,9 @@ export default function App() {
 
     playHaptic('tap')
     setLoading(true)
+    // Declared before the deposit runs: this is a balance increase we caused, so
+    // the incoming-credit watch must not file it as a payment received.
+    expectPrivateCredit(symbol, amt)
     try {
       const sig = await shield(amt, selectedToken)
       addTxn(`Shielded ${amt} ${symbol}`, `+${amt} ${symbol}`, 'income', true, {
@@ -1065,6 +1535,12 @@ export default function App() {
       })
       setSuccess({ kind: 'shield', amount: amt, symbol, signature: sig, mode: 'Shield' })
     } catch (err) {
+      // Drop the reservation only when we know the deposit did not happen —
+      // otherwise a real payment of the same size later would be swallowed as
+      // "ours". An UNKNOWN outcome is not that: the note may still be coming, and
+      // giving up the reservation here would file it as "Received … privately",
+      // a receipt for a payment the user made to themselves.
+      if (!err?.outcomeUnknown) dropPrivateCreditExpectation(symbol, amt)
       notify(shieldErrorMessage(err), '⚠️')
       console.error(err)
     }
@@ -1106,8 +1582,9 @@ export default function App() {
     },
   ]
 
-  // Session totals for the transactions header. History lives only in this
-  // browser, so this is "this session", not a fabricated all-time figure.
+  // Totals for the transactions header. History lives only on this device —
+  // encrypted, and readable only while the identity that wrote it exists — so
+  // these are "what this device remembers", not a fabricated all-time figure.
   const sessionIn = transactions
     .filter(t => t.type === 'income')
     .reduce((sum, t) => sum + (Number(t.value) || 0), 0)
@@ -1415,10 +1892,14 @@ export default function App() {
               <span className="font-mono text-[13px] tracking-widest text-white/90 font-semibold uppercase">
                 Today, {todayLabel}
               </span>
-              <div className="flex items-center gap-3 font-mono text-[13px]">
-                <span className="text-accent font-medium tnum">+{sessionIn.toFixed(3)}</span>
-                <span className="text-muted font-medium tnum">-{sessionOut.toFixed(3)}</span>
-              </div>
+              {/* Empty state stays empty: a "today" row of +0.000 / -0.000 with no
+                  activity reads as a broken number rather than a zero. */}
+              {transactions.length > 0 && (
+                <div className="flex items-center gap-3 font-mono text-[13px]">
+                  <span className="text-accent font-medium tnum">+{sessionIn.toFixed(3)}</span>
+                  <span className="text-muted font-medium tnum">-{sessionOut.toFixed(3)}</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1587,8 +2068,31 @@ export default function App() {
         loading={loading}
         notify={notify}
         mwaAccount={mwaAccount}
+        inactiveWallet={inactiveWallet}
+        onSwitchWallet={switchWallet}
         onDisconnect={disconnectWallet}
         onConnect={connectWalletMwa}
+        onBackup={() => {
+          setSettingsOpen(false)
+          setBackupMode('export')
+          setBackupOpen(true)
+        }}
+        onRestore={() => {
+          setSettingsOpen(false)
+          setBackupMode('import')
+          setBackupOpen(true)
+        }}
+      />
+
+      <BackupDrawer
+        open={backupOpen}
+        mode={backupMode}
+        notify={notify}
+        onClose={() => setBackupOpen(false)}
+        // A restored identity has to be re-derived (notes resync, keys reload),
+        // and every in-memory ref still points at the old one — a reload is both
+        // the simplest and the only honest way to finish the restore.
+        onRestored={() => setTimeout(() => window.location.reload(), 900)}
       />
     </div>
   )

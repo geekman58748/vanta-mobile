@@ -7,6 +7,34 @@ import { looksLikeVantaName, resolveVantaName } from '../lib/config'
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del']
 
+// zolana wraps the real failure. `wallet/transactions.ts` rethrows
+// WALLET_BUILD_TRANSFER *over* WALLET_RECIPIENT_NOT_REGISTERED, so the cause has
+// to be walked — matching only `err.message` is why the documented Ghost fallback
+// never fired on device (it surfaced a raw code instead).
+function isRecipientNotRegistered(err) {
+  let node = err
+  for (let depth = 0; depth < 5 && node; depth += 1) {
+    if (/RECIPIENT_NOT_REGISTERED/.test(String(node?.message ?? node))) return true
+    node = node?.cause
+  }
+  return false
+}
+
+// Every send failure that reaches a user should say what to do about it. Raw
+// SDK codes (WALLET_BUILD_TRANSFER) are translated, and actionable errors are
+// passed through untouched.
+function friendlySendError(err) {
+  const raw = String(err?.cause?.message || err?.message || err)
+  if (/timed out/i.test(raw)) return raw
+  if (/WALLET_BUILD_TRANSFER|RECIPIENT_NOT_REGISTERED|not registered/i.test(raw)) {
+    return 'That address has no shielded balance to receive into. Send it as a Ghost (any public wallet can receive), or ask them for a Vanta address from their Receive screen.'
+  }
+  if (/insufficient|0x1$|debit an account/i.test(raw)) {
+    return 'Not enough in the source balance to cover the amount plus the network fee.'
+  }
+  return `Send failed: ${raw}`
+}
+
 // The keypad send sheet from gemini-code-1789825749253.html (pressKey rules kept
 // intact: one decimal point, no leading zeros, backspace floors at "0"), wired to
 // Vanta's existing shadowSend / ghostSend / sendSol callbacks.
@@ -32,12 +60,17 @@ export default function SendDrawer({
   // Handle lookup: a `.vanta` recipient is a lookup, not a key. Resolved first,
   // used only when confirmed — never optimistically.
   const [lookup, setLookup] = useState({ state: 'idle' })
+  // Nothing that changes the privacy level happens silently. A Shadow send that
+  // would have to become a Ghost, or a plain public transfer, stops here and asks.
+  // Shape: { kind: 'ghost' | 'public', to, amount }.
+  const [pending, setPending] = useState(null)
 
   useEffect(() => {
     if (open) {
       setValue('0')
       setSending(false)
       setLookup({ state: 'idle' })
+      setPending(null)
     }
   }, [open])
 
@@ -136,14 +169,14 @@ export default function SendDrawer({
           title = `Shadow → ${shortAddr(to)}`
           notify('Shadow send complete — amount and counterparty hidden.', '🕳️')
         } catch (err) {
-          // Recipient not in the privacy registry → fall back to ghost send
-          const msg = String(err?.message || err)
-          if (!msg.includes('RECIPIENT_NOT_REGISTERED')) throw err
-          console.log('Recipient not registered → falling back to ghost send')
-          sig = await ghostSend(to, amount, selectedToken)
-          mode = 'Ghost'
-          title = `Ghost → ${shortAddr(to)}`
-          notify('Recipient not registered — ghost sent. Pool, not you.', '👻')
+          // Recipient not in the privacy registry → stop and ask, do not downgrade
+          // the privacy level on the user's behalf.
+          if (isRecipientNotRegistered(err)) {
+            setPending({ kind: 'ghost', to, amount })
+            setSending(false)
+            return
+          }
+          throw err
         }
       } else {
         sig = await ghostSend(to, amount, selectedToken)
@@ -165,23 +198,16 @@ export default function SendDrawer({
       setValue('0')
       onClose()
     } catch (err) {
-      notify('Failed: ' + (err?.message || err), '⚠️')
+      notify(friendlySendError(err), '⚠️')
       console.error(err)
     }
     setSending(false)
   }
 
-  const handlePublicSend = async () => {
-    if (invalidRecipient()) return
-    const amount = parseFloat(value)
-    if (!amount || amount <= 0) {
-      notify('Enter an amount', '⚠️')
-      return
-    }
-
+  /** A plain public transfer: your wallet is the sender and the amount is public. */
+  const sendPublicNow = async (to, amount) => {
     setSending(true)
     try {
-      const to = sendTo()
       const sig = await sendSol(to, amount)
       addTxn(`Sent → ${shortAddr(to)}`, `-${amount} SOL`, 'expense', false, {
         mode: 'Public',
@@ -196,9 +222,58 @@ export default function SendDrawer({
       setValue('0')
       onClose()
     } catch (err) {
-      notify('Failed: ' + (err?.message || err), '⚠️')
+      notify(friendlySendError(err), '⚠️')
     }
     setSending(false)
+  }
+
+  /** Public send is a privacy downgrade, so it asks first instead of firing. */
+  const handlePublicSend = () => {
+    if (invalidRecipient()) return
+    const amount = parseFloat(value)
+    if (!amount || amount <= 0) {
+      notify('Enter an amount', '⚠️')
+      return
+    }
+    playHaptic('tap')
+    setPending({ kind: 'public', to: sendTo(), amount })
+  }
+
+  /** Run whatever the user just confirmed. */
+  const confirmPending = async () => {
+    if (!pending) return
+    const { kind, to, amount } = pending
+    setPending(null)
+    if (kind === 'public') {
+      await sendPublicNow(to, amount)
+      return
+    }
+    setSending(true)
+    try {
+      const sig = await ghostSend(to, amount, selectedToken)
+      addTxn(`Ghost → ${shortAddr(to)}`, `-${amount} ${token.symbol}`, 'expense', true, {
+        mode: 'Ghost',
+        symbol: token.symbol,
+        value: amount,
+        signature: sig,
+        status: 'Confirmed',
+      })
+      playHaptic('success')
+      notify('Ghost send complete — the pool paid, not you.', '👻')
+      onSuccess?.({ mode: 'Ghost', amount, symbol: token.symbol, signature: sig, counterparty: to })
+      setRecipient('')
+      setValue('0')
+      onClose()
+    } catch (err) {
+      notify(friendlySendError(err), '⚠️')
+      console.error(err)
+    }
+    setSending(false)
+  }
+
+  const cancelPending = () => {
+    playHaptic('tap')
+    setPending(null)
   }
 
   const busy = sending || loading
@@ -302,22 +377,51 @@ export default function SendDrawer({
         ))}
       </div>
 
-      <button
-        onClick={handlePrivateSend}
-        disabled={busy}
-        className="w-full py-4 rounded-2xl bg-accent hover:bg-accent-hi font-bold text-black shadow-lg shadow-accent/20 active:scale-[0.98] tap text-base disabled:opacity-50"
-      >
-        {sending ? 'Proving...' : isPrivateMode ? '🕳️ Confirm Shadow Send' : '👻 Confirm Ghost Send'}
-      </button>
-
-      {!isPrivateMode && (
-        <button
-          onClick={handlePublicSend}
-          disabled={busy}
-          className="w-full py-3 rounded-2xl bg-white/10 border border-hair font-semibold text-muted hover:bg-white/20 active:scale-[0.98] tap text-sm disabled:opacity-50"
+      {pending ? (
+        <div
+          role="alert"
+          className="flex flex-col gap-3 p-4 rounded-2xl bg-danger/10 border border-danger/30"
         >
-          or send plain public SOL →
-        </button>
+          <span className="text-[12px] leading-snug text-danger font-semibold">
+            {pending.kind === 'ghost'
+              ? 'That address is not on Vanta yet, so this cannot be a Shadow send. A Ghost send pays them from the pool — but the amount and the recipient are public on-chain.'
+              : 'A public transfer shows your wallet as the sender and the amount on-chain. Anyone can read it.'}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={confirmPending}
+              className="flex-1 py-3 rounded-xl bg-danger/25 border border-danger/40 font-bold text-danger hover:bg-danger/35 active:scale-[0.98] tap text-sm"
+            >
+              {pending.kind === 'ghost' ? 'Send as Ghost' : 'Send publicly'}
+            </button>
+            <button
+              onClick={cancelPending}
+              className="flex-1 py-3 rounded-xl bg-white/10 border border-hair font-semibold text-muted hover:bg-white/20 active:scale-[0.98] tap text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <button
+            onClick={handlePrivateSend}
+            disabled={busy}
+            className="w-full py-4 rounded-2xl bg-accent hover:bg-accent-hi font-bold text-black shadow-lg shadow-accent/20 active:scale-[0.98] tap text-base disabled:opacity-50"
+          >
+            {sending ? 'Proving...' : isPrivateMode ? '🕳️ Confirm Shadow Send' : '👻 Confirm Ghost Send'}
+          </button>
+
+          {!isPrivateMode && (
+            <button
+              onClick={handlePublicSend}
+              disabled={busy}
+              className="w-full py-3 rounded-2xl bg-white/10 border border-hair font-semibold text-muted hover:bg-white/20 active:scale-[0.98] tap text-sm disabled:opacity-50"
+            >
+              or send plain public SOL →
+            </button>
+          )}
+        </>
       )}
     </Drawer>
   )

@@ -4,7 +4,10 @@
  *
  * Exercises the parts that are easy to get subtly wrong: schema bootstrap, the
  * Ed25519 name-claim proof, reserved-name enforcement, the one-name-per-identity
- * rule, and on-chain verification of a client-reported transaction.
+ * rule, on-chain verification of a client-reported transaction, and — since
+ * AUDIT-2026-09-27 C1/C2 — that history reads and writes are authenticated by the
+ * identity's own key rather than by the shared token, and that the relayer
+ * stores no amount and no counterparty.
  *
  * Usage:
  *   RELAYER_PORT=3999 RELAYER_TOKEN=testtoken node relayer/server.js &
@@ -13,7 +16,20 @@
  * Env: TEST_URL (default http://127.0.0.1:3999), TEST_TOKEN (default testtoken)
  */
 import { Keypair } from '@solana/web3.js'
+import { Pool } from 'pg'
 import crypto from 'node:crypto'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
+
+// Same env files the relayer loads, so cleanup can reach the same database.
+const __dirname = dirname(fileURLToPath(import.meta.url))
+for (const file of [join(__dirname, '.env'), join(__dirname, '..', '.env.local')]) {
+  try {
+    process.loadEnvFile(file)
+  } catch {
+    /* absent — fine */
+  }
+}
 
 const BASE = process.env.TEST_URL || 'http://127.0.0.1:3999'
 const TOKEN = process.env.TEST_TOKEN || 'testtoken'
@@ -64,6 +80,18 @@ const post = async (p, body, withAuth = true) => {
   return { status: r.status, body: await r.json().catch(() => null) }
 }
 
+// ── Identity proofs, mirrored from src/lib/identityProof.js ──────────
+const reportMessage = (signature, actor) => `vanta-report:${signature}:${actor}`
+const historyMessage = (address, ts) => `vanta-history:${address}:${ts}`
+const proof = (seed32, message) => b58encode(signEd25519(seed32, message))
+/** `{ts, sig}` query pair for a signed history read. */
+const readQuery = (address, seed32, ts = Date.now()) => ({
+  ts,
+  sig: proof(seed32, historyMessage(address, ts)),
+})
+const signedReadPath = (address, { ts, sig }) =>
+  `/tx/${encodeURIComponent(address)}?${new URLSearchParams({ ts: String(ts), sig })}`
+
 let failures = 0
 function check(label, condition, detail = '') {
   const mark = condition ? '✓' : '✗'
@@ -75,6 +103,11 @@ const owner = Keypair.generate()
 const ownerAddr = owner.publicKey.toBase58()
 // A second identity, used to prove the one-name-per-identity rule.
 const other = Keypair.generate()
+
+// Everything this run writes is suffixed, so re-running the harness never
+// collides with its own previous run (it used to fail with "that name is taken"
+// against rows it had left in the database minutes earlier).
+const runId = crypto.randomBytes(3).toString('hex')
 
 async function main() {
   console.log(`\n▸ Vanta relayer DB harness against ${BASE}\n`)
@@ -105,7 +138,7 @@ async function main() {
 
   // ── 3. Claim proof ────────────────────────────────────────────────
   console.log('\n3. Claim proof (Ed25519)')
-  const name = 'vantatest'
+  const name = `vanta-${runId}`
   const message = `vanta-name-claim:${name}`
 
   const forged = await post('/names/claim', {
@@ -118,7 +151,7 @@ async function main() {
   const realProof = b58encode(signEd25519(owner.secretKey.slice(0, 32), message))
   const claimed = await post('/names/claim', { name, ownerAddress: ownerAddr, signature: realProof })
   check('valid proof accepted', claimed.body?.ok === true, JSON.stringify(claimed.body))
-  check('handle returned', claimed.body?.handle === 'vantatest.vanta')
+  check('handle returned', claimed.body?.handle === `${name}.vanta`)
 
   const taken = await post('/names/claim', { name, ownerAddress: ownerAddr, signature: realProof })
   check('re-claim refused (409)', taken.status === 409, JSON.stringify(taken.body))
@@ -134,10 +167,11 @@ async function main() {
 
   // `other` is a *different* identity, so it may not claim a second name for an
   // address that already has one — the rule is per-address, not per-claimant.
+  const secondName = `vanta2-${runId}`
   const secondForSame = await post('/names/claim', {
-    name: 'vantasecond',
+    name: secondName,
     ownerAddress: ownerAddr,
-    signature: b58encode(signEd25519(owner.secretKey.slice(0, 32), 'vanta-name-claim:vantasecond')),
+    signature: b58encode(signEd25519(owner.secretKey.slice(0, 32), `vanta-name-claim:${secondName}`)),
   })
   check('one name per identity enforced', secondForSame.status === 409, JSON.stringify(secondForSame.body))
 
@@ -148,46 +182,99 @@ async function main() {
   })
   check('reserved claim refused', reservedClaim.status === 409, JSON.stringify(reservedClaim.body))
 
-  // ── 5. Transaction history (real devnet signature) ────────────────
+  // ── 5. Transaction history (identity-signed, no money graph) ──────
   console.log('\n5. Transaction history')
-  // A real Shield from HANDOFF.md §4.3, so the on-chain lookup has something to
-  // actually find.
+  const ownerSeed = owner.secretKey.slice(0, 32)
+  const otherSeed = other.secretKey.slice(0, 32)
+  // A real Shield from HANDOFF.md §4.3, so the on-chain lookup finds something.
   const realSig = '21sFAdV2GMBzfDpEehcZ9mfHxCsQdWqgQMyT2Fccjtn9nERrRBpAfjwwy1MtFcru15woFi9moerqDNBb2NmZcuEA'
-  const actor = '6NrEzXoaEzpxUuHERCtW46xKa3j41B2AAMG4R8a1zhDt'
+  // A syntactically valid 64-byte signature that certainly does not exist, and
+  // is different on every run so rows never collide between runs.
+  const fakeSig = b58encode(crypto.randomBytes(64))
 
-  const report = await post('/tx/report', {
+  // Writes: unsigned and forged reports are refused.
+  const unsigned = await post('/tx/report', { signature: realSig, flow: 'shield', actor: ownerAddr })
+  check('unsigned report refused (401)', unsigned.status === 401, JSON.stringify(unsigned.body))
+
+  const forgedReport = await post('/tx/report', {
     signature: realSig,
     flow: 'shield',
-    amount: '100000000',
-    actor,
-    intent: { kind: 'deposit', source: 'harness' },
+    actor: ownerAddr,
+    proof: proof(otherSeed, reportMessage(realSig, ownerAddr)),
   })
-  check('report accepted', report.body?.ok === true, JSON.stringify(report.body))
-  check('verified on-chain', report.body?.verified_on_chain === true)
+  check('forged report refused (401)', forgedReport.status === 401, JSON.stringify(forgedReport.body))
 
-  const badFlow = await post('/tx/report', { signature: realSig, flow: 'notaflow', actor })
+  // A real transaction may not be filed under an address that is not in it.
+  const notInvolved = await post('/tx/report', {
+    signature: realSig,
+    flow: 'shield',
+    actor: ownerAddr,
+    proof: proof(ownerSeed, reportMessage(realSig, ownerAddr)),
+  })
+  check('real tx not involving the reporter refused (403)', notInvolved.status === 403, JSON.stringify(notInvolved.body))
+
+  // The honest path: our own identity reports a signature the chain cannot find.
+  const reported = await post('/tx/report', {
+    signature: fakeSig,
+    flow: 'shadow',
+    actor: ownerAddr,
+    proof: proof(ownerSeed, reportMessage(fakeSig, ownerAddr)),
+    intent: { mode: 'Shadow' },
+  })
+  check('signed report accepted', reported.body?.ok === true, JSON.stringify(reported.body))
+  check('unverifiable report marked unverified', reported.body?.verified_on_chain === false)
+
+  const badFlow = await post('/tx/report', {
+    signature: fakeSig,
+    flow: 'notaflow',
+    actor: ownerAddr,
+    proof: proof(ownerSeed, reportMessage(fakeSig, ownerAddr)),
+  })
   check('unknown flow rejected', badFlow.status === 400, JSON.stringify(badFlow.body))
 
-  const fakeSig = await post('/tx/report', {
-    signature: 'HarnesstestSignatureThatDoesNotExist1111111111111111',
-    flow: 'shadow',
-    actor: 'someUnrelatedAddress11111111111111111111111111',
-  })
-  check('unverifiable report marked unverified', fakeSig.body?.verified_on_chain === false)
+  // Reads: signed by the key whose history it is — the shared token is not enough.
+  const unauth = await get(`/tx/${ownerAddr}`, false)
+  check('unsigned history read refused (401)', unauth.status === 401)
+  const tokenOnly = await get(`/tx/${ownerAddr}`)
+  check('shared token does not unlock history (401)', tokenOnly.status === 401)
 
-  const history = await get(`/tx/${actor}`)
-  const row = history.body?.transactions?.find((t) => t.signature === realSig)
+  const stale = await get(signedReadPath(ownerAddr, readQuery(ownerAddr, ownerSeed, Date.now() - 10 * 60 * 1000)))
+  check('stale proof refused (401)', stale.status === 401)
+
+  const forgedRead = await get(signedReadPath(ownerAddr, readQuery(ownerAddr, otherSeed)))
+  check('forged read proof refused (401)', forgedRead.status === 401)
+
+  const history = await get(signedReadPath(ownerAddr, readQuery(ownerAddr, ownerSeed)))
+  check('signed read accepted', history.status === 200, JSON.stringify(history.body)?.slice(0, 120))
+  const row = history.body?.transactions?.find((t) => t.signature === fakeSig)
   check('history row present', Boolean(row), `count=${history.body?.count}`)
-  check('flow recorded', row?.flow === 'shield')
-  check('amount recorded', String(row?.amount_atomic) === '100000000')
-  check('client report stored', row?.client_report?.kind === 'deposit')
+  check('flow recorded', row?.flow === 'shadow')
+  check('client intent stored', row?.client_report?.mode === 'Shadow')
+  // The two facts the pooled transfer hides must not exist server-side.
+  check('amount is NOT stored', row ? !('amount_atomic' in row) : false)
+  check('counterparty is NOT stored', row ? !('counterparty' in row) : false)
 
-  const unauth = await get(`/tx/${actor}`, false)
-  check('history is token-gated (401)', unauth.status === 401)
+  // ── 6. Clean up after ourselves ───────────────────────────────────
+  // The harness writes real rows (a claimed name and a reported transaction)
+  // into whatever database it is pointed at. It used to leave them there — a
+  // harness row was still in the deployed database during the 2026-09-27 audit.
+  console.log('\n6. Cleanup')
+  if (!process.env.DATABASE_URL) {
+    console.log('  – DATABASE_URL not set, nothing to clean (rows would persist)')
+  } else {
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+    try {
+      const names = await pool.query('delete from vanta_names where name like $1', [`vanta%-${runId}`])
+      const txs = await pool.query('delete from transactions where signature = $1', [fakeSig])
+      console.log(`  ✓ removed ${names.rowCount} test name(s) and ${txs.rowCount} test transaction row(s)`)
+    } catch (err) {
+      console.log(`  ✗ cleanup failed: ${err.message}`)
+    } finally {
+      await pool.end()
+    }
+  }
 
   console.log(`\n${failures === 0 ? '✓ all checks passed' : `✗ ${failures} check(s) failed`}\n`)
-  console.log(`cleanup: delete from vanta_names where name in ('${name}');`)
-  console.log(`         delete from transactions where signature in ('${realSig}', 'HarnesstestSignatureThatDoesNotExist1111111111111111');\n`)
   process.exit(failures === 0 ? 0 : 1)
 }
 

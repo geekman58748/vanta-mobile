@@ -4,7 +4,7 @@ import { GITHUB_URL, SOCIALS } from '../config.js'
 import Reveal from './Reveal.jsx'
 
 /**
- * Footer — freebuff-style finale, adapted to Vanta.
+ * Footer — finale, adapted to Vanta.
  *
  * Two parts, in the reference's order:
  *   1. The scene — vertical sky falloff, a scroll-revealed line, then a giant
@@ -23,7 +23,7 @@ import Reveal from './Reveal.jsx'
  *
  * Two things differ from the reference on purpose:
  *
- * 1. Plate grading. freebuff ships the far hills at opacity-30 / brightness-0.5
+ * 1. Plate grading. The reference ships the far hills at opacity-30 / brightness-0.5
  *    and the near bushes at brightness-0.5, which on this art (opaque-pixel
  *    luminance p50 ≈ 18) composites to ~2-7/255 against the canvas — the
  *    landscape is invisible. Reference values, for a one-line revert: hills

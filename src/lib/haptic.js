@@ -46,7 +46,12 @@ export function playHaptic(type = 'tap') {
       osc.stop(now + 0.04)
     }
 
-    if (navigator.vibrate) {
+    // Chrome blocks vibrate before any user gesture and logs a console error
+    // every time it does. Asking first keeps the log clean instead of leaving a
+    // wall of "Blocked call to navigator.vibrate" for anyone reading the console.
+    const activation = navigator.userActivation
+    const canVibrate = !activation || activation.hasBeenActive !== false
+    if (canVibrate && typeof navigator.vibrate === 'function') {
       navigator.vibrate(type === 'success' ? [15, 30, 15] : 8)
     }
   } catch {

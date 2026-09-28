@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Drawer from './Drawer'
 import HonestyRows from './HonestyRows'
 import { copyText } from '../lib/clipboard'
+import { playHaptic } from '../lib/haptic'
 import { stampToDate, shortRef } from '../lib/format'
 import { MODE_HONESTY, explorerLink, PROOF } from '../lib/honesty'
 import { lookupProof } from '../lib/txHistory'
@@ -61,12 +62,22 @@ export default function ReceiptDrawer({ open, onClose, txn, notify }) {
     copyText(lines.join('\n'), notify, 'Receipt details copied!', '📋')
   }
 
+  // The toast follows the save's own result. It used to print "Saved <name>"
+  // unconditionally, which is how a receipt that was written nowhere looked
+  // like a success (AUDIT-2026-09-27 H2).
   const exportPdf = async () => {
     if (!txn || exporting) return
     setExporting(true)
     try {
-      const file = await downloadReceiptPdf(txn, 'devnet')
-      notify(`Saved ${file}`, '📄')
+      const res = await downloadReceiptPdf(txn, 'devnet')
+      if (!res.ok) {
+        playHaptic('tap')
+        notify(`Could not save the receipt: ${res.error}`, '⚠️')
+        return
+      }
+      playHaptic('success')
+      if (res.unverified) notify(`Download started — ${res.fileName}`, '📄')
+      else notify(`Saved ${res.fileName}${res.location ? ` to ${res.location}` : ''}`, '📄')
     } catch (err) {
       console.error(err)
       notify(`Could not export the receipt: ${err?.message || err}`, '⚠️')

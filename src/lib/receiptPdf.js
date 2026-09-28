@@ -26,11 +26,19 @@ import { MODE_HONESTY, RESIDUALS, PROOF, explorerLink } from './honesty.js'
  * Because Helvetica is WinAnsi, any glyph outside Latin-1 (✓ ⚠ em dash …)
  * throws at draw time, so every string still goes through `ascii()`.
  *
- * Distribution: the file is handed to the page as a **data: URL**, not a Blob.
- * The webshell's WebView silently drops `blob:` downloads, but it does surface a
- * `data:` URL to `DownloadListener`, where MainActivity decodes it and writes the
- * file to Downloads. Desktop browsers accept data URLs with `download` too, so
- * one path covers both.
+ * Distribution: on Android the bytes go to the native shell through
+ * `window.VantaShell.saveBase64File(fileName, mime, base64)`, which writes them
+ * into `Downloads/Vanta/` and **returns where they landed** (see FileSaver.kt).
+ *
+ * This replaced a `data:` URL handed to the WebView in the belief that a
+ * `DownloadListener` would catch it and write the file. There is no
+ * `DownloadListener` in the shell: the navigation went nowhere, nothing was
+ * written to the device, and the sheet still toasted "Saved" (AUDIT-2026-09-27
+ * H2). Distribution now reports its own outcome instead of assuming one.
+ *
+ * In a desktop browser there is no bridge, so we fall back to an anchor with
+ * `download` — the browser owns the outcome there and all we may honestly say
+ * is that the download was requested.
  */
 
 const INK = [0.024, 0.024, 0.031] // #060608
@@ -411,18 +419,58 @@ export async function buildReceiptPdf(txn, network = 'devnet') {
   return `data:application/pdf;base64,${base64(bytes)}`
 }
 
-/** Build it and hand it to the browser (or the shell's DownloadListener). */
+/** Stable, path-safe file name for a receipt. */
+export function receiptFileName(txn) {
+  const mode = ascii(txn?.mode || 'receipt').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  const stamp = new Date(txn?.at || Date.now()).toISOString().slice(0, 10)
+  return `vanta-${mode || 'receipt'}-receipt-${stamp}.pdf`
+}
+
+const nativeShell = () => {
+  if (typeof window === 'undefined') return null
+  const shell = window.VantaShell
+  return shell && typeof shell.saveBase64File === 'function' ? shell : null
+}
+
+/**
+ * Save the receipt and report what actually happened.
+ *
+ * @returns {Promise<{ok: boolean, fileName: string, location?: string,
+ *   unverified?: boolean, error?: string}>}
+ *   `ok` is only true once the file is on disk (native) or the browser has been
+ *   asked to download it (`unverified`). The caller must not print "Saved" for
+ *   the unverified case.
+ */
 export async function downloadReceiptPdf(txn, network = 'devnet') {
   const href = await buildReceiptPdf(txn, network)
-  const mode = ascii(txn?.mode || 'receipt').toLowerCase()
-  const stamp = new Date(txn?.at || Date.now()).toISOString().slice(0, 10)
-  const anchor = document.createElement('a')
-  anchor.href = href
-  anchor.download = `vanta-${mode}-receipt-${stamp}.pdf`
-  anchor.rel = 'noopener'
-  anchor.style.display = 'none'
-  document.body.appendChild(anchor)
-  anchor.click()
-  anchor.remove()
-  return anchor.download
+  const fileName = receiptFileName(txn)
+
+  const shell = nativeShell()
+  if (shell) {
+    try {
+      const base64Data = href.slice(href.indexOf(',') + 1)
+      const res = JSON.parse(shell.saveBase64File(fileName, 'application/pdf', base64Data) || '{}')
+      if (!res.ok) return { ok: false, fileName, error: res.error || 'the app could not write the file' }
+      return { ok: true, fileName, location: res.path }
+    } catch (err) {
+      console.warn('[receipt] native save failed, trying the browser path:', err?.message ?? err)
+      return { ok: false, fileName, error: err?.message ?? String(err) }
+    }
+  }
+
+  try {
+    const anchor = document.createElement('a')
+    anchor.href = href
+    anchor.download = fileName
+    anchor.rel = 'noopener'
+    anchor.style.display = 'none'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    // The DOM gives no completion event for a download. Say so rather than
+    // claiming a save we cannot see.
+    return { ok: true, fileName, unverified: true }
+  } catch (err) {
+    return { ok: false, fileName, error: err?.message ?? String(err) }
+  }
 }
