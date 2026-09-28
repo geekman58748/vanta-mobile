@@ -263,14 +263,33 @@ export async function recordSend({
  * relayer's verdict for `addresses` before answering. Never throws: an
  * unreachable relayer leaves whatever the row already had alone.
  */
-export async function checkProof(signature, addresses = []) {
+export async function checkProof(signature, addresses = [], { mode = null, actor = null } = {}) {
   if (!signature) return null
   const cached = lookupProof(signature)
   if (cached) return cached
+
+  // READ FIRST. If the relayer already has this row — it paid the fee and
+  // observed it itself, or an earlier report landed — the answer is here, and
+  // re-posting would only downgrade flow_source from 'relayer' to 'client'
+  // (recordSend's ON CONFLICT overwrites it). Reading is always the right
+  // first move; see the header.
   try {
     await refreshVerified(addresses.filter(Boolean))
   } catch (err) {
     console.warn('[tx] receipt re-check failed:', err?.message ?? err)
+  }
+  const found = lookupProof(signature)
+  if (found) return found
+
+  // It is not there at all: the report that should have filed this row failed
+  // (history unreachable, the 12s ceiling, the relayer 500'ing). Reading can
+  // only ever find rows that exist, so without this a row whose ONE report
+  // failed stays "Not checked" for the life of the install — which is exactly
+  // the bug this function was added to close. File it now, and take the
+  // relayer's own verdict back rather than assuming one.
+  if (mode && actor) {
+    const reported = await reportTx({ signature, mode, actor })
+    if (reported) return reported
   }
   return lookupProof(signature)
 }

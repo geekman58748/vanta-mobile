@@ -585,7 +585,22 @@ app.post('/tx/report', async (req, res) => {
     // A transaction that does not include the signer is REFUSED rather than
     // attributed to whoever its first signer happens to be — otherwise anyone
     // could file a stranger's signature and plant a row in their history.
-    if (onChain && !onChain.accounts.includes(actor)) {
+    //
+    // Shield is the one exception, and it has to be. A deposit is funded by the
+    // user's PUBLIC wallet and lands a note for X, but X is never a static
+    // account of the deposit (verified on chain 2026-09-28: signature
+    // 3tH33fUPHi…, 5 static keys, device wallet + pool present, X absent). So a
+    // shield report could NEVER pass this guard from the client — which is why
+    // every Shield row in the table is `flow_source='relayer'` (only the relayer
+    // ever observed one itself) and a device-wallet Shield receipt was stuck at
+    // "Not checked" no matter how many times it was re-opened.
+    //
+    // The abuse this guard exists for does not apply here: the reporter has
+    // already proved it holds X's key, the transaction provably touches the pool
+    // program, and the row stores no amount and no recipient. A false claim
+    // could only pollute the claimant's own book.
+    const isShieldDeposit = flow === 'shield' && onChain.accounts.includes(POOL_PROGRAM)
+    if (onChain && !onChain.accounts.includes(actor) && !isShieldDeposit) {
       return res.status(403).json({ ok: false, error: 'That transaction does not involve the reporting address' })
     }
     const verified = Boolean(onChain)

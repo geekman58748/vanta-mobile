@@ -1439,7 +1439,10 @@ export default function App() {
       signable: [vantaAddress, wallet?.publicKey].filter(Boolean).length,
     })
     if (!txn?.signature || txn?.proof || cached) return
-    checkProof(txn.signature, [vantaAddress, wallet?.publicKey])
+    checkProof(txn.signature, [vantaAddress, wallet?.publicKey], {
+      mode: txn.mode,
+      actor: vantaAddress,
+    })
       .then((proof) => {
         if (!proof) return
         setTransactions((prev) =>
