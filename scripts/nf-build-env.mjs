@@ -1,6 +1,14 @@
 /**
  * Assemble the relayer's production runtime environment for Northflank and
- * apply the two client-side vars to .env.local.
+ * apply the three client-side vars (relayer URL, relayer token, faucet URL) to
+ * .env.local.
+ *
+ * ⚠️ The faucet URL is set here for a reason: it is baked into the APK at build
+ * time, and leaving it to drift cost us a release. It had been left pointing at
+ * `http://localhost:3003` while the shipped APK carried the public URL — so the
+ * next rebuild would have shipped a build whose faucet button is dead on a real
+ * phone, where `localhost` is the phone itself. Anything baked into the bundle
+ * belongs in this script, not in someone's memory of what they set last session.
  *
  * Secrets are written straight to files (mode 600) — never to stdout.
  */
@@ -36,6 +44,7 @@ if (!Array.isArray(secretArr) || secretArr.length !== 64) {
 const token = local.VITE_RELAYER_TOKEN || randomBytes(32).toString('hex')
 
 const PUBLIC_URL = 'https://p01--vanta-mobile--9ymc8tqmdxvj.code.run'
+const PUBLIC_FAUCET_URL = 'https://p01--vanta-faucet--9ymc8tqmdxvj.code.run'
 
 const runtimeEnvironment = {
   NODE_ENV: 'production',
@@ -58,6 +67,8 @@ function setVar(text, key, value) {
 }
 next = setVar(next, 'VITE_RELAYER_URL', PUBLIC_URL)
 next = setVar(next, 'VITE_RELAYER_TOKEN', token)
+next = setVar(next, 'VITE_FAUCET_URL', PUBLIC_FAUCET_URL)
 writeFileSync(join(root, '.env.local'), next, { mode: 0o600 })
 console.log('VITE_RELAYER_URL ->', PUBLIC_URL)
 console.log('VITE_RELAYER_TOKEN -> set (len ' + token.length + ')')
+console.log('VITE_FAUCET_URL  ->', PUBLIC_FAUCET_URL)
