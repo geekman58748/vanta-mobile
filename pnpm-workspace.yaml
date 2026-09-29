@@ -1,4 +1,14 @@
+# pnpm settings for this repo.
+#
+# The three entries below are optional native accelerators pulled in
+# transitively (`bufferutil` and `utf-8-validate` speed up `ws`, `bigint-buffer`
+# is a fallback for older runtimes). Nothing in Vanta needs them compiled —
+# `@solana/web3.js` works without them — so builds are explicitly denied here.
+#
+# Stating it as `false` matters: left unset, pnpm still refuses to run them but
+# reports `[ERR_PNPM_IGNORED_BUILDS]` on every install, which reads as a failure
+# to anyone cloning the repo for the first time.
 allowBuilds:
-  bigint-buffer: set this to true or false
-  bufferutil: set this to true or false
-  utf-8-validate: set this to true or false
+  bigint-buffer: false
+  bufferutil: false
+  utf-8-validate: false
