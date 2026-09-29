@@ -4,6 +4,16 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Package visibility: Android 11+ hides the apps that can handle a VIEW
+         intent, so `resolveActivity` would always report "no viewer found" and
+         the receipt's Open button would refuse to open anything. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/pdf" />
+        </intent>
+    </queries>
+
     <application
         android:networkSecurityConfig="@xml/network_security_config"
         android:allowBackup="true"
@@ -19,6 +29,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden"
+            android:screenOrientation="portrait"
             android:theme="@style/Theme.WebShell.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

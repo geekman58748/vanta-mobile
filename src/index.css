@@ -1,14 +1,15 @@
 @import "tailwindcss";
 
 /* ── SELF-HOSTED TYPE ──────────────────────────────────────────────────
-   Inter and Space Mono ship inside the bundle instead of being fetched from
-   fonts.googleapis.com. That removes a network round-trip from first paint
-   (the old build showed fallback glyphs, then swapped — a visible reflow on
-   every cold start), and it means the wallet renders correctly with no network
-   at all, which matters for a privacy app.
+   Inter, Space Mono and Space Grotesk ship inside the bundle instead of being
+   fetched from fonts.googleapis.com. That removes a network round-trip from
+   first paint (the old build showed fallback glyphs, then swapped — a visible
+   reflow on every cold start), and it means the wallet renders correctly with
+   no network at all, which matters for a privacy app.
 
-   Inter is served by Google as a VARIABLE font: one file covers 300–700, so it
-   is declared with a weight range rather than five static faces. */
+   Inter and Space Grotesk are served by Google as VARIABLE fonts: one file each
+   covers the whole weight range, so they are declared with a weight range rather
+   than five static faces. */
 @font-face {
   font-family: 'Inter';
   font-style: normal;
@@ -30,6 +31,18 @@
   font-display: swap;
   src: url('./assets/fonts/space-mono-700.woff2') format('woff2');
 }
+/* The landing site's display face (landing/src/index.css --font-display). The
+   app had Inter for everything, which is why it read as a generic dashboard
+   while the site read as Vanta: the site pairs a grotesk display face with Inter
+   body copy, and the app was missing half of that pair. Same two reasons as the
+   others for self-hosting — no first-paint round-trip, and it renders offline. */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('./assets/fonts/space-grotesk-var.woff2') format('woff2');
+}
 
 /* ── VANTA DESIGN TOKENS ────────────────────────────────────────────────
    The single source of truth for the app's skin. Every component reads these
@@ -43,6 +56,10 @@
    on the accent, active states and glows only — never on the base surfaces. */
 @theme {
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* Display face. Headings, the balance figure, sheet titles, row titles and
+     button labels use this; 11–13px meta text stays on Inter, which holds up
+     at that size where Space Grotesk starts to crowd. Same split as the site. */
+  --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Space Mono', SFMono-Regular, ui-monospace, monospace;
 
   /* Surfaces — near-black, cooled a hair but deliberately NEUTRAL. Pure #000 is
@@ -51,6 +68,8 @@
   --color-ink: #060608;         /* body / page behind the device frame */
   --color-card: #141417;        /* sheets, asset cards */
   --color-card-lo: #0f0f12;     /* card gradient floor */
+  --color-card-hi: #1b1b1f;     /* one step above --color-card: quiet buttons,
+                                   and the hover fill for canvas cards */
   --color-sunken: #0c0c0f;      /* icon wells inside glass buttons */
   --color-btn: #222226;         /* glass button top */
   --color-btn-hi: #2b2b31;      /* glass button top, hover */
@@ -66,12 +85,23 @@
   --color-accent: #8b79f0;      /* private, success, primary CTA */
   --color-accent-hi: #7a66e6;   /* primary CTA hover */
   --color-accent-deep: #4c3a9e; /* gradients / glows */
-  --color-danger: #ec6a7a;      /* outgoing / failure */
+  --color-danger: #ec6a7a;      /* failure ONLY — see --color-out */
   --color-muted: #8e8e93;       /* secondary text */
+
+  /* Money leaving the wallet. Deliberately NOT --color-danger: that token was
+     doing two jobs at once, so every ordinary send was painted in the same red
+     as a failed one. On a dark violet canvas the outgoing figure was then the
+     loudest thing on the screen, which is backwards — a send you initiated is
+     the LEAST surprising event in the app. Neutral, slightly under white, and
+     unmistakably not an error. Danger goes back to meaning "something broke". */
+  --color-out: #9d9da8;
 
   /* Hairlines — white at low alpha, so they read on any surface */
   --color-hair: rgba(255, 255, 255, 0.08);
   --color-hair-hi: rgba(255, 255, 255, 0.15);
+
+  /* One drop shadow, referenced by every raised card so a change lands once. */
+  --card-lift: 0 1px 2px -1px rgba(0, 0, 0, 0.5), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
 }
 
 /* ── BASE ────────────────────────────────────────────────────────────── */
@@ -161,23 +191,140 @@
   }
   .glass-btn:active { transform: scale(0.98); }
 
+  /* ── SITE BUTTON ──────────────────────────────────────────────────────
+     One structure, two fills. This is the button from the landing site's
+     "The rest of the evidence" list (landing/src/components/PrivacyReceipt.jsx):
+
+       rounded-xl bg-surface px-4 py-3 ring-1 ring-hairline
+       transition-colors hover:bg-surface-2 hover:ring-hairline-strong
+
+     What someone actually MEANS when they say the site's buttons are "sleek and
+     simple" is this box: 12px radius, 16/12 padding, a regular-weight 13px
+     label, flat, colour-only hover, no gradient / drop shadow / glow. Those live
+     HERE rather than at the call site, because "forgot one line of it" is
+     exactly how the app's buttons drifted apart in the first place.
+
+     Only the FILL differs between the two variants. Purple is a fill decision,
+     not a different button: a primary keeps its accent, a secondary sits on the
+     grey tile, and both still read as the same family.
+
+     Geometry and type are in PX on purpose. The label's font-size is the one
+     value the phone moves on its own (the WebView honours the system font
+     scale — 0.9 on the reference device, so 13px lands at 11.7px), and a
+     button's BOX must not move with it. */
+  .btn-quiet,
+  .btn-accent {
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 400;
+    text-align: center;
+    transition-property: color, background-color, box-shadow, transform;
+    transition-duration: 200ms;
+    transition-timing-function: ease;
+  }
+
+  /* Secondary tile: a fill one step ABOVE its backdrop, plus the hairline ring.
+     The ring is an inset box-shadow, not a border: that is what Tailwind's
+     `ring-1` compiles to, and a real border would add 2px to the box model.
+
+     ⚠ The fill is `--color-card-hi`, NOT the site's `--color-surface`
+     (`--color-card` here). The site's tile reads as raised because the page
+     behind it is #0a0a0b, while every place this class is used sits on a SHEET
+     that is already `--color-card` — reusing that colour would leave an empty
+     outline. Keeping the site's RELATIONSHIP (fill one step lighter than the
+     thing behind it) is what actually makes the two look the same. */
+  .btn-quiet {
+    background-color: var(--color-card-hi);
+    color: rgba(255, 255, 255, 0.8);  /* the site's --color-ink #c9c9cc */
+    box-shadow: inset 0 0 0 1px var(--color-hair);
+  }
+  .btn-quiet:hover {
+    background-color: var(--color-btn);
+    box-shadow: inset 0 0 0 1px var(--color-hair-hi);
+  }
+
+  /* Primary: the same box and the same label, filled with the accent where the
+     action has to be the loudest thing in the sheet. No ring — a white
+     hairline over #8b79f0 is invisible, and the flat fill IS the emphasis. */
+  .btn-accent {
+    background-color: var(--color-accent);
+    color: var(--color-canvas);        /* #0a0a0c, clears 6:1 on the accent */
+  }
+  .btn-accent:hover { background-color: var(--color-accent-hi); }
+
+  .btn-quiet:active,
+  .btn-accent:active { transform: scale(0.99); }
+
   /* Flat asset row — lifts and picks up an accent-tinted halo on hover */
   .asset-card {
     background: linear-gradient(180deg, var(--color-card) 0%, var(--color-card-lo) 100%);
     border: 1px solid rgba(255, 255, 255, 0.07);
+    /* The same lift as .ring-card, kept alongside the border because the ACTIVE
+       card signals through border-colour alone: one mechanism, no glow. */
+    box-shadow: var(--card-lift);
     /* Named properties, never `all` — `all` also animates layout properties and
        leaks into children, which is what makes a UI feel loose. */
     transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   }
   .asset-card:hover {
-    border-color: rgba(139, 121, 240, 0.35);
+    /* Neutral on purpose. This used to pick up an accent-tinted 35px halo, so
+       every token card glowed violet on hover and the SELECTED one glowed at
+       rest — a ring of light around a card reads as a demo, not as a wallet. */
+    border-color: rgba(255, 255, 255, 0.16);
     transform: translateY(-1px);
-    box-shadow: 0 0 35px -8px rgba(139, 121, 240, 0.16);
   }
 
-  /* Accent halo for the focused balance card. Low alpha: a glow should be felt,
-     not seen. */
-  .card-glow { box-shadow: 0 0 35px -5px rgba(139, 121, 240, 0.2); }
+  /* ── CARD ELEVATION ────────────────────────────────────────────────────
+     Ported from the site's .ring-card. An inset hairline ring plus a soft drop,
+     rather than a border AND a fill AND a shadow picked per component. The ring
+     keeps a crisp edge on whatever surface is behind it, which is what makes a
+     stack of cards read as one system instead of assorted grey rectangles.
+
+     Background is left to the caller: this is the ring + the lift, and it is
+     meant for cards sitting on the CANVAS. Inside a sheet (--color-card) the
+     app keeps its recessed treatment — a raised card on a card-coloured sheet
+     is invisible, which is why this is not sprinkled through the drawers. */
+  .ring-card {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+      0 1px 2px -1px rgba(0, 0, 0, 0.5),
+      0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  }
+
+  /* ── HATCHED RULE ──────────────────────────────────────────────────────
+     The site's 32px .hatch band, scaled to a phone. A section break that reads
+     as a deliberate device instead of as unexplained whitespace. */
+  .hatch {
+    height: 14px;
+    background-image: repeating-linear-gradient(
+      135deg,
+      transparent 0 5px,
+      rgba(255, 255, 255, 0.05) 5px 6px
+    );
+  }
+
+  /* ── LIVE DOT ──────────────────────────────────────────────────────────
+     The site's .pulse-dot: a 6px accent dot with one slow halo. The app's
+     engine chip had a static dot, so "Shielded" and "Starting" looked equally
+     alive. One ambient loop, and it stops under reduced motion. */
+  .pulse-dot {
+    position: relative;
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background: currentColor;
+  }
+  .pulse-dot::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 9999px;
+    background: currentColor;
+    opacity: 0.35;
+    animation: dotPulse 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
 
   /* ── TAP ───────────────────────────────────────────────────────────────
      The interaction transition, on named properties only. `transition-all`
@@ -239,6 +386,17 @@
   }
   .success-body { animation: successBody 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.28s both; will-change: transform, opacity; }
   .success-veil { animation: successVeil 0.25s ease-out both; will-change: opacity; }
+}
+
+/* One authored moment per screen, and it stops for anyone who asked it to. */
+@media (prefers-reduced-motion: reduce) {
+  .pulse-dot::after { animation: none; }
+  .blur-rollup { animation: none; }
+}
+
+@keyframes dotPulse {
+  0%, 100% { transform: scale(0.6); opacity: 0.35; }
+  50%      { transform: scale(1);   opacity: 0; }
 }
 
 @keyframes blurRollUp {

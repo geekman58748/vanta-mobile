@@ -340,13 +340,15 @@ private fun normalizeHttpUrl(): String? {
 /**
  * JS → native channel exposed to the web app as `window.VantaShell`.
  *
- * Two jobs:
+ * Three jobs:
  *   · Let a mount/unmount of a web Drawer turn the native pull-to-refresh
  *     gesture off and on. Without it, the SwipeRefreshLayout steals a downward
  *     drag meant for the open sheet and reloads the entire WebView.
  *   · Save a base64 file (the PDF receipt) and report where it landed. The
  *     shell has no DownloadListener, so this is the only path that actually
  *     writes a file — see FileSaver.
+ *   · Open that file again, so a receipt can be read in-app instead of being
+ *     hunted for in the Downloads folder.
  *
  * Both are called from the WebView's JS bridge thread, never the UI thread, so
  * the synchronous file write in `saveBase64File` blocks only the bridge call.
@@ -367,6 +369,15 @@ private class VantaShellBridge(
     @JavascriptInterface
     fun saveBase64File(fileName: String, mimeType: String, base64Data: String): String =
         FileSaver.saveBase64(appContext, fileName, mimeType, base64Data)
+
+    /**
+     * Open a file that `saveBase64File` just wrote, in a viewer, so the receipt
+     * can be seen (and screenshotted) without a trip through a file manager.
+     * The uri comes back in `saveBase64File`'s JSON for exactly this reason.
+     */
+    @JavascriptInterface
+    fun openSavedFile(uri: String, mimeType: String): String =
+        FileSaver.openUri(appContext, uri, mimeType)
 }
 
 private const val TAG = "WebShell"

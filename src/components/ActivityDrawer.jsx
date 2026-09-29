@@ -64,7 +64,7 @@ export default function ActivityDrawer({
       <div className="w-full bg-black/50 border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
         <div className="flex items-center justify-between text-xs text-muted">
           <span>Daily volume</span>
-          <span className="text-accent font-semibold">{transactions.length} transfers</span>
+          <span className="font-display text-accent font-semibold">{transactions.length} transfers</span>
         </div>
 
         <div className="w-full h-32 flex items-end justify-between gap-2 pt-4">
@@ -109,19 +109,26 @@ export default function ActivityDrawer({
       <div className="grid grid-cols-2 gap-3">
         <div className="p-4 rounded-2xl bg-accent/10 border border-accent/20">
           <span className="text-xs text-muted font-medium">Into the pool</span>
-          <div className="text-xl font-extrabold text-accent mt-0.5 tnum">
+          <div className="font-display text-xl font-extrabold text-accent mt-0.5 tnum">
             {intoPool.toFixed(3)}
           </div>
         </div>
-        <div className="p-4 rounded-2xl bg-danger/10 border border-danger/20">
+        {/* Neutral, not red: this is money you chose to move, and the pair now
+            reads as "accent in / grey out" instead of "good / alarm". */}
+        <div className="p-4 rounded-2xl bg-white/[0.03] border border-hair">
           <span className="text-xs text-muted font-medium">Out of the pool</span>
-          <div className="text-xl font-extrabold text-danger mt-0.5 tnum">
+          <div className="font-display text-xl font-extrabold text-out mt-0.5 tnum">
             {outOfPool.toFixed(3)}
           </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-1">
+      {/* Sticks to the top of the scrolling body while the list moves under it.
+          The filters are the only control this sheet has; scrolling them off
+          screen left the user looking at a filtered list with no way back to
+          "All" without hunting for it, and a `-mx-6 px-6` bleed means rows pass
+          *behind* an opaque strip instead of showing in the body's gutters. */}
+      <div className="sticky top-0 z-10 -mx-6 px-6 py-2 bg-card flex items-center gap-2 overflow-x-auto no-scrollbar">
         {CHIPS.map(([key, label]) => (
           <button
             key={key}
@@ -129,7 +136,7 @@ export default function ActivityDrawer({
               playHaptic('tap')
               setFilter(key)
             }}
-            className={`px-3.5 py-1.5 rounded-full text-[12px] tap whitespace-nowrap ${
+            className={`font-display px-3.5 py-1.5 rounded-full text-[12px] tap whitespace-nowrap ${
               filter === key
                 ? 'bg-accent/15 text-accent border border-accent/30 font-semibold'
                 : 'bg-white/5 text-muted border border-hair font-medium hover:text-white'
@@ -140,7 +147,11 @@ export default function ActivityDrawer({
         ))}
       </div>
 
-      <div className="overflow-y-auto overscroll-contain no-scrollbar flex flex-col divide-y divide-white/5 max-h-[38vh]">
+      {/* Was its own `max-h-[38vh] overflow-y-auto` box: a scroller inside a
+          scroller, with the app's scrollbars hidden, so the sheet appeared to
+          have ended when it had not. The drawer body is the one scroll surface
+          now — the rows simply run on, and the sheet's own hint says so. */}
+      <div className="flex flex-col divide-y divide-white/5">
         {visible.length === 0 ? (
           <div className="py-8 text-center text-muted text-sm">
             No activity yet.
@@ -159,15 +170,15 @@ export default function ActivityDrawer({
               className="py-3 px-2 flex justify-between items-center gap-3 cursor-pointer hover:bg-white/5 active:bg-white/10 rounded-xl transition-colors w-full text-left"
             >
               <div className="flex flex-col min-w-0">
-                <span className="font-semibold text-white text-[13px] truncate">{tx.title}</span>
+                <span className="font-display font-semibold text-white text-[13px] truncate">{tx.title}</span>
                 <span className="text-[11px] text-muted">
                   {tx.time}
-                  {tx.isPrivate ? ' • 🔒 private' : ' • public'}
+                  {tx.isPrivate ? ' · private' : ' · public'}
                 </span>
               </div>
               <span
-                className={`text-[13px] font-bold shrink-0 tnum ${
-                  tx.type === 'income' ? 'text-accent' : 'text-danger'
+                className={`font-display text-[13px] font-bold shrink-0 tnum ${
+                  tx.type === 'income' ? 'text-accent' : 'text-out'
                 }`}
               >
                 {tx.amount}
@@ -178,10 +189,10 @@ export default function ActivityDrawer({
       </div>
 
       <span className="text-[10px] text-muted leading-relaxed">
-        Charts and totals cover what this device remembers — the history is stored here,
-        encrypted, and survives a restart. The relayer keeps only a receipt anchor — the
-        signature, the flow and the time — never the amount or the recipient — so it can
-        confirm a send landed on chain. Tap any row for its on-chain reference.
+        Charts and totals cover what this device remembers. The history is stored here,
+        encrypted, and survives a restart. The relayer keeps only a receipt anchor: the
+        signature, the flow and the time, never the amount or the recipient. That is what
+        lets it confirm a send landed on chain. Tap any row for its on-chain reference.
         {transactions.length ? ` Last stamped ${stampToTime(transactions[0].at)}.` : ''}
       </span>
     </Drawer>

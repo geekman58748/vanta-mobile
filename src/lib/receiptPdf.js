@@ -436,10 +436,14 @@ const nativeShell = () => {
  * Save the receipt and report what actually happened.
  *
  * @returns {Promise<{ok: boolean, fileName: string, location?: string,
- *   unverified?: boolean, error?: string}>}
+ *   uri?: string, unverified?: boolean, error?: string}>}
  *   `ok` is only true once the file is on disk (native) or the browser has been
  *   asked to download it (`unverified`). The caller must not print "Saved" for
  *   the unverified case.
+ *
+ *   `uri` is the system handle to the file just written, and it is what makes
+ *   `openReceiptFile` possible: on scoped storage a path cannot be handed to a
+ *   viewer, so a save that returned no uri means no Open button.
  */
 export async function downloadReceiptPdf(txn, network = 'devnet') {
   const href = await buildReceiptPdf(txn, network)
@@ -451,7 +455,7 @@ export async function downloadReceiptPdf(txn, network = 'devnet') {
       const base64Data = href.slice(href.indexOf(',') + 1)
       const res = JSON.parse(shell.saveBase64File(fileName, 'application/pdf', base64Data) || '{}')
       if (!res.ok) return { ok: false, fileName, error: res.error || 'the app could not write the file' }
-      return { ok: true, fileName, location: res.path }
+      return { ok: true, fileName, location: res.path, uri: res.uri || undefined }
     } catch (err) {
       console.warn('[receipt] native save failed, trying the browser path:', err?.message ?? err)
       return { ok: false, fileName, error: err?.message ?? String(err) }
@@ -471,6 +475,30 @@ export async function downloadReceiptPdf(txn, network = 'devnet') {
     // claiming a save we cannot see.
     return { ok: true, fileName, unverified: true }
   } catch (err) {
-    return { ok: false, fileName, error: err?.message ?? String(err) }
+    return { ok: false, fileName, error: err?.message || String(err) }
+  }
+}
+
+/**
+ * Open a receipt that `downloadReceiptPdf` just wrote, in the system viewer.
+ *
+ * The point is screenshotting: finding a PDF in a file manager is not something
+ * anyone will do, so the receipt has to be one tap from the sheet that produced
+ * it. Nothing is written here — the uri comes from the save.
+ *
+ * @returns {{ok: boolean, error?: string}}
+ */
+export function openReceiptFile(uri, mimeType = 'application/pdf') {
+  const shell = nativeShell()
+  if (!shell || typeof shell.openSavedFile !== 'function') {
+    return { ok: false, error: 'This build cannot open files yet' }
+  }
+  if (!uri) return { ok: false, error: 'Nothing was saved to open' }
+  try {
+    const res = JSON.parse(shell.openSavedFile(uri, mimeType) || '{}')
+    if (!res.ok) return { ok: false, error: res.error || 'no app on this device can open this file' }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err) }
   }
 }

@@ -8,6 +8,7 @@ import PrivacySheet from './components/PrivacySheet'
 import ReceiveDrawer from './components/ReceiveDrawer'
 import ReceiptDrawer from './components/ReceiptDrawer'
 import ActivityDrawer from './components/ActivityDrawer'
+import { ModeMark } from './components/Icons'
 import SettingsDrawer from './components/SettingsDrawer'
 import BackupDrawer from './components/BackupDrawer'
 import Onboarding from './components/Onboarding'
@@ -109,7 +110,7 @@ function TopoWaves() {
 function shieldErrorMessage(err) {
   const raw = String(err?.message || err || '').trim()
   if (/payloads invalid for signing/i.test(raw)) {
-    return 'The wallet rejected this transaction — usually your balance does not cover the amount plus the network fee.'
+    return 'The wallet rejected this transaction. Usually your balance does not cover the amount plus the network fee.'
   }
   if (/timeout|did not respond|did not answer/i.test(raw)) {
     return 'The wallet did not respond. Reconnect it and try again.'
@@ -137,7 +138,7 @@ function shieldErrorMessage(err) {
 function unknownOutcomeError(cause) {
   const err = new Error(
     'Your wallet did not reply, so this deposit is still unconfirmed. Check your private ' +
-    'balance before trying again — if it rose, the Shield did land.',
+    'balance before trying again. If it rose, the Shield did land.',
     { cause },
   )
   err.outcomeUnknown = true
@@ -208,6 +209,17 @@ export default function App() {
   const [isPrivateMode, setIsPrivateMode] = useState(true) // default ON: shadow send
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState('')
+  // `status` is a TRANSCRIPT, not a modal: ~20 places write into it and only a
+  // few ever clear it. Anything written by a path with no clearer left the
+  // banner stuck on screen — after a Shield the "⋯" icon and its line stayed up
+  // until the page was reloaded by hand, which is exactly what someone demoing
+  // would hit. Every message now dismisses itself, so the banner can only
+  // outlive a status that is still being changed.
+  useEffect(() => {
+    if (!status) return undefined
+    const timer = setTimeout(() => setStatus(''), 6000)
+    return () => clearTimeout(timer)
+  }, [status])
   // User-facing notifications live on their own channel. The engine writes
   // progress/errors into `status` from ~20 places in the crypto paths; if they
   // shared one slot, a background sync could silently overwrite a real error
@@ -429,7 +441,7 @@ export default function App() {
       // a receipt.
       incomingWatchRef.current.synced = true
       const found = walletRef.current.balances().length
-      setStatus(found ? 'Private balance synced ✓' : 'Synced — no private notes found')
+      setStatus(found ? 'Private balance synced ✓' : 'Synced, no private notes found')
       setTimeout(() => setStatus(''), 3500)
       return report
     } catch (err) {
@@ -565,7 +577,7 @@ export default function App() {
         setRegistered(true)
       } catch (err) {
         console.warn('registration failed (Shadow receiving only):', err)
-        setStatus('Registration failed — you can still Shield and Ghost-send')
+        setStatus('Registration failed. You can still Shield and Ghost-send')
       }
 
       // First-load sync: without it a fresh browser shows an empty private
@@ -682,7 +694,7 @@ export default function App() {
         const stranded = await readBalance(previous.publicKey)
         if (stranded > 0) {
           notify(
-            `In-app wallet still holds ${stranded.toFixed(4)} SOL — kept safe, switch back in Settings to move it.`,
+            `In-app wallet still holds ${stranded.toFixed(4)} SOL. Kept safe, switch back in Settings to move it.`,
             '⚠️',
           )
         }
@@ -1008,7 +1020,7 @@ export default function App() {
       // zone crash on every render (it was, and it blanked the app). `setStatus`
       // is the stable setter and drives the same banner.
       console.warn('[vanta] Shield landed but bookkeeping failed:', err?.message ?? err)
-      setStatus('🛡️ Shield landed. Your receipt could not be attached yet — it will be attached on the next refresh.')
+      setStatus('🛡️ Shield landed. Your receipt could not be attached yet. It will be attached on the next refresh.')
       fetchBalance(wallet.publicKey).catch(() => {})
       syncPrivate().catch(() => {})
     })
@@ -1331,7 +1343,7 @@ export default function App() {
             status: 'Confirmed',
           },
         )
-        notify(`Your earlier Shield of ${pending.amount} ${pending.symbol} did land — receipt restored.`, '🛡️')
+        notify(`Your earlier Shield of ${pending.amount} ${pending.symbol} did land. Receipt restored.`, '🛡️')
         await recordSend({
           signature: landed.signature,
           mode: 'Shield',
@@ -1546,8 +1558,13 @@ export default function App() {
       if (!err?.outcomeUnknown) dropPrivateCreditExpectation(symbol, amt)
       notify(shieldErrorMessage(err), '⚠️')
       console.error(err)
+    } finally {
+      // Both belong to THIS attempt, on every path. Leaving `loading` set is why
+      // the button stayed disabled, and leaving `status` set is why the banner
+      // stayed up, after a wallet that rejected or never came back.
+      setLoading(false)
+      setStatus('')
     }
-    setLoading(false)
   }
 
   // ── Asset rail ───────────────────────────────────────────────────────
@@ -1558,21 +1575,17 @@ export default function App() {
     {
       key: 'SOL',
       name: 'Solana',
-      // Wells stay neutral. The Solana gradient below is a brand mark and keeps
-      // its own colours; tinting the well green made the whole card read green.
+      // Wells stay neutral. The mark used to be Solana's brand GRADIENT
+      // (#00FFA3 -> #DC1FFF), which on a near-black card was the single most
+      // saturated thing on the screen — the opposite of the rest of the app.
+      // Solana's own dark-mode treatment is the plain white symbol, so that is
+      // what this is: same three bars, no gradient, no glow.
       well: 'bg-sunken border-hair',
-      glow: 'bg-accent/10',
       icon: (
-        <svg className="relative z-10 w-5 h-5" viewBox="0 0 397 311" fill="none" aria-hidden="true">
-          <defs>
-            <linearGradient id="vanta-sol-g" x1="0" y1="0" x2="397" y2="311" gradientUnits="userSpaceOnUse">
-              <stop stopColor="#00FFA3" />
-              <stop offset="1" stopColor="#DC1FFF" />
-            </linearGradient>
-          </defs>
-          <path d="M64.6 237.9c2.4-2.4 5.7-3.8 9.2-3.8h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1l62.7-62.7z" fill="url(#vanta-sol-g)" />
-          <path d="M64.6 3.8C67 1.4 70.3 0 73.8 0h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1L64.6 3.8z" fill="url(#vanta-sol-g)" />
-          <path d="M332.4 120.9c-2.4-2.4-5.7-3.8-9.2-3.8H5.8c-5.8 0-8.7 7-4.6 11.1l62.7 62.7c2.4 2.4 5.7 3.8 9.2 3.8h317.4c5.8 0 8.7-7 4.6-11.1l-62.7-62.7z" fill="url(#vanta-sol-g)" />
+        <svg className="relative z-10 w-[18px] h-[18px] text-white/85" viewBox="0 0 397 311" fill="currentColor" aria-hidden="true">
+          <path d="M64.6 237.9c2.4-2.4 5.7-3.8 9.2-3.8h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1l62.7-62.7z" />
+          <path d="M64.6 3.8C67 1.4 70.3 0 73.8 0h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1L64.6 3.8z" />
+          <path d="M332.4 120.9c-2.4-2.4-5.7-3.8-9.2-3.8H5.8c-5.8 0-8.7 7-4.6 11.1l62.7 62.7c2.4 2.4 5.7 3.8 9.2 3.8h317.4c5.8 0 8.7-7 4.6-11.1l-62.7-62.7z" />
         </svg>
       ),
     },
@@ -1580,8 +1593,25 @@ export default function App() {
       key: 'dUSDC',
       name: 'Private USD Coin',
       well: 'bg-sunken border-hair',
-      glow: 'bg-white/10',
-      icon: <span className="relative z-10 text-[16px] font-bold text-[#5AC8FA]">$</span>,
+      // Was a bare bold "$". Drawn as the actual coin instead — ring, stem and
+      // S — in a blue that has been lifted for a dark surface: #2775CA is the
+      // brand colour but sits too dim on near-black to read at 20px.
+      icon: (
+        <svg
+          className="relative z-10 w-[18px] h-[18px] text-[#5FA3E4]"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 6.9v10.2" />
+          <path d="M14.5 9.2c-.5-.9-1.5-1.4-2.6-1.4-1.5 0-2.6.8-2.6 1.9 0 1.2 1 1.7 2.6 2 1.7.3 2.8.9 2.8 2.1 0 1.3-1.2 2.1-2.8 2.1-1.3 0-2.3-.5-2.8-1.4" />
+        </svg>
+      ),
     },
   ]
 
@@ -1628,17 +1658,17 @@ export default function App() {
         <TopoWaves />
 
         <div className="relative z-10 flex flex-col items-center gap-7 text-center">
-          <div className="relative w-20 h-20 rounded-3xl bg-card border border-hair flex items-center justify-center shadow-2xl overflow-hidden">
-            <div className="absolute inset-0 bg-accent/10 blur-md" />
-            {/* Was a bare letter "V". The real mark is white-on-transparent, so it
-                needs no filter or tint against the near-black canvas. */}
-            <img
-              src={vantaLogo}
-              alt=""
-              aria-hidden="true"
-              className="relative z-10 h-12 w-12 object-contain"
-            />
-          </div>
+          {/* Was a rounded tile with its own border, shadow and violet tint. The
+              mark is white-on-transparent, so it was really a lighter box sitting
+              on the canvas with the logo pasted onto it — the loading screen read
+              as a panel, not as a brand mark. It now sits on the canvas like every
+              other mark in the app, with the padding the art actually needs. */}
+          <img
+            src={vantaLogo}
+            alt=""
+            aria-hidden="true"
+            className="h-20 w-20 object-contain"
+          />
           <div>
             <h1 className="text-3xl font-bold text-white tracking-tight">Vanta</h1>
             <p className="text-sm text-muted mt-2 max-w-[290px] leading-relaxed">
@@ -1649,23 +1679,23 @@ export default function App() {
           <button
             onClick={() => { playHaptic('pop'); connectWalletMwa() }}
             disabled={loading}
-            className="w-full max-w-[300px] py-4 rounded-2xl bg-accent hover:bg-accent-hi font-bold text-black shadow-lg shadow-accent/20 active:scale-[0.98] tap text-base disabled:opacity-50"
+            className="btn-accent tap w-full max-w-[300px] disabled:opacity-50"
           >
             {loading ? 'Connecting…' : 'Connect device wallet'}
           </button>
           <button
             onClick={() => { playHaptic('tap'); createWallet() }}
             disabled={loading}
-            className="w-full max-w-[300px] py-3.5 rounded-2xl bg-white/5 border border-hair font-semibold text-white/80 hover:bg-white/10 active:scale-[0.98] tap text-sm disabled:opacity-50"
+            className="btn-quiet tap w-full max-w-[300px] disabled:opacity-50"
           >
             Use a throwaway in-app wallet
           </button>
           <p className="text-[11px] text-muted max-w-[300px] leading-snug">
-            Seed Vault / Phantom / Solflare holds your funds — Vanta never stores that key.
+            Seed Vault / Phantom / Solflare holds your funds. Vanta never stores that key.
           </p>
           {!mwaAvailable && (
             <p className="text-[10px] text-muted/70 max-w-[300px] leading-snug">
-              No wallet app detected — install Phantom or Solflare, or use a Seeker.
+              No wallet app detected. Install Phantom or Solflare, or use a Seeker.
             </p>
           )}
           {status && <p className="text-xs text-muted">{status}</p>}
@@ -1691,7 +1721,7 @@ export default function App() {
       <header className="relative z-10 w-full flex items-center justify-between pt-1 pb-6">
         <button
           onClick={() => { playHaptic('tap'); setReceiveOpen(true) }}
-          aria-label="Receive — show QR code"
+          aria-label="Receive. Show QR code"
           className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-hair flex items-center justify-center text-white/90 hover:bg-white/10 tap duration-200 active:scale-95 shadow-lg"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -1711,18 +1741,22 @@ export default function App() {
               nothing, the entry point to the "what leaks" breakdown.
 
               The breakdown does NOT belong as its own row on home: a dedicated
-              legend line read as clutter and got pulled. A status chip is where
+              legend line read as clutter and got pulled. A status marker is where
               "so what does 'Shielded' actually mean?" already gets asked, so the
-              sheet stays one tap away with zero added surface. */}
+              sheet stays one tap away with zero added surface.
+
+              No pill either. A bordered card around a dot and a word made the
+              header read as two competing pieces of chrome; the indicator is the
+              dot and the word, and the whole thing is still the tap target. */}
           <button
             onClick={() => { playHaptic('tap'); setLeakOpen(true) }}
-            aria-label="Engine status — tap for what Vanta hides and what it exposes"
+            aria-label="Engine status. Tap for what Vanta hides and what it exposes"
             title="Tap for what Vanta hides and what it exposes"
-            className="h-9 pl-2.5 pr-3 rounded-full bg-white/[0.03] border border-hair flex items-center gap-1.5 hover:bg-white/10 transition-colors active:scale-95"
+            className="flex items-center gap-1.5 px-1.5 py-2 tap active:scale-95"
           >
             <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                zolanaReady ? (registered ? 'bg-accent' : 'bg-amber-400') : 'bg-white/30'
+              className={`pulse-dot shrink-0 ${
+                zolanaReady ? (registered ? 'text-accent' : 'text-amber-400') : 'text-white/30'
               }`}
             />
             <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
@@ -1745,13 +1779,16 @@ export default function App() {
         {/* PRIMARY BALANCE — bare on the canvas, per the design */}
         <section className="relative mt-3 mb-7">
           <div key={balanceKey} className={`blur-rollup ${isPrivacyOn ? 'balance-masked' : ''}`}>
-            <p className="text-muted text-[13px] font-normal mb-2 tracking-normal">Private balance</p>
+            <p className="font-display text-muted text-[13px] font-normal mb-2 tracking-normal">Private balance</p>
 
+            {/* The display face, tight-tracked, exactly as the site sets its hero
+                figure — this is the one number the whole app is built around, so
+                it is where the type change has to be unmistakable. */}
             <div className="flex items-baseline gap-3">
-              <span className="text-[60px] leading-none font-light tracking-tight text-white tnum">
+              <span className="font-display text-[60px] leading-none font-normal tracking-[-0.035em] text-white tnum">
                 {tokenBalance(selectedToken).toFixed(selectedToken === 'SOL' ? 3 : 2)}
               </span>
-              <span className="text-2xl font-normal text-white/80 tracking-normal">
+              <span className="font-display text-2xl font-normal text-white/80 tracking-tight">
                 {TOKENS[selectedToken].symbol}
               </span>
             </div>
@@ -1800,31 +1837,28 @@ export default function App() {
 
         {/* ACTION ROW — Shield leads, because it is the front door.
 
-             Width maths, because the first version got this wrong: the container
-             splits 1fr/1fr minus a 60px Receive button and two gaps, so each button
-             gets ~129px. At px-2.5 + a 40px icon well + gap-3.5 the text column was
-             left with ~55px, and "Choose amount" in 10px mono needed ~78px — it
-             wrapped and read as the icon pushing the label sideways. Shrinking the
-             well to 32px and dropping `pr-2` buys back ~20px, and the sub-label is
-             non-mono now so it optically aligns with the title above it. */}
+             The marks now sit ON the button instead of inside a 32px well. The
+             well was doing real damage: a bordered box inside a 60px button left
+             the label ~55px, so the sub-label wrapped and the icon appeared to
+             shove the text sideways. With no well there is room for both lines at
+             their natural width, and a greyed-out stroke mark reads as decoration
+             rather than as a second button. */}
         <section className="grid grid-cols-[1fr_1fr_auto] gap-3 mb-5">
           <button
             onClick={() => { playHaptic('pop'); setShieldOpen(true) }}
             disabled={loading}
-            className="glass-btn h-[60px] rounded-[22px] px-3 flex items-center gap-2.5 tap duration-200 disabled:opacity-50"
+            className="glass-btn h-[60px] rounded-[22px] px-4 flex items-center gap-3 tap duration-200 disabled:opacity-50"
           >
-            <div className="w-8 h-8 shrink-0 rounded-[10px] bg-sunken border border-hair flex items-center justify-center">
-              {/* Shield + keyhole. The plain shield silhouette read as stock clip-art;
-                  the keyhole says "vault" and gives the glyph a centre to sit on. */}
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 2.5 5 5.7v5.4c0 4.4 3 8.1 7 9.4 4-1.3 7-5 7-9.4V5.7L12 2.5Z" />
-                <circle cx="12" cy="10.8" r="1.5" />
-                <path d="M12 12.3V15" />
-              </svg>
-            </div>
-            <span className="flex flex-col text-left min-w-0">
-              <span className="font-semibold text-[15px] text-white tracking-tight leading-tight">Shield</span>
-              <span className="text-[10px] text-muted leading-tight truncate">Set amount</span>
+            {/* Shield + keyhole. The plain shield silhouette read as stock clip-art;
+                the keyhole says "vault" and gives the glyph a centre to sit on. */}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-white/35">
+              <path d="M12 2.5 5 5.7v5.4c0 4.4 3 8.1 7 9.4 4-1.3 7-5 7-9.4V5.7L12 2.5Z" />
+              <circle cx="12" cy="10.8" r="1.5" />
+              <path d="M12 12.3V15" />
+            </svg>
+            <span className="flex flex-col text-left min-w-0 gap-1">
+              <span className="font-display font-semibold text-[15px] text-white tracking-tight leading-none">Shield</span>
+              <span className="text-[10px] text-muted leading-none">Set amount</span>
             </span>
           </button>
 
@@ -1832,20 +1866,18 @@ export default function App() {
             onClick={() => { playHaptic('pop'); setSendOpen(true) }}
             className="glass-btn h-[60px] rounded-[22px] px-3 flex items-center gap-2.5 tap duration-200"
           >
-            <div className="w-8 h-8 shrink-0 rounded-[10px] bg-sunken border border-hair flex items-center justify-center">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 20V4m0 0l-6 6m6-6l6 6" />
-              </svg>
-            </div>
-            <span className="flex flex-col text-left min-w-0">
-              <span className="font-semibold text-[15px] text-white tracking-tight leading-tight">Send</span>
-              <span className="text-[10px] text-muted leading-tight truncate">{isPrivateMode ? 'Shadow' : 'Ghost'}</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-white/35">
+              <path d="M12 20V4m0 0l-6 6m6-6l6 6" />
+            </svg>
+            <span className="flex flex-col text-left min-w-0 gap-1">
+              <span className="font-display font-semibold text-[15px] text-white tracking-tight leading-none">Send</span>
+              <span className="text-[10px] text-muted leading-none">{isPrivateMode ? 'Shadow' : 'Ghost'}</span>
             </span>
           </button>
 
           <button
             onClick={() => { playHaptic('pop'); setReceiveOpen(true) }}
-            aria-label="Receive — show QR code"
+            aria-label="Receive. Show QR code"
             className="glass-btn h-[60px] w-[60px] rounded-[22px] flex items-center justify-center tap duration-200"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1857,8 +1889,8 @@ export default function App() {
         {/* SEND MODE — Shadow (Vanta→Vanta) or Ghost (→ any wallet) */}
         <div
           onClick={toggleMode}
-          className={`w-full rounded-[20px] p-4 mb-6 flex items-center justify-between border tap cursor-pointer ${
-            isPrivateMode ? 'bg-accent/10 border-accent/30' : 'bg-card border-hair'
+          className={`w-full rounded-[20px] p-4 mb-6 flex items-center justify-between tap cursor-pointer ${
+            isPrivateMode ? 'bg-accent/10 border border-accent/30' : 'bg-card ring-card'
           }`}
         >
           <div className="flex items-center gap-3">
@@ -1866,11 +1898,11 @@ export default function App() {
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
             </div>
             <div className="flex flex-col">
-              <span className="text-[14px] font-semibold text-white">{isPrivateMode ? 'Shadow send' : 'Ghost send'}</span>
+              <span className="font-display text-[14px] font-semibold text-white">{isPrivateMode ? 'Shadow send' : 'Ghost send'}</span>
               <span className="text-[11px] text-muted">
                 {isPrivateMode
-                  ? 'Vanta → Vanta · amount and counterparty hidden'
-                  : 'Vanta → any wallet · arrives from the pool, not you'}
+                  ? 'Vanta to Vanta · amount and counterparty hidden'
+                  : 'Vanta to any wallet · arrives from the pool, not you'}
               </span>
             </div>
           </div>            <div className={`w-12 h-7 shrink-0 rounded-full tap flex items-center px-0.5 ${isPrivateMode ? 'bg-accent' : 'bg-white/10'}`}>
@@ -1878,17 +1910,23 @@ export default function App() {
           </div>
         </div>
 
+        {/* The site's hatched band used to sit here as a section break. On the
+            site it divides long editorial blocks; here it landed between the
+            send-mode card and the Transactions header, where it read as a stray
+            half-drawn rule rather than as a device — and the mode card already
+            carries its own mb-6, so the spacing is unchanged without it. */}
+
         {/* TRANSACTIONS */}
         <section className="flex-1 flex flex-col">
           {/* Header bar — real date, real session totals */}
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-muted text-[14px] font-normal tracking-normal">Transactions</p>
+              <p className="font-display text-muted text-[14px] font-normal tracking-normal">Transactions</p>
               <button
                 onClick={() => { playHaptic('tap'); setActivityOpen(true) }}
-                className="text-[12px] font-semibold text-accent hover:text-white transition-colors"
+                className="font-display text-[12px] font-semibold text-accent hover:text-white transition-colors"
               >
-                View all →
+                View all
               </button>
             </div>
             <div className="flex justify-between items-center text-sm">
@@ -1911,22 +1949,21 @@ export default function App() {
             {ASSET_RAIL.map((asset) => {
               const active = selectedToken === asset.key
               const priv = tokenBalance(asset.key)
-              const pub = asset.key === 'SOL' ? `${balance.toFixed(4)} SOL` : '—'
+              const pub = asset.key === 'SOL' ? `${balance.toFixed(4)} SOL` : 'n/a'
               return (
                 <button
                   key={asset.key}
                   onClick={() => { playHaptic('pop'); setSelectedToken(asset.key) }}
                   className={`asset-card rounded-[22px] p-4 flex items-center justify-between text-left active:scale-[0.99] tap ${
-                    active ? 'border-accent/40 card-glow' : ''
+                    active ? 'border-accent/45' : ''
                   }`}
                 >
                   <div className="flex items-center gap-3.5">
                     <div className={`relative w-11 h-11 shrink-0 rounded-full border flex items-center justify-center overflow-hidden ${asset.well}`}>
-                      <div className={`absolute inset-0 blur-sm ${asset.glow}`} />
                       {asset.icon}
                     </div>
                     <div className="flex flex-col">
-                      <span className="font-medium text-[16px] text-white leading-snug">{asset.name}</span>
+                      <span className="font-display font-medium text-[16px] text-white leading-snug">{asset.name}</span>
                       <span className="text-muted text-[12px] font-mono leading-snug">public {pub}</span>
                     </div>
                   </div>
@@ -1953,22 +1990,30 @@ export default function App() {
                 )}
               </div>
             ) : (
-              visibleTransactions.map((tx, i) => (
+              // The dashboard is a summary, not the ledger: the four most recent
+              // rows and a route to the rest. It used to print the entire history,
+              // which grew the home screen without bound and buried the balance and
+              // the actions under it — and made "View all →" pointless, since
+              // everything was already on screen.
+              visibleTransactions.slice(0, 4).map((tx, i) => (
                 <div
                   key={`${tx.at}-${i}`}
                   onClick={() => { playHaptic('pop'); openReceipt(tx) }}
                   className="flex items-center justify-between py-3 px-2 rounded-xl hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer group"
                 >
                   <div className="flex items-center gap-3.5">
-                    <div className={`w-10 h-10 rounded-2xl bg-white/[0.03] border border-hair flex items-center justify-center group-hover:scale-105 transition-transform ${tx.type === 'income' ? 'text-accent' : 'text-danger'}`}>
-                      {tx.mode === 'Shield' ? '🛡️' : tx.mode === 'Shadow' ? '🕳️' : tx.mode === 'Ghost' ? '👻' : tx.type === 'income' ? '↓' : '↑'}
+                    {/* The mark is the flow (shield / vault / pool-out), and it
+                        tints by DIRECTION: accent when money arrives, the neutral
+                        outgoing grey when it leaves. */}
+                    <div className={`w-10 h-10 shrink-0 rounded-2xl bg-white/[0.03] border border-hair flex items-center justify-center group-hover:scale-105 transition-transform ${tx.type === 'income' ? 'text-accent' : 'text-out'}`}>
+                      <ModeMark mode={tx.mode} type={tx.type} />
                     </div>
-                    <div className="flex flex-col">
-                      <span className="text-[14px] font-semibold text-white tracking-tight">{tx.title}</span>
-                      <span className="text-[11px] font-medium text-muted">{tx.time}{tx.isPrivate ? ' • 🔒 private' : ' • public'}</span>
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-display text-[14px] font-semibold text-white tracking-tight truncate">{tx.title}</span>
+                      <span className="text-[11px] font-medium text-muted">{tx.time}{tx.isPrivate ? ' · private' : ' · public'}</span>
                     </div>
                   </div>
-                  <span className={`text-[15px] font-bold tracking-tight tnum ${tx.type === 'income' ? 'text-accent' : 'text-danger'}`}>{tx.amount}</span>
+                  <span className={`font-display text-[15px] font-bold tracking-tight tnum shrink-0 ${tx.type === 'income' ? 'text-accent' : 'text-out'}`}>{tx.amount}</span>
                 </div>
               ))
             )}

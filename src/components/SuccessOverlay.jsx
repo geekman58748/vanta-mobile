@@ -133,9 +133,9 @@ export default function SuccessOverlay({
               target="_blank"
               rel="noreferrer noopener"
               onClick={(e) => e.stopPropagation()}
-              className="w-full py-3 rounded-2xl bg-white/10 border border-hair text-white font-semibold text-[13px] hover:bg-white/15 active:scale-95 tap"
+              className="btn-quiet tap w-full"
             >
-              View on Solana Explorer →
+              View on Solana Explorer
             </a>
           )}
 
@@ -147,7 +147,7 @@ export default function SuccessOverlay({
 
           <button
             onClick={onClose}
-            className="w-full py-3.5 rounded-2xl bg-accent hover:bg-accent-hi font-bold text-black active:scale-[0.98] tap text-sm"
+            className="btn-accent tap w-full"
           >
             Done
           </button>

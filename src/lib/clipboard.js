@@ -23,6 +23,6 @@ export async function copyText(text, notify, label = 'Copied to clipboard!', ico
     }
   }
   playHaptic('tap')
-  notify(ok ? label : 'Copy failed — select and copy manually', ok ? icon : '⚠️')
+  notify(ok ? label : 'Copy failed. Select and copy manually', ok ? icon : '⚠️')
   return ok
 }

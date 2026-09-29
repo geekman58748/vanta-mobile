@@ -3,6 +3,13 @@ import './Onboarding.css'
 import { playHaptic } from '../lib/haptic'
 // The real Vanta mark. White-on-transparent, so it sits on the canvas untinted.
 import vantaLogo from '../assets/vanta-logo.png'
+// Step 2's portrait, bundled. It used to be a LIVE request to
+// images.unsplash.com — on the very first screen, before the user had done
+// anything, from an app whose whole point is that it leaks nothing and renders
+// with zero network. Vite hashes it into dist/assets and rewrites the URL
+// relative, so it loads out of the APK's appassets sandbox like every other
+// asset and step 2 works in aeroplane mode.
+import portrait from '../assets/portrait.webp'
 
 /**
  * Onboarding — the three-step first-run flow.
@@ -57,8 +64,11 @@ function TopoField({ className = '' }) {
         <path
           key={d}
           d={d}
-          stroke="var(--color-accent)"
-          strokeOpacity={(0.16 - i * 0.008).toFixed(3)}
+          // White, not accent. Thirteen accent-coloured curves drifting behind
+          // every screen was the single biggest source of "too purple" — the
+          // field is texture, and texture should be neutral.
+          stroke="white"
+          strokeOpacity={(0.10 - i * 0.006).toFixed(3)}
           strokeWidth="1.1"
         />
       ))}
@@ -118,6 +128,37 @@ function PrivateNote({ className = '', style }) {
   )
 }
 
+/**
+ * The third object: a send in flight.
+ *
+ * Step 3 used to re-render `PrivateNote` — the same card as step 1. That reads
+ * as a mistake rather than a motif: the last screen of a three-screen flow
+ * showed the user an object they had already been shown, while the two scenes
+ * are meant to carry different ideas (1: what a shielded note IS, 3: what you DO
+ * with it). So this is a different primitive with a different silhouette — the
+ * flat, wide, hairline-ruled row that the site's evidence links use — floating
+ * in front of the unspent note instead of duplicating the note.
+ */
+function SendTile({ className = '', style }) {
+  return (
+    <div
+      className={
+        'flex items-center justify-between gap-3 rounded-xl border border-hair bg-card px-4 py-3 ' +
+        className
+      }
+      style={style}
+    >
+      <span className="flex flex-col gap-1.5">
+        <span className="font-display text-[13px] font-medium text-white/90">Shadow send</span>
+        <span className="ob-redact h-2.5 w-20 rounded" />
+      </span>
+      <span className="shrink-0 font-display text-[10px] uppercase tracking-[0.14em] text-accent">
+        hidden
+      </span>
+    </div>
+  )
+}
+
 export default function Onboarding({ onDone, initialStep = 0 }) {
   const [step, setStep] = useState(Math.min(Math.max(initialStep, 0), TOTAL - 1))
   const [dir, setDir] = useState('fwd')
@@ -165,11 +206,11 @@ export default function Onboarding({ onDone, initialStep = 0 }) {
               className="ob-anim mx-auto mb-7 h-14 w-14 object-contain"
               style={{ '--i': 0 }}
             />
-            <p className="ob-anim text-sm font-semibold tracking-wide text-accent" style={{ '--i': 1 }}>
+            <p className="ob-anim font-display text-sm font-semibold tracking-wide text-accent" style={{ '--i': 1 }}>
               Private by default
             </p>
             <h1
-              className="ob-anim mt-3 text-[34px] font-extrabold leading-[1.14] tracking-tight text-white"
+              className="ob-anim font-display mt-3 text-[34px] font-semibold leading-[1.14] tracking-[-0.03em] text-white"
               style={{ '--i': 2 }}
             >
               Hidden amounts.
@@ -187,13 +228,15 @@ export default function Onboarding({ onDone, initialStep = 0 }) {
               <div className="absolute h-px w-full bg-white/10" />
               <div className="absolute h-full w-px bg-white/10" />
               <div className="absolute h-64 w-64 rounded-2xl border border-white/5" />
-              <div className="absolute bottom-10 h-10 w-48 rounded-full bg-accent-deep/40 blur-3xl" />
+              <div className="absolute bottom-10 h-10 w-48 rounded-full bg-accent-deep/25 blur-3xl" />
 
               <PrivateNote
                 className="ob-anim ob-note-front h-[164px] w-[268px]"
                 style={{
                   '--i': 4,
-                  background: 'linear-gradient(140deg, #2b2447 0%, #1a1630 46%, #121016 100%)',
+                  // Darker and less saturated: the note keeps a violet cast (it IS
+                  // the accent object) but it no longer tints the whole screen.
+                  background: 'linear-gradient(140deg, #221c38 0%, #151223 46%, #0d0c11 100%)',
                 }}
               />
             </div>
@@ -210,12 +253,12 @@ export default function Onboarding({ onDone, initialStep = 0 }) {
               kind of overclaim this product exists to avoid. */}
           <div className="ob-anim relative h-[52vh] w-full overflow-hidden rounded-b-3xl" style={{ '--i': 0 }}>
             <img
-              src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=1000"
+              src={portrait}
               alt=""
               aria-hidden="true"
               className="h-full w-full object-cover object-center brightness-[0.72] contrast-[1.18]"
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-canvas/50 via-accent-deep/25 to-canvas" />
+            <div className="absolute inset-0 bg-gradient-to-b from-canvas/50 via-accent-deep/10 to-canvas" />
 
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <div className="relative flex h-56 w-44 flex-col justify-between rounded-3xl border border-accent/35 p-2">
@@ -229,10 +272,10 @@ export default function Onboarding({ onDone, initialStep = 0 }) {
           </div>
 
           <div className="relative z-10 -mt-6 flex flex-1 flex-col justify-center text-center">
-            <p className="ob-anim text-sm font-semibold tracking-wide text-accent" style={{ '--i': 1 }}>
+            <p className="ob-anim font-display text-sm font-semibold tracking-wide text-accent" style={{ '--i': 1 }}>
               No sign-up
             </p>
-            <h1 className="ob-anim mt-2 text-[34px] font-extrabold leading-[1.12] tracking-tight text-white" style={{ '--i': 2 }}>
+            <h1 className="ob-anim font-display mt-2 text-[34px] font-semibold leading-[1.12] tracking-[-0.03em] text-white" style={{ '--i': 2 }}>
               You are
               <br />
               the account.
@@ -248,10 +291,10 @@ export default function Onboarding({ onDone, initialStep = 0 }) {
       {step === 2 && (
         <div key="s2" className={'ob-step-' + dir + ' relative z-10 flex flex-1 flex-col justify-between'}>
           <header className="relative z-10 pt-2 text-center">
-            <p className="ob-anim text-sm font-semibold tracking-wide text-accent" style={{ '--i': 0 }}>
+            <p className="ob-anim font-display text-sm font-semibold tracking-wide text-accent" style={{ '--i': 0 }}>
               You are set
             </p>
-            <h1 className="ob-anim mt-3 text-[30px] font-extrabold leading-[1.16] tracking-tight text-white" style={{ '--i': 1 }}>
+            <h1 className="ob-anim font-display mt-3 text-[30px] font-semibold leading-[1.16] tracking-[-0.03em] text-white" style={{ '--i': 1 }}>
               Fund it, then send
               <br />
               what nobody can read
@@ -264,7 +307,7 @@ export default function Onboarding({ onDone, initialStep = 0 }) {
           {/* Same 3D composition as the template — two floating panels at the
               same angles — but they are notes now, not credit cards. */}
           <div className="ob-perspective relative z-10 my-4 flex flex-1 items-center justify-center">
-            <div className="absolute bottom-8 h-12 w-52 rounded-full bg-accent-deep/45 blur-3xl" />
+            <div className="absolute bottom-8 h-12 w-52 rounded-full bg-accent-deep/28 blur-3xl" />
 
             {/* Hand graphic, kept: it is what sells "these objects are held" */}
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-70">
@@ -274,19 +317,19 @@ export default function Onboarding({ onDone, initialStep = 0 }) {
                 viewBox="0 0 200 200"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
-                className="filter drop-shadow-[0_0_14px_rgba(139,121,240,0.55)]"
+                className="filter drop-shadow-[0_0_14px_rgba(139,121,240,0.22)]"
                 aria-hidden="true"
               >
                 <path
                   d="M60 140 C 60 120, 75 110, 85 125 C 95 105, 115 100, 125 120 C 135 105, 150 115, 145 135 C 155 130, 165 140, 155 155 C 140 180, 100 190, 70 170 Z"
-                  stroke="var(--color-accent)"
+                  stroke="rgba(255,255,255,0.30)"
                   strokeWidth="2.2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  fill="rgba(139,121,240,0.05)"
+                  fill="rgba(255,255,255,0.03)"
                 />
-                <path d="M75 125 L 75 95 C 75 85, 90 85, 90 95 L 90 120" stroke="var(--color-accent)" strokeWidth="2.2" strokeLinecap="round" />
-                <path d="M100 110 L 100 80 C 100 70, 115 70, 115 80 L 115 115" stroke="var(--color-accent)" strokeWidth="2.2" strokeLinecap="round" />
+                <path d="M75 125 L 75 95 C 75 85, 90 85, 90 95 L 90 120" stroke="rgba(255,255,255,0.30)" strokeWidth="2.2" strokeLinecap="round" />
+                <path d="M100 110 L 100 80 C 100 70, 115 70, 115 80 L 115 115" stroke="rgba(255,255,255,0.30)" strokeWidth="2.2" strokeLinecap="round" />
               </svg>
             </div>
 
@@ -305,12 +348,9 @@ export default function Onboarding({ onDone, initialStep = 0 }) {
               </div>
             </div>
 
-            <PrivateNote
-              className="ob-anim ob-note-front absolute h-[140px] w-[216px]"
-              style={{
-                '--i': 4,
-                background: 'linear-gradient(140deg, #322a52 0%, #1d1836 48%, #131018 100%)',
-              }}
+            <SendTile
+              className="ob-anim absolute w-[276px] shadow-[0_18px_44px_rgba(0,0,0,0.8)]"
+              style={{ '--i': 4 }}
             />
           </div>
         </div>
@@ -336,7 +376,7 @@ export default function Onboarding({ onDone, initialStep = 0 }) {
         <button
           onClick={advance}
           aria-label={onLast ? 'Finish' : 'Next'}
-          className="group flex h-14 w-14 items-center justify-center rounded-full bg-accent text-black shadow-[0_10px_28px_rgba(139,121,240,0.35)] transition-all duration-200 hover:bg-accent-hi active:scale-95"
+          className="group flex h-14 w-14 items-center justify-center rounded-full bg-accent text-black shadow-[0_10px_28px_rgba(139,121,240,0.2)] transition-all duration-200 hover:bg-accent-hi active:scale-95"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -353,7 +393,7 @@ export default function Onboarding({ onDone, initialStep = 0 }) {
 
         <button
           onClick={finish}
-          className="text-sm font-medium text-muted transition-colors hover:text-white"
+          className="font-display text-sm font-medium text-muted transition-colors hover:text-white"
         >
           {onLast ? 'Done' : 'Skip'}
         </button>

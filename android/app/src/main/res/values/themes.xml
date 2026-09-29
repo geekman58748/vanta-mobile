@@ -11,11 +11,27 @@
         <item name="windowSplashScreenBackground">@color/splash_background</item>
         <!-- The splash icon is the first thing that ever renders, and it was the
              stock Android robot (the webshell template's drawable). Now it is the
-             real Vanta mark. The adaptive foreground is reused deliberately: its
-             glyph occupies ~60% of the 108dp canvas, which is exactly the safe area
-             Android 12+ expects for a splash icon, so no separate asset is needed. -->
+             real Vanta mark. The adaptive foreground is reused deliberately, but it
+             is NOT used as-is: the splash's own safe area is a circle taking up the
+             inner two-thirds of the icon area — the same 72-of-108 ratio the
+             launcher uses — so the one asset serves both as long as the mark fits
+             the 66dp safe circle. scripts/gen-launcher-icons.py sizes it that way.
+             Earlier it was drawn at a flat 60% of the canvas, which is right for a
+             square glyph and wrong for this diamond-shaped prism: the chevron tip
+             and the corners of the left bar sat outside the circle, so the splash
+             (and the home-screen icon) showed the logo zoomed in with its points
+             cut off. -->
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
-        <item name="windowSplashScreenIconBackgroundColor">@color/launcher_icon_background</item>
+        <!-- Was @color/launcher_icon_background (#2A2150, the violet HOME-SCREEN
+             tile). That is what made launch look wrong: a violet disc behind the
+             mark, sitting on a #060509 splash, so the logo appeared to be pasted
+             onto a panel that had its own colour — a second background inside the
+             first one. The disc is also what Android 12+ masks the icon into, so
+             it was clipping the mark at the same time.
+
+             No background at all: the mark is white-on-transparent, so it lands
+             directly on the same ink the splash and the app both use. The violet
+             tile still belongs on the home screen, which is a different surface. -->
         <item name="postSplashScreenTheme">@style/Theme.WebShell</item>
     </style>
 </resources>

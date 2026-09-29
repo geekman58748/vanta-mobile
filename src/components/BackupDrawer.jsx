@@ -15,10 +15,12 @@ import { copyText } from '../lib/clipboard'
 
 const field =
   'w-full px-4 py-3.5 rounded-2xl bg-black/40 border border-white/10 text-white font-mono text-[12px] placeholder:text-muted/60 focus:outline-none focus:border-accent/50'
-const primary =
-  'w-full py-3.5 rounded-2xl bg-accent hover:bg-accent-hi font-bold text-black shadow-lg shadow-accent/20 active:scale-[0.98] tap text-sm disabled:opacity-50'
-const secondary =
-  'w-full py-3.5 rounded-2xl bg-white/5 border border-hair font-semibold text-white/80 hover:bg-white/10 active:scale-[0.98] tap text-sm disabled:opacity-50'
+// The site's button grammar: a flat fill, a hairline border, a 12px radius and a
+// colour transition on hover. No gradient, no glow, no drop shadow. Buttons in
+// this app were `rounded-2xl` + `font-bold` + `shadow-lg shadow-accent/20`, and
+// that glow under every CTA was most of why they read as heavy next to the site.
+const primary = 'btn-accent tap w-full disabled:opacity-50'
+const secondary = 'btn-quiet tap w-full disabled:opacity-50'
 
 export default function BackupDrawer({ open, onClose, mode = 'export', notify, onRestored }) {
   const [passphrase, setPassphrase] = useState('')
@@ -57,7 +59,7 @@ export default function BackupDrawer({ open, onClose, mode = 'export', notify, o
       }
       setBlob(res.text)
       playHaptic('success')
-      notify('Backup ready — save the text somewhere safe', '🔐')
+      notify('Backup ready. Save the text somewhere safe', '🔐')
     } catch (err) {
       notify(`Could not build the backup: ${err?.message || err}`, '⚠️')
     } finally {
@@ -95,7 +97,7 @@ export default function BackupDrawer({ open, onClose, mode = 'export', notify, o
         return
       }
       playHaptic('success')
-      notify('Restored — reloading to rebuild the identity', '✅')
+      notify('Restored. Reloading to rebuild the identity', '✅')
       onRestored?.()
     } catch (err) {
       notify(`Could not restore: ${err?.message || err}`, '⚠️')
@@ -117,7 +119,7 @@ export default function BackupDrawer({ open, onClose, mode = 'export', notify, o
         <>
           <span className="text-[12px] leading-relaxed text-muted">
             Vanta keeps your shielded identity and your in-app wallet in this app&apos;s storage.
-            Nothing is synced anywhere, so clearing this app&apos;s data — or uninstalling it — loses
+            Nothing is synced anywhere, so clearing this app&apos;s data, or uninstalling it, loses
             both, and the SOL behind them with them. A backup is the only way back.
           </span>
 
@@ -142,7 +144,7 @@ export default function BackupDrawer({ open, onClose, mode = 'export', notify, o
               className={field}
             />
             <span className="text-[10px] leading-snug text-muted">
-              It encrypts the file. Vanta cannot recover it for you — there is no reset.
+              It encrypts the file. Vanta cannot recover it for you. There is no reset.
             </span>
           </div>
 
@@ -153,7 +155,7 @@ export default function BackupDrawer({ open, onClose, mode = 'export', notify, o
           {blob && (
             <div className="flex flex-col gap-2">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-accent">
-                Your backup — save this text
+                Your backup. Save this text
               </span>
               <textarea
                 readOnly
@@ -163,7 +165,7 @@ export default function BackupDrawer({ open, onClose, mode = 'export', notify, o
                 className={`${field} resize-none`}
               />
               <button
-                onClick={() => copyText(blob, notify, 'Backup copied — store it in a password manager', '📋')}
+                onClick={() => copyText(blob, notify, 'Backup copied. Store it in a password manager', '📋')}
                 className={secondary}
               >
                 Copy backup text
@@ -181,7 +183,7 @@ export default function BackupDrawer({ open, onClose, mode = 'export', notify, o
           <span className="text-[12px] leading-relaxed text-muted">
             Restoring replaces this device&apos;s shielded identity
             {pending?.summary?.wallet ? ' and its in-app wallet' : ''} with the one in the backup. Do
-            this on a fresh install after a wipe — it rebuilds your private balance from the same
+            this on a fresh install after a wipe. It rebuilds your private balance from the same
             identity.
           </span>
 
@@ -247,7 +249,7 @@ export default function BackupDrawer({ open, onClose, mode = 'export', notify, o
       )}
 
       <span className="text-[10px] leading-snug text-muted">
-        A device wallet (Seed Vault / Phantom / Solflare) is not part of a backup — its key stays in
+        A device wallet (Seed Vault / Phantom / Solflare) is not part of a backup. Its key stays in
         your wallet app. Just reconnect it.
       </span>
     </Drawer>

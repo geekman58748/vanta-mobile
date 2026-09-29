@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Drawer from './Drawer'
 import HonestyRows from './HonestyRows'
 import { copyText } from '../lib/clipboard'
@@ -6,7 +6,7 @@ import { playHaptic } from '../lib/haptic'
 import { stampToDate, shortRef } from '../lib/format'
 import { MODE_HONESTY, explorerLink, PROOF } from '../lib/honesty'
 import { lookupProof } from '../lib/txHistory'
-import { downloadReceiptPdf } from '../lib/receiptPdf'
+import { downloadReceiptPdf, openReceiptFile } from '../lib/receiptPdf'
 
 // ok = confirmed · warn = reported but not confirmed · mute = not checked.
 // Amber rather than danger for `warn`: the transaction is not broken, it is
@@ -36,6 +36,10 @@ const MODE_COPY = {
  */
 export default function ReceiptDrawer({ open, onClose, txn, notify }) {
   const [exporting, setExporting] = useState(false)
+  // Set only by a save that actually wrote a file the system can hand back.
+  // Scoped storage cannot open a path, only a uri, so no uri means no button
+  // rather than a button that fails when pressed.
+  const [savedUri, setSavedUri] = useState(null)
   const income = txn?.type === 'income'
   const mode = txn?.mode
   const known = Boolean(MODE_HONESTY[mode])
@@ -76,7 +80,8 @@ export default function ReceiptDrawer({ open, onClose, txn, notify }) {
         return
       }
       playHaptic('success')
-      if (res.unverified) notify(`Download started — ${res.fileName}`, '📄')
+      setSavedUri(res.uri ?? null)
+      if (res.unverified) notify(`Download started: ${res.fileName}`, '📄')
       else notify(`Saved ${res.fileName}${res.location ? ` to ${res.location}` : ''}`, '📄')
     } catch (err) {
       console.error(err)
@@ -85,6 +90,23 @@ export default function ReceiptDrawer({ open, onClose, txn, notify }) {
       setExporting(false)
     }
   }
+
+  /**
+   * Read the receipt we just wrote, so it can be screenshotted in one tap.
+   * The save already reported success or failure; this is only the open.
+   */
+  const openSaved = () => {
+    if (!savedUri) return
+    playHaptic('tap')
+    const res = openReceiptFile(savedUri, 'application/pdf')
+    if (!res.ok) notify(res.error, '⚠️')
+  }
+
+  // A different transaction is a different file: the old uri points at the
+  // previous receipt and must not be offered for this one.
+  useEffect(() => {
+    setSavedUri(null)
+  }, [txn])
 
   return (
     <Drawer open={open} onClose={onClose} title="Transaction details">
@@ -95,7 +117,7 @@ export default function ReceiptDrawer({ open, onClose, txn, notify }) {
               className={`w-12 h-12 rounded-full flex items-center justify-center mb-1 border ${
                 income
                   ? 'bg-accent/20 text-accent border-accent/30'
-                  : 'bg-danger/20 text-danger border-danger/30'
+                  : 'bg-white/[0.06] text-out border-hair'
               }`}
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -110,8 +132,8 @@ export default function ReceiptDrawer({ open, onClose, txn, notify }) {
             <span className="text-[11px] font-bold text-muted uppercase tracking-widest">
               {txn.mode ? `${txn.mode} transfer` : 'Transfer'}
             </span>
-            <h3 className="text-2xl font-bold text-white tracking-tight">{txn.title}</h3>
-            <span className={`text-3xl font-extrabold tnum ${income ? 'text-accent' : 'text-danger'}`}>
+            <h3 className="font-display text-2xl font-bold text-white tracking-tight">{txn.title}</h3>
+            <span className={`font-display text-3xl font-extrabold tnum ${income ? 'text-accent' : 'text-out'}`}>
               {txn.amount}
             </span>
           </div>
@@ -137,9 +159,9 @@ export default function ReceiptDrawer({ open, onClose, txn, notify }) {
                 href={link}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="mt-0.5 self-start px-3.5 py-2 rounded-xl bg-white/10 border border-hair text-white font-semibold text-[12px] hover:bg-white/15 active:scale-95 tap"
-              >
-                View on Solana Explorer →
+              className="btn-quiet tap mt-0.5 self-start"
+            >
+              View on Solana Explorer
               </a>
             ) : (
               <p className="text-[10px] leading-snug text-muted font-mono break-all">
@@ -198,21 +220,29 @@ export default function ReceiptDrawer({ open, onClose, txn, notify }) {
           <button
             onClick={exportPdf}
             disabled={exporting}
-            className="w-full py-3.5 rounded-2xl bg-accent hover:bg-accent-hi font-bold text-black active:scale-[0.98] tap text-sm disabled:opacity-50"
+            className="btn-accent tap w-full disabled:opacity-50"
           >
             {exporting ? 'Building receipt…' : 'Download PDF receipt'}
           </button>
 
+          {/* Offered only once a file is genuinely on the device. It opens the
+              same bytes the button above just wrote — nothing is saved twice. */}
+          {savedUri && (
+            <button onClick={openSaved} className="btn-quiet tap w-full">
+              Open receipt
+            </button>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={copyReceipt}
-              className="py-3.5 rounded-2xl bg-white/10 font-bold text-white hover:bg-white/15 active:scale-95 tap text-sm"
+              className="btn-quiet tap"
             >
               Copy details
             </button>
             <button
               onClick={onClose}
-              className="py-3.5 rounded-2xl bg-white/10 border border-hair font-bold text-muted hover:bg-white/15 active:scale-95 tap text-sm"
+              className="btn-quiet tap"
             >
               Close
             </button>

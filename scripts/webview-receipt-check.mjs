@@ -17,7 +17,15 @@
 // Usage: ./gradlew assembleDebug && adb install -r <apk>   (DEBUG build only)
 //        node scripts/webview-receipt-check.mjs
 //
-// Env: ADB_PORT (default 9222), PACKAGE (default com.vanta.privacywallet)
+// Env: ADB_PORT (default 9222), PACKAGE (default com.vanta.privacywallet),
+//      CHECK_ATTEMPTS (default 4)
+//
+// ⚠ The device's DNS is intermittently useless — measured on 2026-09-28:
+// `ping` to the relayer fails roughly 1 in 4, and a whole 5-attempt session ran
+// 5/5 red while the same lookup succeeded from the shell seconds earlier. A
+// single pass therefore reports a working app as broken, which is how a session
+// gets spent fixing nothing. This retries, and a device-network failure exits
+// **2** (INCONCLUSIVE) instead of 1 — 1 means the app/relayer is actually wrong.
 
 import { execSync } from 'node:child_process'
 
@@ -113,37 +121,54 @@ ws.addEventListener('message', (event) => {
 const before = await J("localStorage.getItem('vanta-proofs-v1')")
 console.log('proof store before:', before)
 
-// A receipt left open from a previous run would sit on top of the rows.
-await J(`(() => {
-  const close = [...document.querySelectorAll('button')].find((b) => /^close$/i.test(b.innerText.trim()))
-  if (close) close.click()
-  return true
-})()`)
-await sleep(800)
+// One pass: close anything left open, tap a Shield row, read the block back.
+async function inspectReceipt() {
+  // A receipt left open from a previous run would sit on top of the rows.
+  await J(`(() => {
+    const close = [...document.querySelectorAll('button')].find((b) => /^close$/i.test(b.innerText.trim()))
+    if (close) close.click()
+    return true
+  })()`)
+  await sleep(800)
 
-const clicked = await J(`(() => {
-  const rows = [...document.querySelectorAll('div.cursor-pointer')].filter(
-    (d) => !(d.parentElement && String(d.parentElement.className).includes('cursor-pointer')),
-  )
-  const row = rows.find((r) => r.innerText.includes('Shielded')) ?? rows[0]
-  if (!row) return 'NO ROWS'
-  row.click()
-  return row.innerText.replace(/\\s+/g, ' ').slice(0, 56)
-})()`)
-console.log('opened:', clicked)
+  const clicked = await J(`(() => {
+    const rows = [...document.querySelectorAll('div.cursor-pointer')].filter(
+      (d) => !(d.parentElement && String(d.parentElement.className).includes('cursor-pointer')),
+    )
+    const row = rows.find((r) => r.innerText.includes('Shielded')) ?? rows[0]
+    if (!row) return 'NO ROWS'
+    row.click()
+    return row.innerText.replace(/\\s+/g, ' ').slice(0, 56)
+  })()`)
+  console.log('opened:', clicked)
 
-await sleep(7000)
+  await sleep(7000)
 
-const checks = {
-  sheetOpen: await J("document.body.innerText.includes('Transaction details')"),
-  block: await J(
-    "((document.body.innerText.match(/on-chain check[\\s\\S]{0,220}/i) || ['missing'])[0]).replace(/\\s+/g, ' ')",
-  ),
-  store: await J("localStorage.getItem('vanta-proofs-v1')"),
+  return {
+    sheetOpen: await J("document.body.innerText.includes('Transaction details')"),
+    block: await J(
+      "((document.body.innerText.match(/on-chain check[\\s\\S]{0,220}/i) || ['missing'])[0]).replace(/\\s+/g, ' ')",
+    ),
+    store: await J("localStorage.getItem('vanta-proofs-v1')"),
+  }
 }
-console.log('receipt sheet open :', checks.sheetOpen)
-console.log('On-chain check     :', checks.block)
-console.log('proof store after  :', checks.store)
+
+// See the header: the device's DNS is flaky, so retry before believing a red
+// pass. The pass condition here is the same three facts the final verdict uses.
+const ATTEMPTS = Number(process.env.CHECK_ATTEMPTS || 4)
+let checks
+for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
+  checks = await inspectReceipt()
+  console.log('receipt sheet open :', checks.sheetOpen)
+  console.log('On-chain check     :', checks.block)
+  console.log('proof store after  :', checks.store)
+  const pass = checks.sheetOpen === true && checks.block !== 'missing' && !/Not checked/i.test(checks.block)
+  if (pass) break
+  if (attempt < ATTEMPTS) {
+    console.log(`— attempt ${attempt}/${ATTEMPTS} did not resolve; retrying in 15s (flaky device DNS is common) —`)
+    await sleep(15_000)
+  }
+}
 
 console.log('\nrelayer calls:')
 if (!relayerCalls.length) console.log('  (none — the app never issued one)')
@@ -178,7 +203,40 @@ const gainedKey = Boolean(checks.store) && checks.store !== before
 const present = checks.block !== 'missing'
 const resolved = !/Not checked/i.test(checks.block)
 const ok = checks.sheetOpen === true && present && resolved
-console.log(`\n${ok ? '✓' : '✗'} receipt re-check ${ok ? 'holds' : 'FAILED'}` +
-  `  (block present: ${present ? 'yes' : 'NO'}, resolved: ${resolved ? 'yes' : 'no'}, proof key written: ${gainedKey ? 'yes' : 'no'})`)
-if (badCall) console.log(`  relayer ${badCall.status} on ${badCall.url.replace(/^https?:\/\/[^/]+/, '')} — fix the server, not this receipt.`)
-process.exitCode = ok ? 0 : 1
+
+// A device that cannot reach the relayer is not an app failure. From the
+// receipt the two look identical ("Not checked" either way), and only one of
+// them needs a fix — so say which one this is instead of exiting 1 for both.
+const NETWORK_ERROR = /ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED|ERR_ADDRESS_UNREACHABLE|ERR_CONNECTION_|ERR_TIMED_OUT|ERR_NETWORK_CHANGED/
+const networkFailure =
+  loadFailures.some((text) => NETWORK_ERROR.test(text)) ||
+  pageLogs.some((line) => /\[tx\]/.test(line) && /Failed to fetch|fetch failed|NetworkError|network error|timed out/i.test(line))
+const summary = `block present: ${present ? 'yes' : 'NO'}, resolved: ${resolved ? 'yes' : 'no'}, proof key written: ${gainedKey ? 'yes' : 'no'}`
+
+// A row that already carries a proof is short-circuited by `openReceipt` on
+// purpose, so green can mean "the check ran and resolved" OR "there was nothing
+// to check". Observed both ways on device 2026-09-28 — a row that already held
+// 'verified' produced a green with zero relayer calls. That is the shape of a
+// check that hides bugs, so name it rather than let it pass silently.
+const exercised = gainedKey || relayerCalls.length > 0
+
+if (ok) {
+  console.log(`\n✓ receipt re-check holds  (${summary})`)
+  if (!exercised) {
+    console.log('  ⚠ NOT EXERCISED: the relayer was never asked — the row already carried a')
+    console.log('    proof, so the app short-circuits by design (App.jsx openReceipt).')
+    console.log('    This proves the receipt renders, NOT that the re-check works.')
+  }
+} else if (badCall && !networkFailure) {
+  console.log(`\n✗ receipt re-check FAILED  (${summary})`)
+  console.log(`  relayer ${badCall.status} on ${badCall.url.replace(/^https?:\/\/[^/]+/, '')} — fix the server, not this receipt.`)
+} else if (networkFailure) {
+  console.log(`\n⚠ receipt re-check INCONCLUSIVE (${summary})`)
+  console.log(`  The DEVICE could not reach the relayer, so nothing was verified — not an app bug.`)
+  console.log(`  Observed: ${[...new Set(loadFailures)].join(', ') || 'the page\'s fetch was rejected'}`)
+  console.log(`  Retried ${ATTEMPTS}x. Bring the phone online and re-run; exit 2 means "unknown", not "broken".`)
+} else {
+  console.log(`\n✗ receipt re-check FAILED  (${summary})`)
+}
+
+process.exitCode = ok ? 0 : networkFailure ? 2 : 1

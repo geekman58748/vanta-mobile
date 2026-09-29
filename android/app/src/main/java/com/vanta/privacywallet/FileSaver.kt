@@ -2,6 +2,7 @@ package com.vanta.privacywallet
 
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -67,6 +68,38 @@ object FileSaver {
         return cleaned.ifBlank { "vanta-receipt.pdf" }
     }
 
+    /**
+     * Open a file this app just wrote with whatever viewer the device has.
+     *
+     * The receipt has to be readable from inside the app: digging through a file
+     * manager to find a PDF is not something a user (or a judge, demoing in a
+     * hurry) will do just to take a screenshot of it.
+     *
+     * @return JSON `{"ok":true,"opened":true}` or `{"ok":false,"error":"…"}`.
+     */
+    fun openUri(context: Context, uriString: String, mimeType: String): String {
+        if (uriString.isBlank()) return failure("there is no saved file to open yet")
+        return try {
+            val uri = android.net.Uri.parse(uriString)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeType.ifBlank { "application/octet-stream" })
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                // The bridge is not an Activity, so the task has to be asked for.
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            // On API 30+ this only answers for apps listed in the manifest's
+            // <queries>; returning null here means "no viewer installed".
+            if (intent.resolveActivity(context.packageManager) == null) {
+                return failure("no app on this device can open this file")
+            }
+            context.startActivity(intent)
+            success("opened", uriString)
+        } catch (err: Exception) {
+            Log.w(TAG, "open failed: ${err.message}", err)
+            failure(err.message ?: "could not open the file")
+        }
+    }
+
     private fun saveViaMediaStore(
         context: Context,
         name: String,
@@ -98,7 +131,10 @@ object FileSaver {
             values.clear()
             values.put(MediaStore.MediaColumns.IS_PENDING, 0)
             resolver.update(uri, values, null, null)
-            success("$relPath/$name")
+            // The uri, not just the path: it is what lets the web layer open the
+            // file again without re-writing it (a path alone cannot be handed to
+            // ACTION_VIEW on scoped storage).
+            success("$relPath/$name", uri.toString())
         } catch (err: Exception) {
             Log.w(TAG, "MediaStore save failed: ${err.message}", err)
             failure(err.message ?: "the system rejected the write")
@@ -139,7 +175,11 @@ object FileSaver {
         }
     }
 
-    private fun success(path: String): String = JSONObject().put("ok", true).put("path", path).toString()
+    private fun success(path: String, uri: String? = null): String {
+        val json = JSONObject().put("ok", true).put("path", path)
+        if (uri != null) json.put("uri", uri)
+        return json.toString()
+    }
 
     private fun failure(reason: String): String = JSONObject().put("ok", false).put("error", reason).toString()
 }

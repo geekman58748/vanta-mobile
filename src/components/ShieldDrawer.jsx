@@ -94,20 +94,18 @@ export default function ShieldDrawer({
   // One line, always the truth: what goes in, what stays behind, what it costs.
   const footnote = !isSol
     ? `Public SOL pays the network fee. ${SHIELD_FEE_RESERVE.toFixed(6)} SOL is reserved.`
-    : shortOnFee
-      ? `Not enough. Shielding ${amount || 0} needs ${requiredSol.toFixed(6)} SOL — you have ${balance.toFixed(6)}.`
+    : shortOnFee        ? `Not enough. Shielding ${amount || 0} needs ${requiredSol.toFixed(6)} SOL. You have ${balance.toFixed(6)}.`
       : `Keeps ${SHIELD_FEE_RESERVE.toFixed(6)} SOL behind for the network fee.`
 
   return (
     <Drawer
       open={open}
       onClose={onClose}
-      title="Shield"
-      subtitle="Public balance → your private balance"
+      title="Shield"        subtitle="Public balance into your private balance"
     >
       <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-accent/10 border border-accent/20">
         <span className="text-[11px] leading-snug text-accent font-medium">
-          The deposit itself is public — it names your wallet and the amount. What the pool hides is
+          The deposit itself is public. It names your wallet and the amount. What the pool hides is
           where the money goes next.
         </span>
       </div>
@@ -116,7 +114,7 @@ export default function ShieldDrawer({
         <span className="text-[11px] font-semibold uppercase text-accent tracking-wider">
           Shield amount
         </span>
-        <div className="text-[40px] font-extrabold text-white mt-0.5 tracking-tight leading-none tnum">
+        <div className="font-display text-[40px] font-semibold text-white mt-0.5 tracking-[-0.03em] leading-none tnum">
           {value}
           <span className="text-[16px] text-muted font-bold ml-2">{token.symbol}</span>
         </div>
@@ -133,7 +131,7 @@ export default function ShieldDrawer({
               playHaptic('tap')
               setValue(preset)
             }}
-            className={`flex-1 py-2.5 rounded-xl border font-bold text-[13px] tap active:scale-95 ${
+            className={`flex-1 rounded-xl border py-2.5 text-[13px] font-semibold transition-colors tap active:scale-[0.99] ${
               value === preset
                 ? 'bg-accent/20 border-accent/40 text-accent'
                 : 'bg-white/5 border-hair text-white/80 hover:bg-white/10'
@@ -146,7 +144,7 @@ export default function ShieldDrawer({
           <button
             onClick={setMax}
             disabled={maxSol <= 0}
-            className="flex-1 py-2.5 rounded-xl border border-accent/30 bg-accent/10 text-accent font-bold text-[13px] hover:bg-accent/20 active:scale-95 tap disabled:opacity-40"
+            className="flex-1 rounded-xl border border-accent/30 bg-accent/10 py-2.5 text-[13px] font-semibold text-accent transition-colors hover:bg-accent/20 active:scale-[0.99] tap disabled:opacity-40"
           >
             Max
           </button>
@@ -158,7 +156,7 @@ export default function ShieldDrawer({
           <button
             key={key}
             onClick={() => press(key)}
-            className={`py-3.5 text-2xl font-bold bg-white/5 border border-hair rounded-2xl active:bg-accent/20 active:scale-95 tap ${
+            className={`font-display rounded-xl border border-hair bg-white/5 py-3.5 text-2xl font-medium transition-colors active:bg-accent/20 active:scale-[0.99] tap ${
               key === 'del' ? 'text-xl text-danger active:bg-danger/30' : 'text-white'
             }`}
           >
@@ -172,13 +170,13 @@ export default function ShieldDrawer({
         aria-live="polite"
         className={`text-[11px] leading-snug ${shortOnFee || overMax ? 'text-amber-300' : 'text-muted'}`}
       >
-        {overMax ? `Max you can shield is ${maxSol.toFixed(6)} SOL — the fee stays behind.` : footnote}
+        {overMax ? `Max you can shield is ${maxSol.toFixed(6)} SOL. The fee stays behind.` : footnote}
       </span>
 
       <button
         onClick={confirm}
         disabled={blocked}
-        className="w-full py-4 rounded-2xl bg-accent hover:bg-accent-hi font-bold text-black shadow-lg shadow-accent/20 active:scale-[0.98] tap text-base disabled:opacity-50"
+        className="btn-accent tap w-full disabled:opacity-50"
       >
         {shielding ? 'Shielding…' : `Shield ${value} ${token.symbol}`}
       </button>
@@ -192,7 +190,7 @@ export default function ShieldDrawer({
           disabled={loading}
           className="text-[11px] text-muted hover:text-white transition-colors self-center disabled:opacity-50"
         >
-          Not enough to shield? Request a devnet airdrop →
+          Not enough to shield? Request a devnet airdrop
         </button>
       )}
     </Drawer>

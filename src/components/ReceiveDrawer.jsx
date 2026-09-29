@@ -109,8 +109,8 @@ export default function ReceiveDrawer({ open, onClose, wallet, vantaAddress, not
           {vantaAddress || 'initializing…'}
         </span>
         <span className="text-[11px] leading-snug text-muted px-3">
-          Give this to another Vanta user. Their Shadow send lands straight in your private balance —
-          amount and sender hidden. A plain SOL/SPL transfer cannot reach it.
+          Give this to another Vanta user. Their Shadow send lands straight in your private balance.
+          Amount and sender hidden. A plain SOL/SPL transfer cannot reach it.
         </span>
         {handle && (
           <button
@@ -126,7 +126,7 @@ export default function ReceiveDrawer({ open, onClose, wallet, vantaAddress, not
       <button
         disabled={!vantaAddress}
         onClick={() => copyText(vantaAddress, notify, 'Vanta address copied!', '🕳️')}
-        className="w-full py-3.5 rounded-2xl bg-accent/15 border border-accent/30 font-bold text-accent hover:bg-accent/25 active:scale-[0.98] tap text-sm disabled:opacity-40"
+        className="font-display w-full py-3.5 rounded-2xl bg-accent/15 border border-accent/30 font-bold text-accent hover:bg-accent/25 active:scale-[0.98] tap text-sm disabled:opacity-40"
       >
         Copy Vanta address
       </button>

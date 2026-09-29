@@ -146,7 +146,7 @@ function translateWalletError(err) {
     return userFacing(
       `${walletLabel()} could not read this transaction: it does not support Solana v1 transactions yet, ` +
         'and every Vanta privacy transaction is a v1 by design. Shield and send it with the ' +
-        'in-app wallet instead (Settings → Device wallet → Disconnect), then move funds over.',
+        'in-app wallet instead (Settings > Device wallet > Disconnect), then move funds over.',
       err,
     )
   }
@@ -156,7 +156,7 @@ function translateWalletError(err) {
 function withTimeout(promise, label, timeoutMs = MWA_REQUEST_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(
-      () => reject(new Error(`${label} timed out — approve the request in your wallet and try again`)),
+      () => reject(new Error(`${label} timed out. Approve the request in your wallet and try again`)),
       timeoutMs,
     )
     promise.then(
@@ -260,8 +260,8 @@ export async function verifiedSignatureFromSignedTx(signedBytes, address, messag
     signatures = Object.values(transaction.signatures).filter(Boolean)
   } catch (err) {
     throw userFacing(
-      `${walletLabel()} returned something that is not a Solana transaction — the deposit was not submitted. ` +
-        'Update the wallet, or Shield with the in-app wallet instead (Settings → Device wallet → Disconnect).',
+      `${walletLabel()} returned something that is not a Solana transaction. The deposit was not submitted. ` +
+        'Update the wallet, or Shield with the in-app wallet instead (Settings > Device wallet > Disconnect).',
       err,
     )
   }
@@ -277,10 +277,10 @@ export async function verifiedSignatureFromSignedTx(signedBytes, address, messag
 
   throw userFacing(
     signatures.length === 0
-      ? `${walletLabel()} returned this deposit unsigned — it did not sign for your account, so nothing was submitted. ` +
-        'Try again, or Shield with the in-app wallet instead (Settings → Device wallet → Disconnect).'
+      ? `${walletLabel()} returned this deposit unsigned. It did not sign for your account, so nothing was submitted. ` +
+        'Try again, or Shield with the in-app wallet instead (Settings > Device wallet > Disconnect).'
       : `${walletLabel()} returned a signature that does not match this deposit, so nothing was submitted. ` +
-        'No funds moved. Try again, or Shield with the in-app wallet instead (Settings → Device wallet → Disconnect).',
+        'No funds moved. Try again, or Shield with the in-app wallet instead (Settings > Device wallet > Disconnect).',
   )
 }
 

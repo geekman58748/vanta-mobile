@@ -4,6 +4,7 @@ import { playHaptic } from '../lib/haptic'
 import { TOKENS } from '../lib/tokens'
 import { shortAddr } from '../lib/format'
 import { looksLikeVantaName, resolveVantaName } from '../lib/config'
+import { ModeMark } from './Icons'
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del']
 
@@ -166,8 +167,8 @@ export default function SendDrawer({
         try {
           sig = await shadowSend(to, amount, selectedToken)
           mode = 'Shadow'
-          title = `Shadow → ${shortAddr(to)}`
-          notify('Shadow send complete — amount and counterparty hidden.', '🕳️')
+          title = `Shadow to ${shortAddr(to)}`
+          notify('Shadow send complete. Amount and counterparty hidden.', '🕳️')
         } catch (err) {
           // Recipient not in the privacy registry → stop and ask, do not downgrade
           // the privacy level on the user's behalf.
@@ -181,8 +182,8 @@ export default function SendDrawer({
       } else {
         sig = await ghostSend(to, amount, selectedToken)
         mode = 'Ghost'
-        title = `Ghost → ${shortAddr(to)}`
-        notify('Ghost send complete — recipient sees the pool, not you.', '👻')
+        title = `Ghost to ${shortAddr(to)}`
+        notify('Ghost send complete. Recipient sees the pool, not you.', '👻')
       }
 
       addTxn(title, `-${amount} ${sym}`, 'expense', true, {
@@ -209,7 +210,7 @@ export default function SendDrawer({
     setSending(true)
     try {
       const sig = await sendSol(to, amount)
-      addTxn(`Sent → ${shortAddr(to)}`, `-${amount} SOL`, 'expense', false, {
+      addTxn(`Sent to ${shortAddr(to)}`, `-${amount} SOL`, 'expense', false, {
         mode: 'Public',
         symbol: 'SOL',
         value: amount,
@@ -251,7 +252,7 @@ export default function SendDrawer({
     setSending(true)
     try {
       const sig = await ghostSend(to, amount, selectedToken)
-      addTxn(`Ghost → ${shortAddr(to)}`, `-${amount} ${token.symbol}`, 'expense', true, {
+      addTxn(`Ghost to ${shortAddr(to)}`, `-${amount} ${token.symbol}`, 'expense', true, {
         mode: 'Ghost',
         symbol: token.symbol,
         value: amount,
@@ -259,7 +260,7 @@ export default function SendDrawer({
         status: 'Confirmed',
       })
       playHaptic('success')
-      notify('Ghost send complete — the pool paid, not you.', '👻')
+      notify('Ghost send complete. The pool paid, not you.', '👻')
       onSuccess?.({ mode: 'Ghost', amount, symbol: token.symbol, signature: sig, counterparty: to })
       setRecipient('')
       setValue('0')
@@ -282,14 +283,16 @@ export default function SendDrawer({
     <Drawer
       open={open}
       onClose={onClose}
-      title={`${isPrivateMode ? '🕳️ Shadow' : '👻 Ghost'} Send`}
+      title={`${isPrivateMode ? 'Shadow' : 'Ghost'} Send`}
       subtitle={`From your private balance · ${token.symbol}`}
     >
       <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-accent/10 border border-accent/20">
-        <span className="text-accent">{isPrivateMode ? '🕳️' : '👻'}</span>
+        <span className="text-accent shrink-0">
+          <ModeMark mode={isPrivateMode ? 'Shadow' : 'Ghost'} size={16} />
+        </span>
         <span className="text-[11px] leading-snug text-accent font-medium">
           {isPrivateMode
-            ? 'Encrypted. Paste their Vanta address — or just their name, like `ai.vanta` — from their Receive screen. If they aren’t registered, this falls back to a Ghost send.'
+            ? 'Encrypted. Paste their Vanta address, or just their name like `ai.vanta`, from their Receive screen. If they aren’t registered, this falls back to a Ghost send.'
             : `${token.symbol} arrives from the shielded pool, not from you. The payout amount is public.`}
         </span>
       </div>
@@ -326,7 +329,7 @@ export default function SendDrawer({
             </span>
             {lookup.state === 'ok' ? (
               <span className="truncate">
-                {trimmed} → <b className="font-bold">{shortAddr(lookup.address)}</b>
+                {trimmed} resolves to <b className="font-bold">{shortAddr(lookup.address)}</b>
               </span>
             ) : lookup.state === 'pending' ? (
               <span>Checking {trimmed}…</span>
@@ -354,7 +357,7 @@ export default function SendDrawer({
         <span className="text-[11px] font-semibold uppercase text-accent tracking-wider">
           Transfer amount
         </span>
-        <div className="text-[40px] font-extrabold text-white mt-0.5 tracking-tight leading-none tnum">
+        <div className="font-display text-[40px] font-extrabold text-white mt-0.5 tracking-tight leading-none tnum">
           {value}
           <span className="text-[16px] text-muted font-bold ml-2">{token.symbol}</span>
         </div>
@@ -368,7 +371,7 @@ export default function SendDrawer({
           <button
             key={key}
             onClick={() => press(key)}
-            className={`py-3.5 text-2xl font-bold bg-white/5 border border-hair rounded-2xl active:bg-accent/20 active:scale-95 tap ${
+            className={`font-display py-3.5 text-2xl font-bold bg-white/5 border border-hair rounded-2xl active:bg-accent/20 active:scale-95 tap ${
               key === 'del' ? 'text-xl text-danger active:bg-danger/30' : 'text-white'
             }`}
           >
@@ -384,7 +387,7 @@ export default function SendDrawer({
         >
           <span className="text-[12px] leading-snug text-danger font-semibold">
             {pending.kind === 'ghost'
-              ? 'That address is not on Vanta yet, so this cannot be a Shadow send. A Ghost send pays them from the pool — but the amount and the recipient are public on-chain.'
+              ? 'That address is not on Vanta yet, so this cannot be a Shadow send. A Ghost send pays them from the pool, but the amount and the recipient are public on-chain.'
               : 'A public transfer shows your wallet as the sender and the amount on-chain. Anyone can read it.'}
           </span>
           <div className="flex gap-2">
@@ -407,18 +410,18 @@ export default function SendDrawer({
           <button
             onClick={handlePrivateSend}
             disabled={busy}
-            className="w-full py-4 rounded-2xl bg-accent hover:bg-accent-hi font-bold text-black shadow-lg shadow-accent/20 active:scale-[0.98] tap text-base disabled:opacity-50"
+            className="btn-accent tap w-full disabled:opacity-50"
           >
-            {sending ? 'Proving...' : isPrivateMode ? '🕳️ Confirm Shadow Send' : '👻 Confirm Ghost Send'}
+            {sending ? 'Proving…' : isPrivateMode ? 'Confirm Shadow send' : 'Confirm Ghost send'}
           </button>
 
           {!isPrivateMode && (
             <button
               onClick={handlePublicSend}
               disabled={busy}
-              className="w-full py-3 rounded-2xl bg-white/10 border border-hair font-semibold text-muted hover:bg-white/20 active:scale-[0.98] tap text-sm disabled:opacity-50"
+              className="btn-quiet tap w-full disabled:opacity-50"
             >
-              or send plain public SOL →
+              or send plain public SOL
             </button>
           )}
         </>

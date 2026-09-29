@@ -73,6 +73,25 @@ function historyKey(seed) {
 const openStore = (key, nonce) => xchacha20poly1305(key, nonce)
 
 /**
+ * Rewrite copy that an earlier build wrote into a stored row.
+ *
+ * Rows written before 2026-09-28 named a send "Ghost → CNfN…R2qu". The arrow is
+gone from every current string, but the row is sitting ENCRYPTED on disk: the
+ * send path can no longer produce that title, and nothing else would ever reach
+ * back and fix it, so the old glyph would render on the dashboard and in every
+ * PDF receipt forever. Normalising on read is the only place that can repair an
+ * already-stored row.
+ *
+ * Deliberately narrow: `title` is the only user-facing string a row carries.
+ * Amount, mode and signature are data, and rewriting data to tidy punctuation is
+ * how a receipt starts lying.
+ */
+function normalizeTitle(title) {
+  if (typeof title !== 'string') return title
+  return title.replace(/\s*→\s*/g, ' to ').replace(/\s*—\s*/g, ' · ')
+}
+
+/**
  * Read the persisted rows.
  * @returns {Array} [] when there is nothing stored, or when the blob cannot be
  *   decrypted (the blob is preserved in that case, not cleared).
@@ -94,7 +113,11 @@ export function loadHistory() {
     const ciphertext = packed.slice(NONCE_BYTES)
     const plaintext = openStore(historyKey(seed), nonce).decrypt(ciphertext)
     const rows = JSON.parse(new TextDecoder().decode(plaintext))
-    return Array.isArray(rows) ? rows : []
+    return Array.isArray(rows)
+      ? rows.map((row) =>
+          row && typeof row === 'object' ? { ...row, title: normalizeTitle(row.title) } : row,
+        )
+      : []
   } catch (err) {
     console.warn('[history] could not decrypt the local store — leaving it untouched:', err?.message ?? err)
     return []

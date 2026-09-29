@@ -152,7 +152,7 @@ export async function openBackup(text, passphrase) {
   } catch {
     // Wrong passphrase and a corrupted file are indistinguishable here, and
     // saying so is more honest than picking one.
-    return { ok: false, error: 'Could not open it — wrong passphrase, or the text was truncated' }
+    return { ok: false, error: 'Could not open it. Wrong passphrase, or the text was truncated' }
   }
 }
 

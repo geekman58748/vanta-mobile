@@ -54,13 +54,18 @@
 .ob-step-back { animation: ob-in-back 0.52s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
 /* ── Ambient field ─────────────────────────────────────────────────────
-   Amethyst, not blue, and far weaker than the template's 0.18 wash — the
-   canvas has to stay a neutral room, per the note at the top of index.css. */
+   Amethyst, not blue, and weak — the canvas has to stay a neutral room, per
+   the note at the top of index.css.
+
+   0.16 was still too much: a wash that size, plus accent-coloured topographic
+   curves (white now, see TopoField) and an accent hand and accent glow under
+   every scene, added up to the flow reading as PURPLE rather than as a dark
+   room with purple objects in it. The accent belongs on the objects. */
 .ob-glow {
   background: radial-gradient(
     circle at 50% 34%,
-    rgba(139, 121, 240, 0.16) 0%,
-    rgba(10, 10, 12, 0) 68%
+    rgba(139, 121, 240, 0.07) 0%,
+    rgba(10, 10, 12, 0) 62%
   );
 }
 
@@ -104,8 +109,10 @@
 
 .ob-note-front {
   transform: rotateY(-16deg) rotateX(11deg) rotateZ(-9deg) translate3d(-8px, -14px, 30px);
+  /* A dark drop rather than a violet one. The cast shadow was doing as much to
+     tint the scene as the gradient was. */
   box-shadow:
-    -14px 22px 48px rgba(76, 58, 158, 0.55),
+    -14px 22px 48px rgba(0, 0, 0, 0.78),
     inset 0 1px 1px rgba(255, 255, 255, 0.16);
 }
 

@@ -231,7 +231,7 @@ export default function ProfileDrawer({
             <button
               onClick={submit}
               disabled={lookup.state !== 'ok' || claiming}
-              className="w-full mt-3 py-3 rounded-xl bg-accent hover:bg-accent-hi font-bold text-black text-sm active:scale-[0.98] tap disabled:opacity-40"
+              className="btn-accent tap mt-3 w-full disabled:opacity-40"
             >
               {claiming ? 'Signing…' : `Claim ${VANTA_NAME_SUFFIX} name`}
             </button>
@@ -278,10 +278,9 @@ export default function ProfileDrawer({
           playHaptic('tap')
           onOpenSettings?.()
         }}
-        className="w-full py-3.5 px-4 rounded-2xl bg-white/5 hover:bg-white/10 active:scale-[0.98] tap flex items-center justify-between text-white font-semibold text-left gap-3"
+        className="btn-quiet tap w-full flex items-center justify-between gap-3 text-left font-semibold"
       >
         <span className="text-sm">Settings & account</span>
-        <span className="text-muted">→</span>
       </button>
 
       <span className="text-[10px] text-muted leading-relaxed">

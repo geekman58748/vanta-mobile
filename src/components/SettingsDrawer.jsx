@@ -1,9 +1,10 @@
 import Drawer from './Drawer'
 import { playHaptic } from '../lib/haptic'
 import { copyText } from '../lib/clipboard'
+import { IconLock } from './Icons'
 
 const row =
-  'w-full py-3.5 px-4 rounded-2xl bg-white/5 hover:bg-white/10 active:scale-[0.98] tap flex items-center justify-between text-white font-semibold text-left gap-3'
+  'btn-quiet tap w-full flex items-center justify-between gap-3 text-left font-semibold'
 
 // Settings & account sheet. Uses gemini-code's row grammar (label left, status
 // pill / chevron right) but every row is a real Vanta action — none of the
@@ -53,14 +54,13 @@ export default function SettingsDrawer({
               Your handle, your addresses, and your registration state.
             </span>
           </span>
-          <span className="text-muted">→</span>
         </button>
 
         <button onClick={onToggleAutoShield} className={row}>
           <span className="flex flex-col gap-0.5">
             <span className="text-sm">Auto-shield incoming SOL</span>
             <span className="text-[10px] font-medium text-muted leading-snug">
-              Preview — not wired yet. Shielding stays manual for now.
+              Preview: not wired yet. Shielding stays manual for now.
             </span>
           </span>
           <span
@@ -86,11 +86,10 @@ export default function SettingsDrawer({
           <span className="flex flex-col gap-0.5">
             <span className="text-sm">Force resync from chain</span>
             <span className="text-[10px] font-medium text-muted leading-snug">
-              Clears the local note cache and rescans the indexer — use if a Shield or Shadow doesn’t
+              Clears the local note cache and rescans the indexer. Use if a Shield or Shadow doesn’t
               show up.
             </span>
           </span>
-          <span className="text-muted">↻</span>
         </button>
 
         <button
@@ -107,7 +106,6 @@ export default function SettingsDrawer({
               Sends 1 test SOL to your public address so you have something to Shield.
             </span>
           </span>
-          <span className="text-muted">＋</span>
         </button>
 
         <button
@@ -125,7 +123,9 @@ export default function SettingsDrawer({
               reinstall loses the private balance for good.
             </span>
           </span>
-          <span className="text-muted">🔐</span>
+          <span className="text-muted">
+            <IconLock size={16} />
+          </span>
         </button>
 
         <button
@@ -142,7 +142,6 @@ export default function SettingsDrawer({
               Paste a backup from this or another phone to rebuild the same identity here.
             </span>
           </span>
-          <span className="text-muted">↺</span>
         </button>
 
         <div className="w-full py-3.5 px-4 rounded-2xl bg-white/5 flex items-center justify-between gap-3">
@@ -158,8 +157,8 @@ export default function SettingsDrawer({
             <span className="text-[10px] font-medium text-muted leading-snug">
               {mwaAccount
                 ? deviceActive
-                  ? 'Connected — active, signs your public funds'
-                  : 'Connected — bound, not currently active'
+                  ? 'Connected. Active, signs your public funds'
+                  : 'Connected. Bound, not currently active'
                 : 'Not connected'}
             </span>
             {mwaAccount && (
@@ -212,11 +211,10 @@ export default function SettingsDrawer({
                 {inactiveWallet.publicKey}
               </span>
               <span className="text-[10px] font-medium text-muted leading-snug">
-                Both wallets stay stored. Switching moves which one pays — switch back any time to
+                Both wallets stay stored. Switching moves which one pays. Switch back any time to
                 move funds out of the other.
               </span>
             </span>
-            <span className="shrink-0 text-accent">⇄</span>
           </button>
         )}
       </div>
@@ -258,8 +256,8 @@ export default function SettingsDrawer({
 
       <span className="text-[10px] text-muted leading-relaxed">
         {mwaAccount
-          ? 'Devnet build — unaudited, not for real funds. Your public funds are signed by your device wallet; Vanta stores only the shielded spending key.'
-          : 'Devnet build — unaudited, not for real funds. Keys live in this browser’s localStorage only.'}
+          ? 'Devnet build. Unaudited, not for real funds. Your public funds are signed by your device wallet; Vanta stores only the shielded spending key.'
+          : 'Devnet build. Unaudited, not for real funds. Keys live in this browser’s localStorage only.'}
         {' '}The shielded spending key is stored in plaintext so the in-app prover can read it; the
         note and history stores are encrypted with a key derived from it, so their encryption
         protects against a stray storage dump, not against anyone holding this device’s seed. Back
