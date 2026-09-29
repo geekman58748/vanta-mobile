@@ -673,11 +673,14 @@ buildWithdrawalTransaction({ client, wallet, keys, feePayer, recipient, amount }
 3. ✅ **Honest receipt UI** — per-leg public/hidden/linkable + `verified_on_chain`.
 4. ✅ **Audit remediation** — every finding in `docs/AUDIT-2026-09-27.md` (C1→L5) is
    fixed or disclosed. Full table + device evidence in **§19**.
-5. **3-page first-run intro** (P1) — still open.
-6. Then packaging: ~~sign APK~~ ✅ (§18.1), deploy relayer → **Northflank** (B2),
-   README/deck/video (B3–B6).
-7. **Rebuild the APK after the relayer URL exists** — one `npm run build:android` +
-   `gradlew assembleRelease` (the command is in §18.1).
+5. ✅ **3-page first-run intro** — shipped. `Onboarding.jsx`, `TOTAL = 3`, steps 0–2.
+6. Packaging: ~~sign APK~~ ✅ (§18.1), relayer deployed ✅ (`p01--vanta-mobile--9ymc8tqmdxvj.code.run`,
+   baked into the build). **README / deck / video still open** → see **§20**.
+7. ✅ **APK rebuilt against the live relayer** — `deploy/releases/vanta-1.0.0-ux6.apk` (§20.3).
+
+> ⚠️ **This section is now historical — the live open list is §20.** Two entries above were
+> stale when §20 was written (the intro had shipped; the APK had been rebuilt), which is the
+> same drift §20.1.9 is about.
 
 ⚠️ **Before the repo or the APK goes public:** the `VITE_RELAYER_TOKEN` build arg no
 longer unlocks history (C1 is closed — history reads are identity-signed), but the
@@ -868,11 +871,29 @@ Someone had already fixed the *colours* (`launcher_icon_background` = `#2A2150` 
 
 `scripts/gen-launcher-icons.py` generates the set from the master:
 
-- `mipmap-*/ic_launcher_foreground.png` — adaptive foreground at **108dp**, mark at 60% of
-  the canvas so it sits inside the 72dp safe zone (0.54 was tried first and read small;
-the mark is a sparse thin-line design, so it needs more room than a solid glyph).
+- `mipmap-*/ic_launcher_foreground.png` — adaptive foreground at **108dp**. Two limits:
+  a **composition** size (`VISIBLE_FILL` = 58% of the 72dp visible box, the knob to turn for
+  "a bit bigger / smaller") and a **clamp** (the 66dp safe circle, plus 4% for resampling),
+  whichever is smaller wins. Currently 41.8dp / 38.7% of the canvas, furthest point 28.3dp
+  from centre against a 33dp safe radius — inside the circle with room to see that it is.
 - `mipmap-*/ic_launcher.webp` / `ic_launcher_round.webp` — legacy violet tile, rounded and
-  circular, mark at 62%.
+  circular. Shown whole, with no launcher mask over them, so they carry the same *apparent*
+  size as the adaptive icon instead of the same percentage: 58% of the tile.
+
+> **Correction (2026-09-28): the mark is a diamond, so 60% clipped it.** The prism's extreme
+> points sit on the diagonals — the outer corners of the left bar and the tip of the chevron
+> — and a launcher mask is a circle / squircle that eats exactly those corners. At 60% the
+> furthest pixel was 44.6dp from centre against a 33dp safe radius, so a quarter of the
+> artwork's reach was outside the mask: "the logo is zoomed in and some parts are cut off,"
+> and on the splash it read as off-centre because the clipping is asymmetric (the left
+> corners go first, the tip survives, so the mark appears to lean right). The script now
+> measures the mark's real radial extent and clamps the mark so every opaque pixel stays
+> inside the safe circle, plus 4% headroom for resampling — so it stays correct if the art
+> is redrawn, and no future "the icon looks small, bump the number" tweak can reintroduce the
+> clipping. Touching the circle turned out to read as cramped for a diamond (its points are
+> the only thing you see reaching for the edge), hence the separate `VISIBLE_FILL`: the
+> icon is now 58% of the visible box, which puts the prism's furthest point at ~86% of the
+> safe radius.
 
 `mipmap-anydpi/ic_launcher{,_round}.xml` now point `foreground` **and** `monochrome` at
 `@mipmap/ic_launcher_foreground` — monochrome reuses the same art because Android 13+ tints
@@ -881,8 +902,13 @@ right asset.
 
 **Splash screen:** `values/themes.xml` also referenced the robot
 (`windowSplashScreenAnimatedIcon`). It now points at the same adaptive foreground — reused
-**deliberately**, because 60% of 108dp *is* the safe area Android 12+ expects for a splash
-icon, so no separate asset was needed.
+**deliberately**: the splash's icon area is 288dp with the mark drawn inside the inner
+192dp circle, which is the same 2/3 ratio as the launcher's 72dp-of-108dp visible box, so
+an asset sized for the 66dp safe circle is already sized for both. (The earlier 60% figure
+was not that safe area — it was a percentage that happened to sound like one.) The
+`windowSplashScreenIconBackgroundColor` disc was dropped in the same pass: it painted a
+violet circle behind a white mark on a `#060509` splash, i.e. a second background inside
+the first, and it was the thing the splash masked the mark into.
 
 **Verified in the shipped APK** (not in the source):
 
@@ -988,3 +1014,63 @@ New: `src/lib/{walletStore,identityProof,localHistory,backup}.js`,
 `android/app/src/main/java/com/vanta/privacywallet/FileSaver.kt`,
 `scripts/{history-store-check,backup-check}.mjs` (the last two are the promoted round-trip
 tests — they ship as permanent checks, not temp files).
+
+---
+
+## 20. OPEN ITEMS — CLOCK IN submission (written 2026-09-28 · deadline **Oct 8**)
+
+Required: **functional APK · GitHub repo · demo video · pitch deck**. Judged on stickiness/PMF,
+UX, innovation, presentation. The engineering is not what stands between this and a submission —
+the artifacts are.
+
+### 20.1 Blockers
+
+| # | Item | State as of 2026-09-28 |
+|---|---|---|
+| 1 | **Repo ≠ APK** | **46** changed/new paths uncommitted on `zolana-rework`, 0 unpushed commits. The pushed tree contains none of the Sep 28 UX pass, the drawer rework or the new icon set — a judge who clones it builds a *different app* than the demo. Commit → push → tag the submission build. |
+| 2 | **README is the Vite template** | `README.md` still opens "# React + Vite … This template provides a minimal setup". Requirement #2 is literally a GitHub repo; its front door is boilerplate. |
+| 3 | **Demo video** | Does not exist. Only a 14 s (Sep 28 22:04) and a 6 s (Sep 23) screen capture on the Desktop. The narration is already written — `docs/live-test-evidence.md` → "How to read the trace". |
+| 4 | **Pitch deck** | Does not exist. |
+| 5 | **Release build never run** | The §19.2 device pass was the **debug** APK. `vanta-1.0.0-ux6.apk` is verified *statically* only (signature, icon pixels, endpoint probes). `BETA-TEST.md`'s 8-flow table still has every Result cell blank. |
+| 6 | **`BETA-TEST.md` is stale, and wrong in one place** | §5 claims "there is no export or backup path in the app". False — `src/lib/backup.js` + `BackupDrawer.jsx` ship export **and** restore (`SettingsDrawer.jsx:114`, `:140`), and §19.2 verifies both on device. Its APK line also still points at `vanta-1.0.0-ux.apk` (`fa690f75…`), three builds behind. |
+| 7 | **Secrets are inside the shipped bundle** | `VITE_HELIUS_API_KEY` and `VITE_RELAYER_TOKEN` are compiled into `assets/www` — confirmed present in ux6. Publishing the APK publishes them. Rotate after the window, or accept the burn. |
+| 8 | **Install path is gated** | MIUI/HyperOS rejects `adb install` (`INSTALL_FAILED_USER_RESTRICTED`, BETA-TEST §4). Release builds land by tap-install from `/sdcard/Download/vanta-1.0.0-ux6.apk`, or Developer options → **Install via USB**. Rehearse before demo day. |
+| 9 | **Doc-vs-code drift** | §5 above and §17.5–17.7 were stale when this section was written. A pass over PLAN / HANDOFF / `zolana-status` against the code is owed — the docs are a submission asset, and drift makes them a liability. |
+
+### 20.2 Product gaps — put them in the deck, don't let a judge find them first
+
+- **devnet only**; no mainnet / real-money custody path.
+- **No NGN or fiat display.** `CLOCKIN-RESEARCH.md` §5 pitches a NGN balance; nothing in `src/`
+  matches `ngn|naira|₦`. The emerging-market PMF story is narrative today, not UI.
+- **One shared relayer** = single point of failure during a live demo, and `/fund` is capped at
+  **0.05 SOL/request, 10 requests/hour, 0.5 SOL/hour per IP** (BETA-TEST §3). Every fresh install
+  funds a new session wallet — do not burn reinstalls in the hour before filming.
+- **A lost backup passphrase is unrecoverable by design** (the drawer says so).
+- **One 4.8 MB JS chunk** (Zolana SDK) → cold-start parse cost on mid-range hardware.
+- **No automated pass over the web UI.** Verification is by eye on a device — which is exactly
+  how the Privacy-analytics sheet shipped broken (§20.3).
+
+### 20.3 Landed 2026-09-28 (so the next session doesn't re-litigate it)
+
+- **Drawer rework** (`Drawer.jsx`): pinned handle/title, **one** scroll surface, `[&>*]:shrink-0`.
+  Root cause of the broken "View all" screen: children of a flex column with `overflow-*` have
+  `min-height: 0`, so the filter rail and the activity list were the first things allowed to give
+  up their height — they collapsed under the pool totals instead of the sheet scrolling. Filters
+  are now `sticky`; a "Scroll for more ↓" pill appears only while there is more below (the app
+  hides every scrollbar, so "there is more" was previously invisible).
+- **Hatched section break removed** from the dashboard, between the send-mode card and Transactions.
+- **Launcher/splash icon corrected.** The mark is now fitted to Android's 66dp safe circle by
+  measuring its real radial extent (its extreme points sit on the diagonals, which is where a
+  circular/squircle mask bites), with `VISIBLE_FILL = 0.58` of the visible box as the composition
+  knob. It was a flat 60% of the canvas, which put the furthest pixel at 44.6dp against a 33dp safe
+  radius — clipped, and asymmetric enough to read as off-centre on the splash. All 15 mipmap files
+  regenerated; the furthest point now lands at ≈86% of the safe radius.
+- **`deploy/releases/vanta-1.0.0-ux6.apk`** — 4.43 MB, `CN=Vanta, OU=Privacy`; Helius + relayer +
+  prover endpoints present in the bundle; correct prism at all five densities.
+- Device housekeeping: `/sdcard/Download` cleared of superseded Vanta APKs (kept `fakewallet-v1.apk`,
+  which is the test wallet installer, not a Vanta build).
+
+### 20.4 Next workstream
+
+**Website** — `landing/` (Vite + React; `landing/design.md` is the design/copy reference the app's
+UI is measured against). Nothing in §20.1 blocks it; §20.1.1–.4 are the items that need hands.
