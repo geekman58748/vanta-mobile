@@ -107,7 +107,7 @@ function TopoWaves() {
 // fakewallet maps *every* failed submission to -2 "payloads invalid for
 // signing" — including a tx that simply had no money in it. Showing that verbatim
 // told the user our payload was broken when the real answer was 5,000 lamports.
-function shieldErrorMessage(err) {
+function shieldErrorMessage(err, symbol = 'SOL') {
   const raw = String(err?.message || err || '').trim()
   if (/payloads invalid for signing/i.test(raw)) {
     return 'The wallet rejected this transaction. Usually your balance does not cover the amount plus the network fee.'
@@ -116,6 +116,12 @@ function shieldErrorMessage(err) {
     return 'The wallet did not respond. Reconnect it and try again.'
   }
   if (/insufficient/i.test(raw)) {
+    // One SPL error covers both halves of a deposit: too little of the token
+    // being shielded, and too little SOL for the fee. Naming SOL for a token
+    // shortfall sent the user to top up the asset that was never the problem.
+    if (symbol !== 'SOL') {
+      return `Not enough ${symbol} to shield that much. That is your public ${symbol} balance, not the private one.`
+    }
     return `Not enough SOL: ${raw}`
   }
   // A dead network used to surface as a bare "Failed to fetch" or an SDK
@@ -205,6 +211,9 @@ export default function App() {
   const [inactiveWallet, setInactiveWallet] = useState(() => readInactive())
   const [balance, setBalance] = useState(0)
   const [privateBalances, setPrivateBalances] = useState([])
+  // Public SPL token balances, keyed by symbol. SOL is deliberately absent: it
+  // comes from `balance`, which the whole app already watches.
+  const [publicBalances, setPublicBalances] = useState({})
   const [isPrivacyOn, setIsPrivacyOn] = useState(false)
   const [isPrivateMode, setIsPrivateMode] = useState(true) // default ON: shadow send
   const [loading, setLoading] = useState(false)
@@ -638,6 +647,46 @@ export default function App() {
     if (bal !== null) setBalance(bal)
   }, [readBalance])
 
+  // Public SPL token read (read-only). The SOL read above cannot answer for a
+  // token, and the asset rail used to render dUSDC's public side as "n/a" — so a
+  // user could not see what they had to shield, and the amount guard had nothing
+  // to compare against. `null` means "the read failed", which is not the same as
+  // zero and must not be treated as a failure of the shield.
+  const readTokenBalance = useCallback(async (pubKey, token) => {
+    const info = TOKENS[token]
+    if (!info || token === 'SOL') return null
+    try {
+      const { Connection, PublicKey } = await import('@solana/web3.js')
+      const conn = new Connection(PUBLIC_RPC, 'confirmed')
+      const res = await conn.getParsedTokenAccountsByOwner(
+        new PublicKey(pubKey),
+        { mint: new PublicKey(info.mint) },
+      )
+      // No ATA at all reads as zero: that is a real answer, not a missing one.
+      return res.value.reduce(
+        (sum, { account }) => sum + (account.data.parsed.info.tokenAmount.uiAmount ?? 0),
+        0,
+      )
+    } catch (err) {
+      console.error('Token balance read error:', err)
+      return null
+    }
+  }, [])
+
+  const fetchPublicTokens = useCallback(async (pubKey) => {
+    const symbols = Object.keys(TOKENS).filter((symbol) => symbol !== 'SOL')
+    const entries = await Promise.all(
+      symbols.map(async (symbol) => [symbol, await readTokenBalance(pubKey, symbol)]),
+    )
+    // A failed read keeps the last known figure rather than flashing 0 — a
+    // dropped request must not make the guard reject a shield the chain allows.
+    setPublicBalances((prev) => {
+      const next = { ...prev }
+      for (const [symbol, amount] of entries) if (amount !== null) next[symbol] = amount
+      return next
+    })
+  }, [readTokenBalance])
+
   // The public balance has no push channel: it was read once at boot. Without this,
   // SOL that arrives from a faucet, the relayer's gas float or a Ghost payout stayed
   // invisible until the app restarted, and the Shield sheet quoted (and sized its
@@ -650,6 +699,7 @@ export default function App() {
     const refreshPublic = () => {
       if (cancelled || document.visibilityState === 'hidden') return
       fetchBalance(pubKey)
+      fetchPublicTokens(pubKey)
     }
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return
@@ -668,7 +718,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', onVisible)
       document.removeEventListener('vanta:refresh-public', refreshPublic)
     }
-  }, [wallet?.publicKey, fetchBalance, syncPrivate])
+  }, [wallet?.publicKey, fetchBalance, fetchPublicTokens, syncPrivate])
 
   // ── Connect a real device wallet via MWA ────────────────────────────────
   // This becomes Vanta's public wallet: it funds Shielding and receives Ghosts.
@@ -1481,6 +1531,13 @@ export default function App() {
     return privateBalances.find(b => b.mint === info.mint)?.amount ?? 0
   }
 
+  // The public side of the same question, and the number the Shield guard needs.
+  // `undefined` means the read has not answered yet, which is not the same as
+  // zero: a dropped request must not look like an empty wallet.
+  const publicTokenBalance = (token) => (
+    token === 'SOL' ? balance : publicBalances[token]
+  )
+
   const visibleTransactions = transactions.filter((tx) => {
     if (txnFilter === 'private') return tx.isPrivate
     if (txnFilter === 'public') return !tx.isPrivate
@@ -1543,6 +1600,24 @@ export default function App() {
       return
     }
 
+    // The fee is only half of it. A token deposit funds itself out of the token
+    // balance, and this guard never looked at that — shielding more dUSDC than
+    // the wallet held passed here and died inside the pool with a raw SPL
+    // `insufficient funds`, which the error mapper then blamed on SOL.
+    if (selectedToken !== 'SOL') {
+      const available = publicTokenBalance(selectedToken)
+      // Only enforce this once the read has answered. If it has not, the chain
+      // is still the backstop and it can refuse the deposit safely — so an
+      // unknown balance must not be allowed to block a shield that would work.
+      if (available !== undefined && amt > available + 1e-9) {
+        notify(
+          `Need ${amt} ${symbol}. You have ${available.toFixed(2)} public ${symbol}.`,
+          '⚠️',
+        )
+        return
+      }
+    }
+
     playHaptic('tap')
     setLoading(true)
     // Declared before the deposit runs: this is a balance increase we caused, so
@@ -1565,7 +1640,7 @@ export default function App() {
       // giving up the reservation here would file it as "Received … privately",
       // a receipt for a payment the user made to themselves.
       if (!err?.outcomeUnknown) dropPrivateCreditExpectation(symbol, amt)
-      notify(shieldErrorMessage(err), '⚠️')
+      notify(shieldErrorMessage(err, symbol), '⚠️')
       console.error(err)
     } finally {
       // Both belong to THIS attempt, on every path. Leaving `loading` set is why
@@ -1958,7 +2033,12 @@ export default function App() {
             {ASSET_RAIL.map((asset) => {
               const active = selectedToken === asset.key
               const priv = tokenBalance(asset.key)
-              const pub = asset.key === 'SOL' ? `${balance.toFixed(4)} SOL` : 'n/a'
+              // An unknown read renders as an em dash rather than a fabricated
+              // zero — the rail said "n/a" here for a year for the same reason.
+              const pubValue = publicTokenBalance(asset.key)
+              const pub = pubValue === undefined
+                ? '—'
+                : `${pubValue.toFixed(asset.key === 'SOL' ? 4 : 2)} ${TOKENS[asset.key].symbol}`
               return (
                 <button
                   key={asset.key}
@@ -2053,6 +2133,7 @@ export default function App() {
         onClose={() => setShieldOpen(false)}
         selectedToken={selectedToken}
         balance={balance}
+        publicTokenBalance={publicTokenBalance(selectedToken)}
         loading={loading}
         onRequestAirdrop={requestAirdrop}
         onShield={shieldNow}

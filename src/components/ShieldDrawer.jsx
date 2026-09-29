@@ -30,6 +30,7 @@ export default function ShieldDrawer({
   onClose,
   selectedToken,
   balance,
+  publicTokenBalance,
   loading,
   onRequestAirdrop,
   onShield,
@@ -41,6 +42,14 @@ export default function ShieldDrawer({
 
   const isSol = selectedToken === 'SOL'
   const maxSol = maxShieldableSol(balance)
+  // What can actually be deposited. SOL has to leave the fee behind; a token is
+  // limited by its own public balance, and the fee comes out of SOL either way.
+  // `undefined` is "the read has not answered", which is not the same as zero.
+  const tokenKnown = isSol || publicTokenBalance !== undefined
+  const maxAmount = isSol ? maxSol : publicTokenBalance ?? 0
+  const publicLabel = tokenKnown
+    ? `${maxAmount.toFixed(isSol ? 6 : 2)} ${token.symbol}`
+    : '—'
 
   useEffect(() => {
     if (open) {
@@ -54,7 +63,10 @@ export default function ShieldDrawer({
   // What the wallet actually needs: the amount, plus the fee, in SOL.
   const requiredSol = isSol ? amount + SHIELD_FEE_RESERVE : SHIELD_FEE_RESERVE
   const shortOnFee = requiredSol > balance
-  const overMax = isSol && amount > maxSol
+  // The epsilon absorbs float error from the keypad, so typing exactly the
+  // balance you hold is not read as exceeding it. An unknown balance is not
+  // enforced here — the chain refuses an over-draw on its own.
+  const overMax = tokenKnown && amount > maxAmount + 1e-9
   const tooSmall = amount <= 0
   const blocked = shielding || loading || shortOnFee || overMax || tooSmall
 
@@ -75,7 +87,7 @@ export default function ShieldDrawer({
     playHaptic('tap')
     // Floor to the token's own precision so we never build a value the keypad
     // itself would have refused to type.
-    const floored = Math.floor(maxSol * 10 ** token.decimals) / 10 ** token.decimals
+    const floored = Math.floor(maxAmount * 10 ** token.decimals) / 10 ** token.decimals
     setValue(floored > 0 ? String(floored) : '0')
   }
 
@@ -93,7 +105,9 @@ export default function ShieldDrawer({
 
   // One line, always the truth: what goes in, what stays behind, what it costs.
   const footnote = !isSol
-    ? `Public SOL pays the network fee. ${SHIELD_FEE_RESERVE.toFixed(6)} SOL is reserved.`
+    ? (overMax
+        ? `You hold ${maxAmount.toFixed(2)} public ${token.symbol}. The network fee comes from SOL.`
+        : `Public SOL pays the network fee. ${SHIELD_FEE_RESERVE.toFixed(6)} SOL is reserved.`)
     : shortOnFee        ? `Not enough. Shielding ${amount || 0} needs ${requiredSol.toFixed(6)} SOL. You have ${balance.toFixed(6)}.`
       : `Keeps ${SHIELD_FEE_RESERVE.toFixed(6)} SOL behind for the network fee.`
 
@@ -119,7 +133,7 @@ export default function ShieldDrawer({
           <span className="text-[16px] text-muted font-bold ml-2">{token.symbol}</span>
         </div>
         <span className="text-[11px] text-muted">
-          Public balance: {balance.toFixed(isSol ? 6 : 4)} SOL
+          Public balance: {publicLabel}
         </span>
       </div>
 
@@ -140,16 +154,13 @@ export default function ShieldDrawer({
             {preset}
           </button>
         ))}
-        {isSol && (
-          <button
-            onClick={setMax}
-            disabled={maxSol <= 0}
-            className="flex-1 rounded-xl border border-accent/30 bg-accent/10 py-2.5 text-[13px] font-semibold text-accent transition-colors hover:bg-accent/20 active:scale-[0.99] tap disabled:opacity-40"
-          >
-            Max
-          </button>
-        )}
-      </div>
+        <button
+          onClick={setMax}
+          disabled={!tokenKnown || maxAmount <= 0}
+          className="flex-1 rounded-xl border border-accent/30 bg-accent/10 py-2.5 text-[13px] font-semibold text-accent transition-colors hover:bg-accent/20 active:scale-[0.99] tap disabled:opacity-40"
+        >
+          Max
+        </button>      </div>
 
       <div className="grid grid-cols-3 gap-2.5 my-1 text-center">
         {KEYS.map((key) => (
@@ -170,7 +181,11 @@ export default function ShieldDrawer({
         aria-live="polite"
         className={`text-[11px] leading-snug ${shortOnFee || overMax ? 'text-amber-300' : 'text-muted'}`}
       >
-        {overMax ? `Max you can shield is ${maxSol.toFixed(6)} SOL. The fee stays behind.` : footnote}
+        {overMax
+          ? (isSol
+              ? `Max you can shield is ${maxSol.toFixed(6)} SOL. The fee stays behind.`
+              : `Max you can shield is ${maxAmount.toFixed(2)} ${token.symbol}.`)
+          : footnote}
       </span>
 
       <button
