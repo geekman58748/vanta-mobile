@@ -1,0 +1,70 @@
+android/ - provenance and changes
+=================================
+
+This Android shell was generated from the Solana Mobile **webshell** CLI
+template, then modified. The upstream template is the starting point for the
+files listed as "derived" below; the rest of this directory is Vanta's.
+
+  Generator  @solana-mobile/webshell-cli 0.1.0
+  Upstream   https://github.com/solana-mobile/web-shell (directory `template/`)
+  License    none declared upstream
+
+The upstream repository declares `"license": null` in its package.json and ships
+no LICENSE, COPYING or NOTICE file. It is not Apache-2.0 and this file does not
+claim that it is. The full statement, and why Vanta still treats the generated
+shell as its own work, is in the repository root `NOTICE`, section 3. Vanta
+asserts no rights over any upstream template code, and will follow any license
+Solana Mobile publishes for the template.
+
+Vanta's own code in this repository, including its changes to this directory, is
+Apache-2.0. See `../LICENSE`.
+
+
+Derived from the upstream template
+----------------------------------
+
+  app/build.gradle.kts             signed-release block, the WEB_SHELL_* Gradle
+                                   properties, and the debug/release variants
+  app/proguard-rules.pro
+  app/src/main/res/values/colors.xml
+  app/src/main/res/values/themes.xml   the `Theme.WebShell` styles
+  app/src/main/AndroidManifest.xml
+
+Upstream file names are otherwise preserved so a reader can diff against the
+template. Upstream copyright and licence notices, where they exist, are retained
+verbatim.
+
+Significant changes
+-------------------
+
+These are the changes material enough to state, per Apache-2.0 section 4(b),
+which is the convention this project follows for derived files whether or not
+the upstream is licensed:
+
+1. **The web app is bundled, not fetched.** Upstream loads a remote URL. Vanta
+   stages the Vite build into `app/src/main/assets/www/` and serves it through
+   `WebViewAssetLoader` from `https://appassets.androidplatform.net`. The shell
+   boots with no network and needs no host. See `README.md`.
+
+2. **Application identity.** Package and namespace are `com.vanta.privacywallet`
+   instead of `com.solanamobile.webshell`, with a matching signing config.
+
+3. **Native file save.** `app/src/main/java/com/vanta/privacywallet/FileSaver.kt`
+   is new. A WebView silently drops a data-URL download, so PDF receipts cannot
+   be exported from the web layer. This bridges to `MediaStore` and writes to
+   `Downloads/Vanta/` on API 29+.
+
+4. **`saveBase64File` bridge.** Added to `MainActivity.kt` so the web layer can
+   reach `FileSaver`.
+
+5. **v1 transaction custody.** The Mobile Wallet Adapter path is wired for
+   version 1 transactions, which is what Zolana compiles to. Details in
+   `../README.md` and `../src/lib/mwa.js`.
+
+6. **Splash and theme.** Replaced the template's Android green with Vanta's
+   palette. The upstream template used one colour for both the splash and the
+   icon background; that is split here.
+
+7. **R8 kept, configuration extended.** Minification stays on for release; the
+   web assets are identical in both variants and the release APK is roughly
+   4.4 MB against the debug build's 34 MB.

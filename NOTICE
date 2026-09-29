@@ -1,0 +1,158 @@
+Vanta
+Copyright 2026 Maxx
+
+    Vanta is licensed under the Apache License, Version 2.0. See LICENSE.
+
+This file carries the attribution notices the licenses of our third-party
+components require, and one notice that is here because a component's upstream
+licensing status is unresolved and we would rather say so than quietly assume.
+
+Nothing here was copied out of a closed source. Every component below is either
+installed unmodified from a public registry, or vendored with its license
+travelling alongside it.
+
+
+================================================================================
+1. Helius Zolana SDK (@heliuslabs/zolana) - Apache-2.0
+================================================================================
+
+The Zolana "Privacy Rings" TypeScript SDK backs Shield, Shadow and Ghost.
+
+  Upstream   https://github.com/helius-labs/zolana
+  Version    0.3.0-alpha (tag v0.3.0-alpha, commit efed2ff)
+  Copyright  Helius Labs
+  License    Apache License, Version 2.0
+
+It is vendored as `vendor/heliuslabs-zolana-0.3.0-alpha.tgz` rather than
+installed from the registry, because the registry's published `0.2.0-alpha` is
+broken against devnet. The Apache-2.0 text ships inside the tarball and is also
+copied to `vendor/LICENSE.zolana.txt`. The upstream repository's own third-party
+notices, which cover components outside this tarball, are reproduced in
+`vendor/THIRD_PARTY_NOTICES.txt`. `vendor/README.md` records the exact
+provenance, the sha256, and how to regenerate the artifact.
+
+It is used unmodified as a library.
+
+
+================================================================================
+2. rpc-websockets 9.3.9 - GNU LGPL v3.0 only
+================================================================================
+
+  Upstream   https://github.com/elpheria/rpc-websockets
+  Version    9.3.9
+  Copyright  Elpheria j.d.o.o.
+  License    GNU Lesser General Public License, version 3.0 only
+
+THIS IS THE ONLY COMPONENT IN THE SHIPPED APPLICATION THAT IS NOT UNDER A
+PERMISSIVE LICENSE, AND IT IS WHY THIS FILE EXISTS.
+
+How it gets in. Vanta does not depend on it directly. It arrives transitively
+through `@solana/web3.js` (MIT), whose browser build does
+
+    import { CommonClient, WebSocket } from 'rpc-websockets';
+
+at module scope. A bundler cannot drop a top-level import it cannot prove is
+unused, so the library is compiled into the release APK. This was verified
+rather than assumed:
+
+  $ grep -rl max_reconnects_reached dist/assets/*.js
+  dist/assets/index.browser.esm-CqbKqh0d.js
+
+  $ unzip -p deploy/releases/vanta-1.0.0-ux10.apk \
+      assets/www/assets/index.browser.esm-CqbKqh0d.js | grep -c max_reconnects_reached
+  1
+
+What Vanta does not claim. The library is unmodified and is used as a library.
+Elpheria holds the copyright. Vanta claims none of it and grants no additional
+rights over it.
+
+What the LGPL asks for, and how it is met here:
+
+  (a) Prominent notice that the library is used and that it is covered by the
+      LGPL. This section is that notice.
+
+  (b) A copy of the GNU GPL and of the LGPL travels with the distribution.
+      See `licenses/GPL-3.0.txt` and `licenses/LGPL-3.0.txt`. LGPL-3.0 is
+      written as a set of additional permissions layered on GPL-3.0, which is
+      why both texts are shipped.
+
+  (c) The ability to relink. The library is an unmodified npm dependency
+      installed by pnpm and compiled into a JavaScript bundle; it is not
+      welded into machine code. To replace it with a modified build:
+
+          pnpm install
+          # patch or replace node_modules/rpc-websockets, for example with a
+          # pnpm patch, then:
+          pnpm build:android
+
+      Everything needed is in this repository, which is itself open source
+      under Apache-2.0, so there is no application code a user cannot see or
+      rebuild. Vanta adds no terms forbidding this and imposes no restriction
+      on reverse engineering its own code in order to debug a modification to
+      the library (LGPL-3.0 section 4, final paragraph).
+
+  (d) Corresponding source. The library is unmodified. Its source is public at
+      the upstream URL above and on npm as `rpc-websockets@9.3.9`. No written
+      offer is required for source the recipient already has; `pnpm-lock.yaml`
+      pins the exact version and integrity hash.
+
+If you redistribute Vanta or an APK built from it, keep this file and the
+`licenses/` directory alongside it.
+
+KNOWN CLEANUP, RECORDED RATHER THAN HIDDEN. The library is bundled only because
+`@solana/web3.js` imports it at module scope. Vanta's RPC traffic is plain HTTPS
+and never opens a websocket, so aliasing `rpc-websockets` to a stub in the Vite
+config would drop it from the bundle and retire this obligation entirely. That
+has not been done, because the APK's current build has not been re-tested on
+hardware and removing a dependency that is baked into an app we cannot currently
+re-verify would trade a license obligation we can meet for a runtime risk we
+cannot measure. We took the obligation we can discharge.
+
+
+================================================================================
+3. Solana Mobile webshell template - no upstream license declared
+================================================================================
+
+The Android shell in `android/` was generated from the Solana Mobile webshell
+CLI template and then substantially modified.
+
+  Generator  @solana-mobile/webshell-cli 0.1.0
+  Upstream   https://github.com/solana-mobile/web-shell (directory `template/`)
+  License    none declared
+
+Stated plainly, because the honest answer is not the tidy one: as of 2026-09-29
+that repository declares `"license": null` in its `package.json` and contains no
+LICENSE, COPYING or NOTICE file anywhere in its tree. It is not Apache-2.0, and
+this file will not claim that it is. The CLI exists to generate Android projects
+for developers to own and ship; that is its documented purpose, and `template/`
+is published inside the npm package for exactly that use. Vanta treats the
+generated shell as its own work, records the provenance here, and asserts no
+rights over any upstream template code. If Solana Mobile publishes a license for
+the template, Vanta will follow it. What Vanta changed is listed in
+`android/NOTICE`.
+
+Vanta separately depends on Solana Mobile packages that *are* Apache-2.0,
+notably `@solana-mobile/wallet-standard-mobile` and
+`@solana-mobile/mobile-wallet-adapter-protocol` for Mobile Wallet Adapter, and
+follows the Apache-2.0 `solana-mobile/mobile-wallet-adapter` specification.
+Those are used unmodified.
+
+
+================================================================================
+4. Everything else
+================================================================================
+
+The remaining dependencies are permissive and used unmodified, as installed
+from the public npm registry. To reproduce the census:
+
+    pnpm licenses list
+
+Two packages declare no license field but are not a concern. `eyes@0.1.8`
+carries an MIT LICENSE file (Copyright (c) 2009 cloudhead), and
+`text-encoding-utf-8@1.0.2` is dedicated to the public domain under the
+Unlicense. Neither reaches the shipped bundle.
+
+`lightningcss` is declared MPL-2.0. Tailwind runs it at build time to transform
+CSS and its code is not distributed inside the APK.
+
+The single LGPL entry in that census is rpc-websockets, covered in section 2.
