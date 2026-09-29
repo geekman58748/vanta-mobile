@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@heliuslabs/zolana':
-        specifier: file:../zolana-sdk-v0.3.0/sdk-libs/ts
-        version: file:../zolana-sdk-v0.3.0/sdk-libs/ts(@solana/kit@8.3.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6))
+        specifier: file:./vendor/heliuslabs-zolana-0.3.0-alpha.tgz
+        version: file:vendor/heliuslabs-zolana-0.3.0-alpha.tgz(@solana/kit@8.3.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6))
       '@noble/ciphers':
         specifier: ^2.4.0
         version: 2.4.0
@@ -152,8 +152,9 @@ packages:
     resolution: {integrity: sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==}
     engines: {node: '>=6.9.0'}
 
-  '@heliuslabs/zolana@file:../zolana-sdk-v0.3.0/sdk-libs/ts':
-    resolution: {directory: ../zolana-sdk-v0.3.0/sdk-libs/ts, type: directory}
+  '@heliuslabs/zolana@file:vendor/heliuslabs-zolana-0.3.0-alpha.tgz':
+    resolution: {integrity: sha512-ByUhZV57XirSYj9NO4prdpUEBqCFPNCtoOkefve7rYJ6Ake2u5IBxL6JCpODxOeJVmjuE9TmHSU2gbNEFOCe1g==, tarball: file:vendor/heliuslabs-zolana-0.3.0-alpha.tgz}
+    version: 0.3.0-alpha
     engines: {node: '>=24'}
     peerDependencies:
       '@solana/kit': ^8.3.0
@@ -3085,7 +3086,7 @@ snapshots:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
 
-  '@heliuslabs/zolana@file:../zolana-sdk-v0.3.0/sdk-libs/ts(@solana/kit@8.3.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6))':
+  '@heliuslabs/zolana@file:vendor/heliuslabs-zolana-0.3.0-alpha.tgz(@solana/kit@8.3.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6))':
     dependencies:
       '@lightprotocol/hasher.rs': 0.2.1
       '@noble/ciphers': 2.4.0
