@@ -22,7 +22,7 @@ import { playHaptic } from './lib/haptic'
 import { copyText } from './lib/clipboard'
 import { shortAddr, splitLeadingGlyph } from './lib/format'
 import { TOKENS, SOL_MINT, SHIELD_FEE_RESERVE } from './lib/tokens'
-import { relayerFetch } from './lib/config'
+import { relayerFetch, faucetFetch, FAUCET_URL } from './lib/config'
 import { recordSend, lookupProof, checkProof } from './lib/txHistory'
 import {
   clearPendingShield, findLandedDeposit, loadPendingShield, readSlot, savePendingShield,
@@ -786,17 +786,26 @@ export default function App() {
   const requestAirdrop = useCallback(async () => {
     if (!wallet) return
     setLoading(true)
-    setStatus('Requesting airdrop...')
+    setStatus('Requesting devnet SOL...')
     try {
-      const { Connection, PublicKey } = await import('@solana/web3.js')
-      const conn = new Connection(PUBLIC_RPC, 'confirmed')
-      const sig = await conn.requestAirdrop(new PublicKey(wallet.publicKey), 1e9)
-      await conn.confirmTransaction(sig, 'confirmed')
+      // The public devnet faucet (Connection.requestAirdrop) is rate-limited and
+      // mostly answers -32603 Internal error, which made this button look broken.
+      // Vanta runs its own faucet as a separate service with a separate wallet,
+      // so a judge whose wallet is empty still gets enough to Shield, Shadow
+      // and Ghost — and a drain can never touch the relayer's fee float.
+      if (!FAUCET_URL) throw new Error('Faucet not configured (VITE_FAUCET_URL)')
+      const res = await faucetFetch('/faucet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: wallet.publicKey }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`)
       await fetchBalance(wallet.publicKey)
-      setStatus('Airdropped 1 SOL!')
+      setStatus(`Received ${data.amount} SOL from the faucet!`)
       playHaptic('success')
     } catch (err) {
-      setStatus('Airdrop failed: ' + err.message)
+      setStatus('Faucet failed: ' + err.message)
     }
     setLoading(false)
   }, [wallet, fetchBalance])

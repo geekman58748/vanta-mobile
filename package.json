@@ -10,7 +10,8 @@
     "build:android": "vite build && node scripts/bundle-android.mjs",
     "lint": "oxlint",
     "preview": "vite preview",
-    "relayer": "node relayer/server.js"
+    "relayer": "node relayer/server.js",
+    "faucet": "node faucet/server.js"
   },
   "dependencies": {
     "@heliuslabs/zolana": "file:../zolana-sdk-v0.3.0/sdk-libs/ts",

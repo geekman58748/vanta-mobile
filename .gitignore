@@ -56,6 +56,10 @@ deploy credentials would have been staged by a `git add -A`.
 # Relayer signing key. Was git-tracked; never commit it again.
 relayer/relayer-keypair.json
 
+# Devnet faucet key. Holds only the judge-facing demo budget, and is
+# deliberately separate from the relayer's fee wallet.
+faucet/faucet-keypair.json
+
 # Test/device APKs — build outputs and third-party installs. 100MB+ each;
 # committing one permanently bloats the repo and the GitHub push for the
 # hackathon submission.

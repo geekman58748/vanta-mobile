@@ -101,7 +101,7 @@ export default function SettingsDrawer({
           className={`${row} disabled:opacity-50`}
         >
           <span className="flex flex-col gap-0.5">
-            <span className="text-sm">Request devnet airdrop</span>
+            <span className="text-sm">Get devnet SOL from the faucet</span>
             <span className="text-[10px] font-medium text-muted leading-snug">
               Sends 1 test SOL to your public address so you have something to Shield.
             </span>

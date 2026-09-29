@@ -25,6 +25,20 @@ export function relayerFetch(path, init = {}) {
   return fetch(`${RELAYER_URL}${path}`, { ...init, headers })
 }
 
+// ── Devnet faucet ──────────────────────────────────────────────────────
+// A SEPARATE service with its OWN wallet — never a relayer endpoint. The
+// relayer only ever pays network fees; the faucet only ever pays claims, so
+// draining one can never touch the other. Empty until VITE_FAUCET_URL is set;
+// the app then reports that rather than silently404ing.
+export const FAUCET_URL = (import.meta.env.VITE_FAUCET_URL || '').replace(/\/+$/, '')
+
+/** fetch() against the faucet service, carrying the same shared token. */
+export function faucetFetch(path, init = {}) {
+  const headers = new Headers(init.headers)
+  if (RELAYER_TOKEN) headers.set('x-vanta-token', RELAYER_TOKEN)
+  return fetch(`${FAUCET_URL}${path}`, { ...init, headers })
+}
+
 // ── .vanta handles ───────────────────────────────────────────────────
 export const VANTA_NAME_SUFFIX = '.vanta'
 

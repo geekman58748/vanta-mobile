@@ -16,7 +16,7 @@ fresh privacy identity X able to pay for its own spends.
 | GET | `/status` | public | Address, balance, database health. |
 | GET | `/address` | public | Relayer pubkey. |
 | POST | `/relay` | token | Fill the relayer's signer slot and submit a v1 tx. |
-| POST | `/fund` | token | Send SOL from the relayer to an address. |
+| POST | `/fund` | token | Send SOL from the relayer to an address (small identity float). |
 | GET | `/tx/:address` | token | Transaction history for one address. |
 | POST | `/tx/report` | token | Report a tx the relayer never saw (Shadow/Ghost/send). |
 | GET | `/names/:name` | public | Resolve `ai.vanta` → owner address. |

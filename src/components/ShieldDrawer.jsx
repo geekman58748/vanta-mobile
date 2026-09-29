@@ -190,7 +190,7 @@ export default function ShieldDrawer({
           disabled={loading}
           className="text-[11px] text-muted hover:text-white transition-colors self-center disabled:opacity-50"
         >
-          Not enough to shield? Request a devnet airdrop
+          Not enough to shield? Get SOL from the faucet
         </button>
       )}
     </Drawer>
