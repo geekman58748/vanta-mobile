@@ -186,6 +186,186 @@ use `scrypt` then `XChaCha20-Poly1305` and produce a single portable line.
 
 ---
 
+## Engineering notes: eight bugs a device found
+
+Every item below is a bug that a desktop browser cannot reproduce, that no unit test
+caught, and whose fix is a handful of lines. The useful part is the diagnosis, so each
+one is written up as symptom, cause, fix. A privacy wallet's hard problems are not on
+the screen; they are in the places where the platform quietly disagrees with you.
+
+### 1. Zolana compiles v1 transactions, and v1 puts the signatures last
+
+**File:** `src/lib/mwa.js`, `serializeCompiledTx`.
+
+**Symptom:** every Shield from the device wallet hung. No crash in the app, no error
+in the UI. A spinner that never resolved.
+
+**Cause:** Zolana's builders emit a **v1** transaction. The version byte is `0x81`, the
+signature count sits at index 1, and the signatures **trail** the message. Wallet
+parsers dispatch on byte 0, so a payload written in the legacy
+`[sigCount][sigs][message]` order sends `0x01` first, the wallet takes its legacy
+branch, reads `0x81` as a compact-u16 length, computes an absurd offset and dies:
+
+```
+java.lang.ArrayIndexOutOfBoundsException: length=361; index=8258
+  at SolanaSigningUseCase.getSignersForTransaction(…:97)
+  // 8258 = 2 + 64*129, and 129 is the compact-u16 read of [0x81, 0x01]
+```
+
+That throw happens inside the wallet process, so the app never sees it. It looks like a
+session or approval problem, and was misdiagnosed as one for a long time. Sending
+`[message][sigs]` fixes it. `scripts/mwa-wire-check.mjs` reproduces both encodings and
+runs the wallet's own bounds checks against them, so this can be re-tested without a
+phone.
+
+### 2. Never trust a position to find a signature
+
+**File:** `src/lib/mwa.js`, `verifiedSignatureFromSignedTx`.
+
+**Symptom:** the relayer rejected deposits with `Transaction did not pass signature
+verification`, naming no one.
+
+**Cause:** the signature the wallet returned was located by **arithmetic**: read the
+count from byte 1, take `count * 64` bytes off the tail, index into that block. That is
+the exact inverse of what a well-behaved wallet writes and nothing else. A wallet that
+fills the slot of its choosing, re-serialises in legacy order, or hands the payload back
+unsigned yields 64 bytes of not-a-signature. It is still 64 bytes, so it passed the
+client's own check and the relayer's `length !== 64` check, and failed only at the RPC,
+which does not say which signer it rejected.
+
+**Fix:** decode the returned bytes with kit's own codec, which dispatches on the envelope
+it is actually given, then keep only the signature that **verifies** against this account
+over this message under `ed25519.verify`. Everything else is refused before the deposit
+is submitted. This path is deliberately off the app's route today (a device-wallet Shield
+has the wallet pay its own fee and broadcast, so there is a single signer) and is kept
+because it is the correct way to do the relayer-funded variant, and because the harness
+alongside it is what proves a wallet's reply is usable before anyone trusts one again.
+Solflare's reply was not.
+
+### 3. `maxSupportedTransactionVersion: 1` is not optional
+
+**File:** `relayer/server.js`, `lookupSignature`; `src/lib/pendingShield.js`.
+
+**Symptom:** none. That is the problem. Every Zolana transaction read as unverified
+forever, and nothing failed loudly.
+
+**Cause:** the usual value is `0`. Against a v1 transaction the RPC refuses to decode it
+at all:
+
+```
+Transaction version (1) is not supported by the requesting client.
+```
+
+That error is indistinguishable from "signature not found", so `lookupSignature`
+returned `null`, and the caller is written to treat `null` as **unverified, never as
+valid**. The receipts were simply wrong, in the safe direction, permanently. This is the
+RPC-client twin of item 1: same v1 wire format, different process, different silent
+failure. The `curl` example under [Verify the claims yourself](#verify-the-claims-yourself)
+carries the same flag for the same reason.
+
+### 4. Older Android WebViews have no Ed25519 in WebCrypto
+
+**File:** `src/polyfills.js`, imported as the first line of `src/main.jsx`.
+
+**Symptom:** the app died at launch with `Privacy init failed: … Algorithm: Unrecognized
+name` on a real device.
+
+**Cause:** Ed25519 landed in Chrome's WebCrypto only in 2025, and Android WebViews older
+than roughly 137 reject `importKey('raw', …, 'Ed25519', …)` with
+`NotSupportedError`. `@solana/kit` builds its browser signers on WebCrypto Ed25519, so
+with no shim no Shield, Shadow or Ghost can be constructed on that device.
+
+**Fix:** probe first, then install `@solana/webcrypto-ed25519-polyfill` only if the probe
+throws. The probe matters: a WebView that already implements Ed25519 keeps its native
+implementation, whose keys are non-exportable and structured-cloneable into IndexedDB.
+`polyfills.js` uses a top-level `await`, which makes module evaluation of `App.jsx` and
+its dependencies wait for the probe, so nothing can touch a signer before the shim has
+settled. **The import order in `main.jsx` is load-bearing.**
+
+### 5. History is identity-signed, because the shipped token is not authentication
+
+**Files:** `src/lib/identityProof.js`, `src/lib/txHistory.js`, `relayer/server.js`.
+
+**Cause:** the app is a PWA inside a WebView, and its relayer token is compiled into the
+bundle. Anybody who unzips the APK can read it. The first version of history reporting
+used that token as the only thing standing between a request and a database write, and
+sent the amount and the recipient along with it, so the server held exactly the payment
+graph the pool had hidden (AUDIT-2026-09-27 C1/C2). This is the one item on this list
+that is a design defect rather than a platform defect.
+
+**Fix, in three parts.** Reports and reads are signed by the address they concern: the
+server verifies an Ed25519 proof over a domain-separated message (`vanta-report:…`,
+`vanta-history:…`) before it files anything, with a five minute freshness window
+(`PROOF_MAX_AGE_MS`), so a report cannot be filed under someone else's identity. The
+shared token is demoted to abuse deterrence and the README says so out loud. And
+`amount_atomic` and `counterparty` were **dropped from the schema**, so the server is no
+longer capable of leaking them rather than merely instructed not to.
+
+### 6. A shadowed binding meant every receipt said "Not checked"
+
+**File:** `src/lib/txHistory.js`, `reportTx`.
+
+**Symptom:** every receipt sat at "Not checked" forever, on every send, on every device.
+
+**Cause:** a `const proof` in the inner scope shadowed the `proof` the request body
+reads, putting the inner binding in its temporal dead zone at exactly the moment the
+body was built:
+
+```
+ReferenceError: cannot access 'proof' before initialization
+```
+
+The call sat inside a deliberately silent `catch`, because this whole path runs **after**
+the transfer is already confirmed and must never be able to fail a send. Correct policy,
+which is precisely why the bug was invisible: nothing anywhere printed. The binding is
+now `proofKey`.
+
+**Same file, same bug hunt:** the report timeout was raised from 5s to 12s
+(`REPORT_TIMEOUT_MS`). `POST /tx/report` is not a database write, it does a
+`getTransaction` against the RPC to decide `verified_on_chain`, and a signature confirmed
+seconds ago is often not indexed yet. Measured: 1946 ms cold for a signed read, 1366 ms
+warm for a report. At 5s the client was aborting real reports mid-flight on a slow
+network and the row stayed unchecked forever.
+
+### 7. A WebView silently drops a data-URL download
+
+**File:** `android/app/src/main/java/com/vanta/privacywallet/FileSaver.kt`, plus the
+`saveBase64File` bridge in `MainActivity.kt`.
+
+**Symptom:** the receipt sheet toasted "Saved" and no file existed anywhere on the
+device (AUDIT-2026-09-27 H2).
+
+**Cause:** the web layer handed a `data:` URL to the WebView and relied on a
+`DownloadListener` that was never installed in this shell. The navigation went nowhere.
+This is a class of bug the web platform will not tell you about: the navigation is
+accepted, and nothing reports that it was dropped.
+
+**Fix:** export through native code. `FileSaver` writes via `MediaStore` on API 29+
+(scoped storage, no permission needed, visible in the Files app) to
+`Downloads/Vanta/`, and **returns a result**, so the UI can only claim what actually
+happened. The base64 bridge is reachable from any script in the WebView, so it is capped
+at 20 MB, because an unbounded payload is otherwise a free way to fill a user's storage.
+
+### 8. A flex child with `min-height: auto` collapsed the drawer
+
+**File:** `src/components/Drawer.jsx`.
+
+**Symptom:** on a short phone, the filter rail and the activity list were squashed to
+nothing under the pool totals instead of the sheet scrolling.
+
+**Cause:** the sheet was one `max-h-[92vh] overflow-y-auto` flex column holding
+everything, handle and title included. A child of a flex column with `overflow-*` has a
+`min-height` of 0, so the two blocks that already scrolled on their own traded their
+height away first. The sheet looked like it scrolled and did the opposite.
+
+**Fix:** handle and title are pinned and `shrink-0` outside the scroller, the body is the
+single scroll container, and every direct child is pinned to its natural height with
+`[&>*]:shrink-0`. A sheet can be too tall; it just cannot compress its contents. The app
+hides `::-webkit-scrollbar` globally, which is why there is also a "Scroll for more" pill:
+without it, a sheet whose content ran past the fold read as a sheet that had ended.
+
+---
+
 ## Build from source
 
 ### Prerequisites
@@ -352,6 +532,8 @@ android/              Solana Mobile webshell host, Kotlin
 landing/              the marketing site
 vendor/               vendored @heliuslabs/zolana tarball. See vendor/README.md
 scripts/              verification harnesses, listed above
+licenses/             GPL-3.0 and LGPL-3.0 texts, required by a bundled dependency
+NOTICE                attribution for everything third-party. Read this if you fork.
 docs/                 architecture, audit, evidence, integration notes
 ```
 
@@ -367,3 +549,32 @@ Wallet Adapter. The Zolana SDK is vendored in `vendor/` under Apache-2.0, with i
 and third-party notices alongside it, because the registry's published `0.2.0-alpha` is
 broken against devnet and the working version lives on a source tag. `vendor/README.md`
 records the exact provenance and how to regenerate it.
+
+---
+
+## License
+
+Vanta's own code is **Apache-2.0**. See `LICENSE`.
+
+`NOTICE` carries the attribution for everything third-party, and it is worth one line
+here because one entry is not boilerplate. Vanta's RPC traffic is plain HTTPS and never
+opens a websocket, but `@solana/web3.js` imports `rpc-websockets` at module scope, so that
+library is compiled into the release APK and it is **LGPL-3.0-only**, not permissive.
+This was measured, not assumed:
+
+```bash
+grep -rl max_reconnects_reached dist/assets/*.js
+# dist/assets/index.browser.esm-CqbKqh0d.js
+```
+
+That chunk ships inside the APK, and the library is unmodified. `NOTICE` section 2 records
+the prominent notice and how the relink and source requirements are met, and
+`licenses/` holds the GPL-3.0 and LGPL-3.0 texts that have to travel with it. Aliasing the
+dependency away in `vite.config.js` would retire the obligation, and that change is
+recorded there as a known cleanup rather than quietly skipped: it cannot be verified on
+a device from this repository's current state.
+
+The Android shell in `android/` was generated from the Solana Mobile webshell CLI
+template. That upstream template declares **no license at all**, so this repository does
+not claim it is Apache-2.0. `android/NOTICE` states the provenance, and what Vanta
+changed.
