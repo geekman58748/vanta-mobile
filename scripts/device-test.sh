@@ -79,6 +79,9 @@ echo "== 3. reverse tunnels (phone localhost -> this Mac) =="
 adb -s "$SERIAL" reverse --remove-all 2>/dev/null
 adb -s "$SERIAL" reverse tcp:3000 tcp:3000 && echo "    tcp:3000 -> app"
 adb -s "$SERIAL" reverse tcp:3001 tcp:3001 && echo "    tcp:3001 -> relayer"
+# The faucet has its own port, so it needs its own tunnel: without it the
+# in-app button fails against the phone's own localhost.
+adb -s "$SERIAL" reverse tcp:3003 tcp:3003 && echo "    tcp:3003 -> faucet"
 
 echo
 echo "== 4. install =="

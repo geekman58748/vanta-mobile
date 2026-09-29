@@ -41,7 +41,11 @@ import { dirname, join } from 'path'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const FAUCET_KEYPAIR_PATH = join(__dirname, 'faucet-keypair.json')
 
-const PORT = Number(process.env.FAUCET_PORT || 3002)
+// 3003, not 3002: 3000 is the app server, 3001 the relayer, and vite's dev
+// server falls through to 3002 when both are taken — so a default of 3002 put
+// this service on the same port as `npm run dev` while .env.example, .env.local
+// and the launchd job all pointed the client at 3003.
+const PORT = Number(process.env.FAUCET_PORT || 3003)
 const RPC_URL = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com'
 const isProd = process.env.NODE_ENV === 'production'
 
