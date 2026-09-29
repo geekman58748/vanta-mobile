@@ -260,8 +260,8 @@ export default function Footer() {
                 </div>
                 <p className="measure mt-5 text-[14px] leading-relaxed text-ink-subtle">
                   A privacy wallet for Solana. Shadow-send to another Vanta and your amount and
-                  recipient never appear on-chain — and you get a receipt that says exactly what
-                  still does.
+                  recipient never appear on-chain. You get a receipt that says exactly what still
+                  does.
                 </p>
                 <div className="mt-6 flex items-center gap-2">
                   {SOCIALS.map((s) => (
@@ -309,12 +309,14 @@ export default function Footer() {
           <div className="mt-14 border-t border-hairline pt-7">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[12px] text-ink-subtle">© {new Date().getFullYear()} Vanta.</p>
-              <span className="inline-flex items-center gap-2 text-ink-subtle">
-                <SolanaMark size={12} />
-                <span className="font-mono text-[10px] uppercase tracking-[0.12em]">
-                  Built on Solana
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="inline-flex items-center gap-2 text-ink-subtle">
+                  <SolanaMark size={12} />
+                  <span className="font-mono text-[10px] uppercase tracking-[0.12em]">
+                    Built on Solana
+                  </span>
                 </span>
-              </span>
+              </div>
             </div>
 
             {/* Kept full-width: running this as a narrow column under STATUS ran it

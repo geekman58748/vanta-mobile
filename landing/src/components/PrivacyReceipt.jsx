@@ -133,7 +133,7 @@ export default function PrivacyReceipt() {
 
                 <p className="mt-4 text-[14px] leading-relaxed text-ink">
                   We moved <span className="text-ink-strong">{SHADOW.amountMoved}</span>. Search
-                  this transaction for that number — it is not there.
+                  this transaction for that number. It is not there.
                 </p>
 
                 <div className="mt-5 flex flex-col gap-3">
@@ -212,7 +212,7 @@ export default function PrivacyReceipt() {
                     />
                   </span>
                   <span className="text-[13px] text-ink">
-                    Observer mode —{' '}
+                    Observer mode: {' '}
                     <span className="text-ink-subtle">see only what a stranger sees</span>
                   </span>
                 </label>
@@ -257,10 +257,10 @@ export default function PrivacyReceipt() {
             </p>
             <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {[
-                { label: `${GHOST.kind} — withdraw ${GHOST.amountMoved}`, sig: GHOST.signature },
-                { label: `${SHIELD.kind} — deposit ${SHIELD.amountMoved}`, sig: SHIELD.signature },
+                { label: `${GHOST.kind}: withdraw ${GHOST.amountMoved}`, sig: GHOST.signature },
+                { label: `${SHIELD.kind}: deposit ${SHIELD.amountMoved}`, sig: SHIELD.signature },
                 ...USER_SENDS.map((s, i) => ({
-                  label: `Live send ${i + 1} — ${s.time}`,
+                  label: `Live send ${i + 1}: ${s.time}`,
                   sig: s.signature,
                 })),
               ].map((item) => (

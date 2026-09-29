@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { VantaMark, SolanaMark, Github, ChevronDown } from './Marks.jsx'
 import { GITHUB_URL } from '../config.js'
 import StoreBadge from './StoreBadge.jsx'
+import WaitlistButton from './WaitlistButton.jsx'
 
 const LINKS = [
   { label: 'How it works', href: '#how' },
@@ -98,9 +99,22 @@ export default function Nav() {
             faded ? 'is-idle' : ''
           }`}
         >
-          {/* Wordmark — the text drops out when collapsed, the mark stays */}
+          {/* Wordmark — the text drops out when collapsed, the mark stays.
+
+              The mark is also the pill's tell that it changed state: it turns a
+              full revolution while shrinking and unwinds it on the way back, so
+              the collapse reads as one motion instead of a width snap. Driven
+              entirely off `.nav-pill.is-shrunk` in CSS — no React state, no
+              scroll listener of its own, so it can never disagree with the pill
+              it is describing.
+
+              Motion rule 1 note: this is transform-only (rotate + scale), which
+              is why it is allowed to be this loud. It is also suppressed under
+              prefers-reduced-motion (see index.css). */}
           <a href="#top" aria-label="Vanta home" className="flex shrink-0 items-center gap-2.5">
-            <VantaMark size={28} />
+            <span className="nav-mark">
+              <VantaMark size={26} />
+            </span>
             <span
               className={`font-display text-2xl leading-none tracking-[-0.01em] text-ink-strong ${
                 collapsed ? 'hidden' : ''
@@ -189,7 +203,10 @@ export default function Nav() {
             >
               GitHub ↗
             </a>
-            <div className="mt-2 px-1">
+            {/* Waitlist placement 2 of 2: the mobile sheet, where a thumb
+                reaches without scrolling (see WaitlistButton.jsx). */}
+            <div className="mt-2 flex flex-col gap-2 px-1">
+              <WaitlistButton className="w-full justify-center" />
               <StoreBadge className="w-full justify-center" />
             </div>
           </div>

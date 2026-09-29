@@ -9,11 +9,11 @@ import Reveal from './Reveal.jsx'
 const FAQS = [
   {
     q: 'Is Vanta anonymous?',
-    a: 'No — it is confidential, and the difference matters. A Shadow send hides the amount and the recipient. It does not hide the sender: Vanta pays its own network fees, so the sending identity is publicly visible on every spend and is reused across sends. Anyone who knows your Vanta address can count and time your payments.',
+    a: 'No. It is confidential, and the difference matters. A Shadow send hides the amount and the recipient. It does not hide the sender: Vanta pays its own network fees, so the sending identity is publicly visible on every spend and is reused across sends. Anyone who knows your Vanta address can count and time your payments.',
   },
   {
     q: 'Where do my funds go when I shield?',
-    a: 'Into a shared shielded pool — a program-controlled vault, not an account we hold keys to. Your private balance is an encrypted note inside that pool, and it behaves like a bearer claim: whoever holds the viewing and nullifier keys can spend it.',
+    a: 'Into a shared shielded pool: a program-controlled vault, not an account we hold keys to. Your private balance is an encrypted note inside that pool, and it behaves like a bearer claim. Whoever holds the viewing and nullifier keys can spend it.',
   },
   {
     q: 'Who actually controls the vault?',
@@ -25,7 +25,7 @@ const FAQS = [
   },
   {
     q: 'What happens if I lose my device or my seed?',
-    a: 'Your private balance is derived from your seed. Lose it and the notes cannot be spent — they are bearer claims with no recovery path and no support desk that can restore them.',
+    a: 'Your private balance is derived from your seed. Lose it and the notes cannot be spent. They are bearer claims with no recovery path and no support desk that can restore them.',
   },
   {
     q: 'Does the relayer see my payments?',

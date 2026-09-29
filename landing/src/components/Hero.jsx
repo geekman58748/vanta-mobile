@@ -3,10 +3,15 @@ import { GITHUB_URL } from '../config.js'
 import StoreBadge from './StoreBadge.jsx'
 import Reveal from './Reveal.jsx'
 
+// The three caveats, in the hero on purpose.
+//
+// Written as two short sentences rather than one clause joined by a dash: at
+// 12px in a three-up strip, "Devnet only. No mainnet deployment." scans in one
+// pass, and it survives being wrapped in a narrow cell.
 const HONESTY = [
-  'Devnet only — no mainnet deployment',
-  'Not audited — do not use real funds',
-  'Sender identity is public — see the receipt',
+  'Devnet only. No mainnet deployment.',
+  'Not audited. Do not use real funds.',
+  'Sender identity is public. See the receipt.',
 ]
 
 export default function Hero() {
@@ -52,8 +57,8 @@ export default function Hero() {
           <Reveal delay={140}>
             <p className="measure mt-6 text-[17px] leading-[1.6] text-ink sm:text-[19px]">
               Vanta is a privacy wallet on Solana. Shadow-send to another Vanta and your
-              amount and recipient never appear on-chain — then read the receipt that tells
-              you exactly what is still public.
+              amount and recipient never appear on-chain. Then read the receipt that tells you
+              exactly what is still public.
             </p>
           </Reveal>
 
@@ -73,12 +78,25 @@ export default function Hero() {
             </div>
           </Reveal>
 
-          {/* Radical honesty strip — the differentiator starts in the hero */}
+          {/* Radical honesty strip — the differentiator starts in the hero.
+
+              Was three loose centred lines with a 12px padlock floating beside
+              each one. Two problems: the padlock read as sitting *above* the
+              text it belonged to once the copy wrapped, and three centred lines
+              of unequal length read as stray sentences rather than as one unit.
+
+              It is now the same hairline grid the rest of the page already uses
+              (see InfraStrip): 1px gaps over a hairline background, cells filled
+              with canvas. `items-start` pins each padlock to the first line of
+              its own cell, left-aligned, so the icon and its sentence always
+              read as one block at any width. */}
           <Reveal delay={280}>
-            <ul className="mt-10 flex flex-col items-center gap-2.5 text-[12px] text-ink-subtle sm:flex-row sm:gap-6">
+            <ul className="mt-10 grid w-full max-w-2xl grid-cols-1 gap-px overflow-hidden rounded-xl bg-hairline text-left text-[12px] leading-snug text-ink-subtle ring-1 ring-hairline sm:grid-cols-3">
               {HONESTY.map((item) => (
-                <li key={item} className="flex items-center gap-2">
-                  <Lock size={12} />
+                <li key={item} className="flex items-start gap-2.5 bg-canvas px-4 py-3">
+                  <span className="mt-px shrink-0 text-ink-subtle/70">
+                    <Lock size={12} />
+                  </span>
                   <span>{item}</span>
                 </li>
               ))}

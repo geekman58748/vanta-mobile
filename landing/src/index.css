@@ -145,6 +145,56 @@
 }
 
 /* ============================================================
+   Phone-mockup ambient background (AppPreview).
+
+   Ported from the wallet app's own src/index.css: two neutral spotlights
+   (.spotlight-left / .spotlight-right) and the topographic field
+   (.topo-waves). The app draws them on a 440px-wide canvas; the mockup's
+   screen is 282px inside the bezel, so every value here is the app's × 0.64.
+   Kept as named classes rather than Tailwind arbitrary values so the two
+   files stay diffable against each other.
+
+   Neutral, not violet, on purpose. The app tried violet washes behind the
+   header and the whole screen read as purple rather than as a neutral room
+   with a purple lamp in it.
+   ============================================================ */
+
+.mock-spot {
+  position: absolute;
+  top: 10px;
+  width: 83px;
+  height: 83px;
+  border-radius: 9999px;
+  pointer-events: none;
+  z-index: 0;
+}
+.mock-spot-l {
+  left: 13px;
+  background: radial-gradient(circle, rgb(255 255 255 / 0.11) 0%, rgb(255 255 255 / 0) 70%);
+  filter: blur(13px);
+}
+.mock-spot-r {
+  right: 13px;
+  width: 90px;
+  height: 90px;
+  background: radial-gradient(circle, rgb(255 255 255 / 0.13) 0%, rgb(255 255 255 / 0) 75%);
+  filter: blur(16px);
+}
+
+.mock-topo {
+  position: absolute;
+  top: -13px;
+  right: -13px;
+  width: 100%;
+  height: 243px;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.85;
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 1) 30%, rgb(0 0 0 / 0) 100%);
+  -webkit-mask-image: linear-gradient(to bottom, rgb(0 0 0 / 1) 30%, rgb(0 0 0 / 0) 100%);
+}
+
+/* ============================================================
    Floating pill nav — ported from BlackRail's landing page.
    Full width at the top; scroll down past 80px and .is-shrunk folds the
    middle cluster away and pulls the capsule in. Scroll up to expand.
@@ -193,6 +243,24 @@
     inset 0 1px 0 rgb(255 255 255 / 0.1),
     inset 0 -1px 0 rgb(0 0 0 / 0.7),
     0 20px 48px rgb(0 0 0 / 0.6);
+}
+
+/* Brand mark in the pill. One full turn + a step down in scale while collapsed,
+   unwinding to exactly 0deg / 1x when the pill expands, so the resting state is
+   never "some rotation" — it always resolves back to normal on its own. The
+   460ms is deliberately shorter than the 500ms width collapse: the mark arrives
+   before the pill finishes, which is what makes it read as fast rather than as
+   a slow twirl. Transform only (motion rule 1). */
+.nav-mark {
+  display: inline-grid;
+  place-items: center;
+  transform: rotate(0deg) scale(1);
+  transition: transform 460ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+.nav-pill.is-shrunk .nav-mark {
+  transform: rotate(360deg) scale(0.74);
 }
 
 /* Reading room — paused mid-page, the capsule fades out of the way.
@@ -309,7 +377,8 @@
 @media (prefers-reduced-motion: reduce) {
   .reveal { opacity: 1; transform: none; transition: none; }
   .nav-pill,
-  .nav-collapse { transition-duration: 1ms; }
+  .nav-collapse,
+  .nav-mark { transition-duration: 1ms; }
   .nav-pill { transition: background-color 1ms, border-color 1ms, box-shadow 1ms; }
   .sweep { display: none; }
   .pulse-dot::after { animation: none; }

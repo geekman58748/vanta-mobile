@@ -9,6 +9,19 @@
 export const APK_URL = ''
 
 /** Set to the repo that will be public at submission time. */
+/**
+ * Waitlist destination.
+ *
+ * Wired but PLACEHOLDER: both placements (wallet section primary, mobile nav)
+ * render now, and the link points at `#wallet`, so it scrolls to
+ * the product instead of going nowhere or 404ing. Swap this one string when
+ * the real signup exists, nothing else changes:
+ *   · a hosted form  e.g. https://tally.so/r/xxxxx  or  https://formspree.io/f/xxxx
+ *   · a list service e.g. https://buttondown.email/vanta  (its own signup page)
+ *   · `mailto:you@domain?subject=Vanta waitlist`  (works today, collects nothing)
+ */
+export const WAITLIST_URL = '#wallet'
+
 export const GITHUB_URL = 'https://github.com/geekman58748/vanta-mobile'
 
 /** Devnet wallet app — useful for judges who want to try it before the APK. */

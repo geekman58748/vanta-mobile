@@ -65,7 +65,7 @@ export const SHADOW = {
       claim: 'Sender',
       verdict: 'visible',
       detail:
-        'The sender identity is account[0] — the fee payer — and it is reused across every send. Anyone who knows your address can chart your sends.',
+        'The sender identity is account[0], the fee payer, and it is reused across every send. Anyone who knows your address can chart your sends.',
     },
   ],
 }
@@ -77,12 +77,12 @@ export const GHOST = {
   amountMoved: '0.3 SOL',
   signature:
     'Q5o9soTu8Yf7U7iwgoj9WeLKgkDS6CSdoZHyZPjQgNJon1nQ27GMa3RUVzThBEWxBsLxjT4LUPMH8CSrQcwm4QA',
-  headline: 'Redemption is real — the private balance left the pool vault.',
+  headline: 'Redemption is real. The private balance left the pool vault.',
   deltas: [
     { short: '2iAazE9t…', role: 'Pool vault', delta: '−0.300000000', tone: 'exposed' },
     { short: 'CmPCvP42…', role: 'Withdrawer', delta: '+0.299995000', tone: 'exposed' },
   ],
-  note: 'A private balance is a redeemable bearer claim, not a number the app renders. Withdrawing makes the amount public again — by design.',
+  note: 'A private balance is a redeemable bearer claim, not a number the app renders. Withdrawing makes the amount public again, by design.',
 }
 
 export const SHIELD = {
@@ -96,7 +96,7 @@ export const SHIELD = {
   deltas: [
     { short: 'FhV7cyfV…', role: 'Relayer (fee only)', delta: '−0.000010000', tone: 'exposed' },
   ],
-  note: 'The relayer sponsors fees and registration rent — it never funds a payment amount. Your own wallet pays the deposit.',
+  note: 'The relayer sponsors fees and registration rent. It never funds a payment amount. Your own wallet pays the deposit.',
 }
 
 export const ALL_EVIDENCE = [SHADOW, GHOST, SHIELD]

@@ -14,7 +14,7 @@ export default function InfraStrip() {
       <div className="shell py-14 sm:py-16">
         <Reveal>
           <p className="text-center font-mono text-[11px] uppercase tracking-[0.16em] text-ink-subtle">
-            Built on real infrastructure
+            Vanta&apos;s infrastructure
           </p>
         </Reveal>
 
@@ -43,12 +43,18 @@ export default function InfraStrip() {
         </Reveal>
 
         {/* The honest caption. Stealf says "no on-chain link between them";
-            we say precisely what we can prove and flag what we cannot. */}
+            we say precisely what we can prove and flag what we cannot.
+
+            The dash is gone. "The sender is — Vanta pays its own fees" left the
+            strongest claim on the page hanging on a piece of punctuation, and
+            the eye reads a dash as an aside rather than as the point. Now the
+            sentence simply says what is true, in order: the sender is public,
+            and here is why. */}
         <Reveal delay={140}>
           <p className="measure mx-auto mt-8 text-center text-[13px] leading-relaxed text-ink-subtle">
             The amount and the recipient are not derivable from on-chain data.{' '}
-            <span className="text-ink">The sender is</span> — Vanta pays its own fees, so the
-            spend identity is visible and reused. We show you that instead of hiding it.
+            <span className="text-ink">The sender is public.</span> Vanta pays its own fees, so
+            the spend identity is visible and reused. We show you that instead of hiding it.
           </p>
         </Reveal>
       </div>

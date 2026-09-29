@@ -13,7 +13,7 @@ const FLOWS = [
     route: 'Public → private',
     Icon: Shield,
     flagship: false,
-    body: 'Move SOL into the shielded pool. The deposit edge is public — that part is unavoidable — and everything after it is not.',
+    body: 'Move SOL into the shielded pool. The deposit edge is public, and that part is unavoidable. Everything after it is not.',
     visibility: [
       { label: 'Amount', state: 'public' },
       { label: 'Recipient', state: 'n/a' },
@@ -39,7 +39,7 @@ const FLOWS = [
     route: 'Private → any address',
     Icon: Ghost,
     flagship: false,
-    body: 'Cash out to any Solana wallet, even one that has never used Vanta. The amount becomes public again — on purpose.',
+    body: 'Cash out to any Solana wallet, even one that has never used Vanta. The amount becomes public again, on purpose.',
     visibility: [
       { label: 'Amount', state: 'public' },
       { label: 'Recipient', state: 'public' },
@@ -87,7 +87,7 @@ export default function Flows() {
           <Reveal delay={120}>
             <p className="measure mt-5 text-[16px] leading-relaxed text-ink-subtle">
               Each flow discloses its own visibility up front. Pick the one that matches what
-              you need to keep private — and know what it costs you.
+              you need to keep private, and know what it costs you.
             </p>
           </Reveal>
         </div>
@@ -145,13 +145,13 @@ export default function Flows() {
             <span className="flex items-center gap-2">
               <EyeOff size={13} />
               <span>
-                <span className="text-hidden">hidden</span> — not derivable from on-chain data
+                <span className="text-hidden">hidden</span>, not derivable from on-chain data
               </span>
             </span>
             <span className="flex items-center gap-2">
               <Alert size={13} />
               <span>
-                <span className="text-exposed">visible</span> — readable by anyone with the
+                <span className="text-exposed">visible</span>, readable by anyone with the
                 transaction
               </span>
             </span>

@@ -2,29 +2,30 @@ import { Android, ArrowUpRight } from './Marks.jsx'
 import { APK_URL } from '../config.js'
 
 /**
- * Android store badge, styled like the familiar TestFlight/App Store badge.
+ * Store badge: the Android mark and "Solana dApp Store" on one line.
+ *
+ * Used to be the familiar two-line store badge — a monospace eyebrow ("Get it
+ * on" / "Coming soon") stacked over the store name. Two lines to say one thing
+ * made the badge the tallest, busiest element in the nav, and "Coming soon" was
+ * the loudest thing in the hero for a piece of information nobody needs twice.
+ * One line: mark, then where to get it.
  *
  * ⚠️ While APK_URL is empty this renders in a PENDING state — it is a <div>,
- * not a link, and it says so. Once the APK exists it becomes a real link with
- * no other change (see src/config.js).
+ * not a link. Once the APK exists it becomes a real link with no other change
+ * (see src/config.js). The label does not change either way.
  */
 export default function StoreBadge({ size = 'md', className = '' }) {
   const live = Boolean(APK_URL)
-  const h = size === 'lg' ? 'h-16 px-5' : 'h-14 px-4'
-  const icon = size === 'lg' ? 24 : 20
+  const h = size === 'lg' ? 'h-16 px-5' : 'h-12 px-4'
+  const icon = size === 'lg' ? 24 : 18
 
   const inner = (
     <>
       <span className="text-ink-strong shrink-0">
         <Android size={icon} />
       </span>
-      <span className="flex flex-col items-start text-left leading-none">
-        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-subtle">
-          {live ? 'Get it on' : 'Coming soon'}
-        </span>
-        <span className="mt-1.5 text-[15px] font-medium tracking-[-0.01em] text-ink-strong">
-          {live ? 'Android · APK' : 'Solana dApp Store'}
-        </span>
+      <span className="text-[15px] font-medium tracking-[-0.01em] text-ink-strong whitespace-nowrap">
+        Solana dApp Store
       </span>
       {live && (
         <span className="ml-1 text-ink-subtle transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
@@ -40,8 +41,8 @@ export default function StoreBadge({ size = 'md', className = '' }) {
     return (
       <div
         className={`${shared} cursor-default bg-surface-2 ring-1 ring-hairline`}
-        aria-label="Android app coming soon"
-        title="No APK has shipped yet — this badge goes live at submission."
+        aria-label="Vanta on the Solana dApp Store"
+        title="The APK is not published yet. This badge becomes a link when it is."
       >
         {inner}
       </div>
