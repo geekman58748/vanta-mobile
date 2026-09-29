@@ -35,6 +35,9 @@ importers:
       '@solana/web3.js':
         specifier: ^1.99.0
         version: 1.99.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@solana/webcrypto-ed25519-polyfill':
+        specifier: ^8.4.0
+        version: 8.4.0(typescript@5.9.3)
       cors:
         specifier: ^2.8.6
         version: 2.8.6
@@ -200,6 +203,9 @@ packages:
   '@noble/curves@2.4.0':
     resolution: {integrity: sha512-P4/62zrgfH33CneE3Dn4WhJVA22YUU0eR51wKIan4NVRvwsA0YnPTwWGpNbpuacSujmSFLvyzpyuR30+fbq2Ew==}
     engines: {node: '>= 20.19.0'}
+
+  '@noble/ed25519@3.2.0':
+    resolution: {integrity: sha512-criDgRlnUA09hchYrTy/JUWPIEap5rZxQe6wDWzRx51oWWpDRcUpuNzlgPxDJaOK6AsW9c0wKcj3rKRv6t+bPQ==}
 
   '@noble/hashes@1.8.0':
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
@@ -1407,6 +1413,15 @@ packages:
 
   '@solana/web3.js@1.99.0':
     resolution: {integrity: sha512-QZYQ2T1z6xWisoyALPq25i/QZTsRlM02BABtAsfaQ1p8wX4SdTfxrKTRue/ZZqrhNVh5oL7T/DUFiTS9DRgxow==}
+
+  '@solana/webcrypto-ed25519-polyfill@8.4.0':
+    resolution: {integrity: sha512-hdAhW4OYJlO7jIEEIvsM+6A0q+75wN5IN9yn6v6xqgVMNVEg5E4eL2BdfuGkJPoSuCYjaoRM8drG79i7khrLDg==}
+    engines: {node: '>=20.18.0'}
+    peerDependencies:
+      typescript: '>=5.4.0'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   '@swc/helpers@0.5.23':
     resolution: {integrity: sha512-5lSsMOTXURePglDfvuAQUqkGek9Hg2kksOYay2m0+XR++b2NWYL/4sWyuvVBIs8oKnJaxkdi9whaL/sqN13afw==}
@@ -3132,6 +3147,8 @@ snapshots:
     dependencies:
       '@noble/hashes': 2.4.0
 
+  '@noble/ed25519@3.2.0': {}
+
   '@noble/hashes@1.8.0': {}
 
   '@noble/hashes@2.4.0': {}
@@ -4515,6 +4532,12 @@ snapshots:
       - encoding
       - typescript
       - utf-8-validate
+
+  '@solana/webcrypto-ed25519-polyfill@8.4.0(typescript@5.9.3)':
+    dependencies:
+      '@noble/ed25519': 3.2.0
+    optionalDependencies:
+      typescript: 5.9.3
 
   '@swc/helpers@0.5.23':
     dependencies:
