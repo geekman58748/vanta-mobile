@@ -1,0 +1,9 @@
+node_modules
+npm-debug.log*
+
+# Never ship a keypair in an image layer. Production injects FAUCET_KEYPAIR.
+faucet-keypair.json
+
+.env
+.env.*
+*.md

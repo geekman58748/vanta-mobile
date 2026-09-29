@@ -26,11 +26,6 @@
  * with only what you are willing to lose.
  */
 
-// Loads relayer/.env + .env.local (the same files as the relayer, so local dev
-// has one place to configure everything). No-op when NODE_ENV=production,
-// where real env vars are platform secrets.
-import '../relayer/env.js'
-
 import express from 'express'
 import cors from 'cors'
 import { Keypair, Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js'
@@ -40,6 +35,27 @@ import { dirname, join } from 'path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const FAUCET_KEYPAIR_PATH = join(__dirname, 'faucet-keypair.json')
+
+// Local-dev convenience: load relayer/.env + .env.local, the same two files the
+// relayer already uses, so there is one place to configure everything. A no-op
+// when NODE_ENV=production, where these arrive as platform secrets and must not
+// be shadowed by a file on disk.
+//
+// Inline rather than an imported env.js the way the relayer does it: that
+// exists because db.js reads DATABASE_URL at module scope, so an inline loader
+// would run too late for it. Nothing the faucet imports reads env at module
+// scope and every constant below is computed after this block, so inline is
+// correct here — and it keeps faucet/ the whole build context, with no
+// dependency on relayer/.
+if (process.env.NODE_ENV !== 'production') {
+  for (const file of [join(__dirname, '..', 'relayer', '.env'), join(__dirname, '..', '.env.local')]) {
+    try {
+      process.loadEnvFile(file)
+    } catch {
+      /* absent — fine */
+    }
+  }
+}
 
 // 3003, not 3002: 3000 is the app server, 3001 the relayer, and vite's dev
 // server falls through to 3002 when both are taken — so a default of 3002 put
