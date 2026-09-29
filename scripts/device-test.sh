@@ -90,8 +90,39 @@ LABEL="debug (CDP diagnostics ON)"
 if [ "$USE_RELEASE" -eq 1 ]; then APK="$RELEASE_APK"; LABEL="release (no CDP)"; fi
 if [ ! -f "$APK" ]; then echo "  ✗ missing $APK"; exit 1; fi
 
-adb -s "$SERIAL" install -r "$APK" 2>&1 | tail -2 | sed 's/^/    /'
-echo "    installed Vanta: $LABEL"
+INSTALL_OUT=$(adb -s "$SERIAL" install -r "$APK" 2>&1)
+if echo "$INSTALL_OUT" | grep -q "Success"; then
+  echo "    installed Vanta: $LABEL"
+elif echo "$INSTALL_OUT" | grep -q "INSTALL_FAILED_UPDATE_INCOMPATIBLE"; then
+  # The debug and release APKs are signed with different keys, so whichever one
+  # is installed rejects the other. Never 'fix' this by uninstalling: that wipes
+  # the phone's wallet, identity, private balance and history.
+  echo "  ✗ signature mismatch — the installed Vanta was signed with another key."
+  echo "$(echo "$INSTALL_OUT" | tail -1)" | sed 's/^/    /'
+  echo "    Debug installs reject the release APK and vice versa. Re-run with the"
+  echo "    matching flavour (--release for a phone that already has a release build)."
+  exit 1
+elif echo "$INSTALL_OUT" | grep -q "INSTALL_FAILED_USER_RESTRICTED"; then
+  # MIUI/HyperOS gates `adb install` behind an on-device confirmation it will not
+  # show over adb (HANDOFF §6.0). Two fallbacks: install through the device shell
+  # out of /data/local/tmp (SELinux blocks the system server from reading
+  # /sdcard), and leave a copy in Download for a tap-install.
+  echo "  ⚠️  MIUI/HyperOS refused adb install (INSTALL_FAILED_USER_RESTRICTED)."
+  echo "      Retrying through the device shell…"
+  adb -s "$SERIAL" push "$APK" /data/local/tmp/vanta-install.apk >/dev/null 2>&1
+  PM_OUT=$(adb -s "$SERIAL" shell pm install -r /data/local/tmp/vanta-install.apk 2>&1 | tr -d '\r' | tail -1)
+  echo "      pm install: $PM_OUT"
+  STAMP=$(adb -s "$SERIAL" shell dumpsys package "$APP_PKG" 2>/dev/null | tr -d '\r' | awk -F= '/lastUpdateTime/{print $2; exit}')
+  echo "      installed package lastUpdateTime:$STAMP"
+  adb -s "$SERIAL" push "$APK" "/sdcard/Download/$(basename "$APK")" >/dev/null 2>&1
+  echo "      ⚠️  MIUI reports failure even when the install lands, so do not trust"
+  echo "      that message — check the app on the phone. Manual fallback: a copy is"
+  echo "      at /sdcard/Download/$(basename "$APK") — tap it in Files to install."
+else
+  echo "  ✗ install failed:"
+  echo "$INSTALL_OUT" | sed 's/^/    /'
+  exit 1
+fi
 
 if [ "$INSTALL_WALLET" -eq 1 ]; then
   if [ ! -f "$WALLET_APK" ]; then
