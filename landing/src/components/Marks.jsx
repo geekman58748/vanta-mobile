@@ -103,6 +103,41 @@ export function RelayerMark({ size = 22 }) {
   )
 }
 
+/**
+ * Solana Mobile — a handset carrying an approval check.
+ *
+ * Drawn as a phone *plus a tick* rather than a bare handset, because the claim
+ * it stands next to is about signing: the wallet approves on the device and
+ * Vanta never sees the key. A plain phone outline would read as the Android
+ * mark already in this file, which sits one tile away.
+ */
+export function MobileMark({ size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 22 22" {...base}>
+      <rect x="6.6" y="2.4" width="8.8" height="17.2" rx="2.3" />
+      <path d="M9.7 11.5 L10.9 12.7 L13.4 9.9" strokeWidth={1.7} />
+      <path d="M9.9 17.3 h2.2" strokeWidth={1.7} />
+    </svg>
+  )
+}
+
+/**
+ * Seed Vault — a vault door with a dial and spokes.
+ *
+ * Reads as "a safe" before it reads as any particular vendor's mark, which is
+ * the point: this is a hardware-custody statement, not a logo wall.
+ */
+export function VaultMark({ size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 22 22" {...base}>
+      <rect x="3.4" y="3.6" width="15.2" height="14.8" rx="2.6" />
+      <circle cx="11" cy="11" r="4.1" />
+      <circle cx="11" cy="11" r="1.3" fill="currentColor" stroke="none" />
+      <path d="M11 6.9 V5.4 M11 16.6 V15.1 M15.1 11 H16.6 M6.9 11 H5.4" strokeWidth={1.1} />
+    </svg>
+  )
+}
+
 /* ---------------- UI icons ---------------- */
 
 export function ArrowUpRight({ size = 14 }) {

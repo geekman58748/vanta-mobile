@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { VantaMark, SolanaMark, Github, ArrowUpRight } from './Marks.jsx'
+import { VantaMark, SolanaMark, MobileMark, Github, ArrowUpRight } from './Marks.jsx'
 import { GITHUB_URL, SOCIALS } from '../config.js'
 import Reveal from './Reveal.jsx'
 import FooterSceneMarble from './FooterSceneMarble.jsx'
@@ -314,6 +314,15 @@ export default function Footer() {
                   <SolanaMark size={12} />
                   <span className="font-mono text-[10px] uppercase tracking-[0.12em]">
                     Built on Solana
+                  </span>
+                </span>
+                {/* The other half of the same pair. "Built on Solana" answers which
+                    chain; this answers which device, and it is the one the project is
+                    judged on. Same chip, same treatment, no new visual weight. */}
+                <span className="inline-flex items-center gap-2 text-ink-subtle">
+                  <MobileMark size={13} />
+                  <span className="font-mono text-[10px] uppercase tracking-[0.12em]">
+                    Built for Seeker
                   </span>
                 </span>
               </div>

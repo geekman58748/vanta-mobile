@@ -53,11 +53,15 @@ export default function Hero() {
             </h1>
           </Reveal>
 
-          {/* Lede */}
+          {/* Lede — "built for Seeker" goes in the first sentence on purpose.
+              The page's first job is to say who this is for, and "on Solana" alone
+              was answering half of it: Vanta is an Android wallet for the Solana
+              Mobile stack, and the hero is the only place a reader is guaranteed to
+              land. Four added words, so the sentence rhythm is unchanged. */}
           <Reveal delay={140}>
             <p className="measure mt-6 text-[17px] leading-[1.6] text-ink sm:text-[19px]">
-              Vanta is a privacy wallet on Solana. Shadow-send to another Vanta and your
-              amount and recipient never appear on-chain. Then read the receipt that tells you
+              Vanta is a privacy wallet on Solana, built for Seeker. Shadow-send to another Vanta and
+              your amount and recipient never appear on-chain. Then read the receipt that tells you
               exactly what is still public.
             </p>
           </Reveal>

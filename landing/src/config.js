@@ -1,10 +1,12 @@
 /**
  * Single source of truth for every outbound link on the landing page.
  *
- * ⚠️ APK_URL is a PLACEHOLDER. Vanta has no shipped Android build yet
- * (PLAN.md blocker B1). When the Capacitor/webshell APK lands, replace this
- * one value with the GitHub Release asset URL — nothing else needs to change.
- * Until then the store badge renders in its "pending" state.
+ * ⚠️ APK_URL is empty on purpose, and no longer because there is no build. The
+ * release APK is built and signed (deploy/releases/vanta-1.0.0-ux12.apk); the
+ * repository does not commit binaries, so it is distributed as a GitHub Release
+ * asset and, later, through the dApp Store. It is deliberately not served from
+ * this site. When the Release is published, set this to the asset URL and the
+ * store badge becomes a real link with no other change.
  */
 export const APK_URL = ''
 
@@ -23,9 +25,6 @@ export const APK_URL = ''
 export const WAITLIST_URL = '#wallet'
 
 export const GITHUB_URL = 'https://github.com/geekman58748/vanta-mobile'
-
-/** Devnet wallet app — useful for judges who want to try it before the APK. */
-export const DEVNET_APP_URL = 'http://localhost:3000'
 
 export const SOCIALS = [
   { label: 'GitHub', href: GITHUB_URL },
