@@ -6,7 +6,7 @@
 > it predates the Zolana pivot and is actively misleading if read as current.
 >
 > Last updated: **2026-09-28 ~14:30** — full remediation pass over
-> `docs/AUDIT-2026-09-27.md`: every finding C1–L5 is now fixed, or explicitly disclosed
+> `audits/AUDIT-2026-09-27.md`: every finding C1–L5 is now fixed, or explicitly disclosed
 > where a fix is impossible in-architecture (C3/L5). Session log: **§19**.
 > Owner: Maxx · Hackathon deadline: **2026-10-08** (CLOCK IN, Solana Mobile × RadiantsDAO)
 
@@ -671,7 +671,7 @@ buildWithdrawalTransaction({ client, wallet, keys, feePayer, recipient, amount }
    signature = base58 Ed25519 over `vanta-name-claim:<name>`; `/names/available/:name` and
    `/names/owned/:address` are public; **one handle per owner**.
 3. ✅ **Honest receipt UI** — per-leg public/hidden/linkable + `verified_on_chain`.
-4. ✅ **Audit remediation** — every finding in `docs/AUDIT-2026-09-27.md` (C1→L5) is
+4. ✅ **Audit remediation** — every finding in `audits/AUDIT-2026-09-27.md` (C1→L5) is
    fixed or disclosed. Full table + device evidence in **§19**.
 5. ✅ **3-page first-run intro** — shipped. `Onboarding.jsx`, `TOTAL = 3`, steps 0–2.
 6. Packaging: ~~sign APK~~ ✅ (§18.1), relayer deployed ✅ (`p01--vanta-mobile--9ymc8tqmdxvj.code.run`,
@@ -932,7 +932,7 @@ interactive prompt — always use `unzip -oq`.
 
 ## 19. SESSION LOG — 2026-09-28: full audit remediation
 
-Every finding in `docs/AUDIT-2026-09-27.md` was worked, in the audit's own order.
+Every finding in `audits/AUDIT-2026-09-27.md` was worked, in the audit's own order.
 A snapshot was taken first (`~/vanta-pre-audit-fix-*.tar`, plus commit `2f3f110`), so the
 pre-fix tree is recoverable.
 

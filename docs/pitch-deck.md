@@ -1,9 +1,11 @@
 # Vanta — pitch deck (CLOCK IN)
 
 > **Why this file exists.** `docs/pmf-narrative.md` holds the argument, `docs/vanta-privacy-architecture.md`
-> holds the mechanics and `docs/pitch-deck-native-android-slide.md` holds the one slide that answers the
-> "WebView wrapper" objection. Nothing assembled them into a deck. This is that assembly — twelve slides,
-> paste-ready into Slides/Canva/Figma, in the order they should be presented.
+> holds the mechanics, `docs/pitch-deck-native-android-slide.md` holds the one slide that answers the
+> "WebView wrapper" objection and `docs/pitch-deck-relayer-fee-payer-section.md` holds the one that
+> answers "why does the fee payer expose the sender?" with SDK receipts. Nothing assembled them into a
+> deck. This is that assembly — twelve slides, paste-ready into Slides/Canva/Figma, in the order they
+> should be presented.
 >
 > **Claims discipline.** Every number and hash below is either code in this repository or a transaction
 > confirmed on devnet. Nothing here is a roadmap item presented as shipped; §11 labels direction as

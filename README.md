@@ -29,7 +29,9 @@ have confirmed on devnet. Nothing here is a roadmap item dressed up as a feature
 
 - Not anonymous. It never claims to be, and `src/lib/honesty.js` exists to stop it.
 - Not mainnet. Devnet only, and the app says `DEVNET` on the dashboard.
-- Not audited. The custody model is disclosed in [Known limitations](#known-limitations).
+- **Not third-party audited.** An adversarial self-audit was run and every finding is remediated
+  or disclosed — see [`audits/`](audits/). The custody model is disclosed in
+  [Known limitations](#known-limitations).
 - Not a PWA. It is a React bundle inside the official **Solana Mobile webshell**, with a
   native Kotlin layer for the things a WebView cannot do. Details in
   [How it works](#how-it-works).
@@ -623,7 +625,8 @@ vendor/               vendored @heliuslabs/zolana tarball. See vendor/README.md
 scripts/              verification harnesses, listed above
 licenses/             GPL-3.0 and LGPL-3.0 texts, required by a bundled dependency
 NOTICE                attribution for everything third-party. Read this if you fork.
-docs/                 architecture, audit, evidence, integration notes
+docs/                 architecture, evidence, integration notes
+audits/               the 2026-09-27 adversarial self-audit and its status. Start there.
 ```
 
 Start with `src/lib/honesty.js` and `docs/vanta-privacy-architecture.md`. Between them
