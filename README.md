@@ -223,6 +223,14 @@ Vanta relayer (Node + Express, Neon Postgres)
   allowlisted program, and stores no amount and no counterparty
 ```
 
+**What we build on, and what we add.** The shielded pool, the ZK circuits, the
+prover and the indexer are **Helius Zolana** (Privacy Rings) — we did not write
+the cryptography, and we don't claim to. What Vanta adds is the client: a mobile
+wallet where privacy is a mode rather than a setting, custody that stays in the
+Mobile Wallet Adapter, and a receipt that names what each send still leaks. The
+default-ring spend identity is visible as the fee payer; that is the SDK's
+invariant, and the receipts say so.
+
 Four design decisions worth calling out:
 
 - **Every OS-level surface is native, not simulated.** The biometric prompt
