@@ -9,6 +9,13 @@ that you funded the pool, and every receipt the app renders says so in plain wor
 Built for the Solana Mobile stack. Android APK, Mobile Wallet Adapter custody, live on
 devnet, deployed end to end.
 
+> **Submission artifacts**
+> - 📱 **APK** — [Releases → latest](https://github.com/geekman58748/vanta-mobile/releases/latest)
+>   (`vanta-1.0.0-ux12.apk`, signed, Android 9+)
+> - 📊 **Pitch deck** — [`docs/pitch-deck.md`](docs/pitch-deck.md)
+> - 🔍 **Security self-audit** — [`audits/`](audits/), with finding-by-finding status
+> - 🔐 **Relayer / fee-payer findings** — [`docs/pitch-deck-relayer-fee-payer-section.md`](docs/pitch-deck-relayer-fee-payer-section.md)
+
 ---
 
 ## What Vanta is
@@ -215,6 +222,14 @@ Vanta relayer (Node + Express, Neon Postgres)
   sponsors network fees, refuses to co-sign anything that does not touch an
   allowlisted program, and stores no amount and no counterparty
 ```
+
+**What we build on, and what we add.** The shielded pool, the ZK circuits, the
+prover and the indexer are **Helius Zolana** (Privacy Rings) — we did not write
+the cryptography, and we don't claim to. What Vanta adds is the client: a mobile
+wallet where privacy is a mode rather than a setting, custody that stays in the
+Mobile Wallet Adapter, and a receipt that names what each send still leaks. The
+default-ring spend identity is visible as the fee payer; that is the SDK's
+invariant, and the receipts say so.
 
 Four design decisions worth calling out:
 
