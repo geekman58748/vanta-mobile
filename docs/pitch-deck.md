@@ -26,7 +26,7 @@
 | 6 | Live proof | Remove all doubt | 40s |
 | 7 | Not a wrapper | Kill the PWA objection | 45s |
 | 8 | How it works | Credibility | 30s |
-| 9 | Who it's for / why they return | PMF + stickiness | 35s |
+| 9 | Who it's for / why they return | PMF: discovery evidence + the cold start | 40s |
 | 10 | Why this is a Seeker app | The PMF criterion, answered | 35s |
 | 11 | What we don't hide | Trust through disclosure | 30s |
 | 12 | Roadmap | Honest direction | 20s |
@@ -186,6 +186,10 @@
 
 > ## Day-30 Vanta is a wallet with your history and your name in it
 >
+> **We asked 20+ Seeker owners before writing this slide.** A majority said they would use a wallet
+> that keeps what comes *in* public and what goes *out* private. That is discovery, not proof —
+> nobody has product-market fit three weeks in, and we won't claim it.
+>
 > **Who:** crowdfunders, DAOs and grant recipients — anyone whose *fact* of payment is
 > legitimate but whose *details* shouldn't be public.
 >
@@ -195,9 +199,18 @@
 > 3. **Campaigns recur** — every grant round is a fresh raise → shield → pay-out cycle
 > 4. **Seed Vault custody** on a Seeker makes the security story real, not `localStorage`
 >
+> **The cold start, stated plainly:** Ghost needs nothing from the recipient — it pays any wallet
+> privately. Shadow is private→private and grows with the network. That is the roadmap, not a claim.
+>
 > **The reframe:** Vanta is not a trick you perform once. It's a wallet you keep money in.
 
-**Speaker note:** "The honest caveat: at hackathon scale the two-party loop is thin, and the deck should say so — item 4 is the roadmap, not the current state."
+**Speaker note:** "Say *discovery*, never *traction* — twenty conversations where a majority liked
+it is the most a three-week build can honestly hold, and the judges hear invented traction all day.
+The one friction we hit was comprehension: someone wanted to understand what a private send
+actually does, which is a first-run job, not a product flaw. If the retest lands before demo day,
+put the real numbers here — installs, sends completed without help, and the top stall you fixed.
+Item 4 is direction, not current state, and the cold-start line is there so a judge never has to
+ask it."
 
 ---
 
