@@ -25,11 +25,12 @@
 | 7 | Not a wrapper | Kill the PWA objection | 45s |
 | 8 | How it works | Credibility | 30s |
 | 9 | Who it's for / why they return | PMF + stickiness | 35s |
-| 10 | What we don't hide | Trust through disclosure | 30s |
-| 11 | Roadmap | Honest direction | 20s |
-| 12 | Close | The ask | 15s |
+| 10 | Why this is a Seeker app | The PMF criterion, answered | 35s |
+| 11 | What we don't hide | Trust through disclosure | 30s |
+| 12 | Roadmap | Honest direction | 20s |
+| 13 | Close | The ask | 15s |
 
-**Total: ~5:40.** For a 3-minute slot cut slides 8 and 11 and compress 7 to 25 seconds.
+**Total: ~6:15.** For a 3-minute slot cut slides 8 and 12 and compress 7 to 25 seconds.
 
 ---
 
@@ -198,7 +199,28 @@
 
 ---
 
-## Slide 10 — What we don't hide
+## Slide 10 — Why this is a Seeker app
+
+> ## The custody story closes on this device
+>
+> PMF here is not "people like wallets". It is: **who does this belong to, and would they
+> keep it open?** For Vanta the answer is a Seeker owner, and the reasons are technical.
+>
+> | | |
+> |---|---|
+> | **Signing never leaves the phone** | Full Mobile Wallet Adapter client — `solana-wallet:` handoff, v1 wire format, signed inside your wallet app. Vanta never holds the key. There is no desktop equivalent, which is the point. |
+> | **The shell is what keeps MWA working** | Solana Mobile's own docs recommend the WebView shell over a Trusted Web Activity: browsers' Local Network Access restrictions break wallet connections in Bubblewrap APKs, and the shell handles wallet intents natively. This is a platform requirement, not a shortcut. |
+> | **Seed Vault is the fix for our one real weakness** | The devnet build keeps the shielded key in `localStorage`. On a Seeker it belongs in the hardware Seed Vault, where it is not extractable. **The disclosed gap and the reason this belongs on this device are the same fact.** |
+> | **Distribution is the dApp Store** | The Seeker-native channel, and the reason winners are required to publish there. |
+>
+> **Scope note:** the MWA path is shipped and verified on devnet. Seed Vault custody is
+> the direction, not a feature — and the repository says so.
+
+**Speaker note:** "Ask yourself why this is a phone app and not a website. The key never enters our code — your wallet signs, on your device, through the Mobile Wallet Adapter. That only exists on Android. And the one weakness I'll show you later, the key sitting in localStorage, is a weakness that a Seeker deletes by existing: it goes in the Seed Vault instead. We haven't built that yet. But it's why we're here and not on the web."
+
+---
+
+## Slide 11 — What we don't hide
 
 > ## A privacy product that overclaims is worse than none
 >
@@ -213,7 +235,7 @@
 
 ---
 
-## Slide 11 — Roadmap (labelled as direction)
+## Slide 12 — Roadmap (labelled as direction)
 
 > ## What we'd build next — none of this is shipped
 >
@@ -225,7 +247,7 @@
 
 ---
 
-## Slide 12 — Close
+## Slide 13 — Close
 
 > # Vanta
 > ### The pool hides the link between funding and payout. We'll tell you exactly what it doesn't.

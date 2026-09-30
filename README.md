@@ -36,6 +36,38 @@ have confirmed on devnet. Nothing here is a roadmap item dressed up as a feature
 
 ---
 
+## Built for Seeker
+
+Vanta is a Seeker app in the sense that matters: **the custody story closes on that
+device.**
+
+- **Signing never leaves the phone.** The full Mobile Wallet Adapter client
+  (`src/lib/mwa.js`) does the `solana-wallet:` handoff and the v1 wire format, and the key
+  is signed with inside your wallet app. Vanta never holds it. That path exists only on
+  Android, which is why this is a phone app and not a website.
+- **The shell is the documented way to keep MWA working.** Solana Mobile's own docs
+  recommend the WebView shell over a Trusted Web Activity, because browsers' Local Network
+  Access restrictions break wallet connections in Bubblewrap/TWA APKs while the shell
+  handles wallet intents natively. Vanta pins
+  `@solana-mobile/wallet-standard-mobile@0.6.0`, above the `0.5.1` that doc requires.
+- **Seed Vault is the fix for our one real weakness.** The devnet build keeps the shielded
+  key in `localStorage` (see [Known limitations](#known-limitations)). On a Seeker it
+  belongs in the hardware Seed Vault, where it cannot be extracted at all. That is the
+  roadmap item — the disclosed gap and the reason this belongs on this device are the same
+  fact.
+- **Distribution is the Seeker dApp Store**, the Seeker-native channel, and the reason
+  winning teams are required to publish there.
+
+Scope, stated plainly because the rest of this file does not overclaim either: **the
+Mobile Wallet Adapter path is real today. Seed Vault custody, Seeker Genesis Token gating
+and SKR are not implemented** — there is no code for any of the three in this repository.
+
+> One ecosystem detail that *is* shipped: `seeker`, `helius`, `solana`, `phantom` and
+> `solflare` are on the relayer's reserved `.vanta` handle list (`relayer/db.js`), so
+> nobody can register an impersonating handle.
+
+---
+
 ## The receipt
 
 This is the part we have not seen anywhere else, and it is why the rest of the claims

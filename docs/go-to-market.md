@@ -208,12 +208,49 @@ features.** Every hour after today belongs to the video, the deck, and the submi
 ## 5. Angles worth using (ranked)
 
 1. **"Helius built the rails, nobody built the phone."** Mert is judging. Lead with this.
-2. **"A wallet that tells you what it leaks."** Contrarian, quotable, defensible.
-3. **"The receipt is the product."** Novel artifact; screenshots well.
-4. **"Eight bugs a real device found."** Engineering credibility; HN and dev audiences love it.
-5. **"1,333 lines of Kotlin behind an HTML UI."** Directly answers the PWA-wrapper suspicion before
+2. **"The device deletes our only weakness."** The devnet build keeps the shielded key in
+   `localStorage`; a Seeker puts it in the Seed Vault, where it cannot be extracted. The
+   disclosed gap and the reason this is a Seeker app are the *same fact*. This matters more
+   than it looks: the rubric **defines** PMF as "how well a project connects with the Solana
+   Mobile and Seeker community", so this angle is scored, not decoration.
+3. **"A wallet that tells you what it leaks."** Contrarian, quotable, defensible.
+4. **"The receipt is the product."** Novel artifact; screenshots well.
+5. **"Eight bugs a real device found."** Engineering credibility; HN and dev audiences love it.
+6. **"1,333 lines of Kotlin behind an HTML UI."** Directly answers the PWA-wrapper suspicion before
    it is voiced — use it in replies where someone says "this is a website."
-6. **The verified numbers.** 50→40 public, 49→59 vault, one program, `err: None`. Evidence travels.
+7. **The verified numbers.** 50→40 public, 49→59 vault, one program, `err: None`. Evidence travels.
+
+### 5.1 The Seeker gap, and why more mentions are the wrong fix
+
+Audited 2026-09-30. `grep -ri seeker` across the product:
+
+| Area | Seeker footprint |
+|---|---|
+| `src/`, `landing/src/` | **One string** — an MWA-not-found error that says "or use a Seeker". The landing site does not name Seeker or Solana Mobile anywhere. |
+| Android / Kotlin | **None.** No Seed Vault, no SMS SDK. |
+| Seeker Genesis Token, SKR | **None.** No code. |
+| `relayer/db.js` | `seeker`, `helius`, `solana`, `phantom`, `solflare` on the reserved `.handle` list, so nobody can impersonate them. |
+
+So no, the gospel is not being preached — and the fix is **not** to sprinkle the word into the
+UI. A technical judge clocks keyword stuffing instantly, and the repo's whole credibility rests on
+not overclaiming.
+
+The fix is framing, and the framing is already true: **Vanta's one disclosed weakness is the
+`localStorage` key, and Seed Vault is what deletes it.** That is a real argument for this device,
+it is worth up to 25% of the score, and it costs nothing to say because the README already
+concedes the weakness.
+
+What would be dishonest, and should not be attempted before Oct 8:
+
+- **Claiming Seed Vault support.** It is the roadmap item and the README says so.
+- **Gating anything on the Seeker Genesis Token** to appear Seeker-native. There is no SGT code,
+  and one cannot be tested on an emulator — only the "not a Seeker" branch is reachable here.
+- **Forcing an SKR use case** for the $10k side prize. Forced integration is detectable, and this
+  panel is strong.
+
+The genuine Seeker action available in the time left is **preparing the dApp Store listing**
+(metadata, 512×512 icon, screenshots) — publishing there *is* the Seeker integration, and winners
+are required to do it anyway.
 
 ---
 
