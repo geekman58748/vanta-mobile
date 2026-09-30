@@ -9,6 +9,13 @@ that you funded the pool, and every receipt the app renders says so in plain wor
 Built for the Solana Mobile stack. Android APK, Mobile Wallet Adapter custody, live on
 devnet, deployed end to end.
 
+> **Submission artifacts**
+> - 📱 **APK** — [Releases → latest](https://github.com/geekman58748/vanta-mobile/releases/latest)
+>   (`vanta-1.0.0-ux12.apk`, signed, Android 9+)
+> - 📊 **Pitch deck** — [`docs/pitch-deck.md`](docs/pitch-deck.md)
+> - 🔍 **Security self-audit** — [`audits/`](audits/), with finding-by-finding status
+> - 🔐 **Relayer / fee-payer findings** — [`docs/pitch-deck-relayer-fee-payer-section.md`](docs/pitch-deck-relayer-fee-payer-section.md)
+
 ---
 
 ## What Vanta is
