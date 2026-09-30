@@ -1,0 +1,19 @@
+{
+  "name": "vanta-video",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Code-driven launch film and demo cut for Vanta. Renders real MP4s from React; no After Effects, no subscriptions.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "studio": "remotion studio",
+    "render:launch": "remotion render LaunchFilm out/launch-film.mp4 --codec h264 --crf 18 --color-space bt709",
+    "render:loop": "remotion render LaunchLoop out/launch-loop.mp4 --codec h264 --crf 18",
+    "render:all": "npm run render:launch && npm run render:loop"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.530",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "remotion": "^4.0.530"
+  }
+}

@@ -80,3 +80,11 @@ android/.idea/
 
 # Solana Mobile webshell-managed toolchain
 .webshell/
+
+# ── Launch video (video/) ──
+# The Remotion project IS committed — the code is the point, and it documents how the
+# marketing video was made. The rendered MP4s are not: a 14 MB binary belongs in the
+# hackathon submission form and on the social post, not in git history.
+video/node_modules/
+video/out/
+video/.remotion/
