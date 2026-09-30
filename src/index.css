@@ -185,9 +185,23 @@
     border: 1px solid var(--color-hair);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   }
-  .glass-btn:hover {
-    background: linear-gradient(180deg, rgba(50, 50, 56, 0.95) 0%, rgba(38, 38, 42, 0.95) 100%);
-    border-color: var(--color-hair-hi);
+  /* ── HOVER, GATED ─────────────────────────────────────────────────────
+     On a touch screen there is no hover, and WebKit's sticky-hover rule fires
+     `:hover` on the first tap anyway — so the button visibly changes colour as
+     it is pressed, then stays changed until something else is tapped. That is
+     the "why did that button light up?" tell on every mobile web view.
+
+     Tailwind v4 already emits its own `hover:` utilities inside
+     `@media (hover: hover)`, so every `hover:bg-*` / `hover:text-*` class in the
+     app is fine. These are the four hand-written rules Tailwind does not own,
+     and they were the only ones still firing on tap. Everything that must
+     respond to a POINTER outside a hover query — the `:active` press states —
+     stays outside the query, where it still fires on a touch. */
+  @media (hover: hover) {
+    .glass-btn:hover {
+      background: linear-gradient(180deg, rgba(50, 50, 56, 0.95) 0%, rgba(38, 38, 42, 0.95) 100%);
+      border-color: var(--color-hair-hi);
+    }
   }
   .glass-btn:active { transform: scale(0.98); }
 
@@ -240,9 +254,12 @@
     color: rgba(255, 255, 255, 0.8);  /* the site's --color-ink #c9c9cc */
     box-shadow: inset 0 0 0 1px var(--color-hair);
   }
-  .btn-quiet:hover {
-    background-color: var(--color-btn);
-    box-shadow: inset 0 0 0 1px var(--color-hair-hi);
+  /* Gated with .glass-btn:hover above — see the note there. */
+  @media (hover: hover) {
+    .btn-quiet:hover {
+      background-color: var(--color-btn);
+      box-shadow: inset 0 0 0 1px var(--color-hair-hi);
+    }
   }
 
   /* Primary: the same box and the same label, filled with the accent where the
@@ -252,7 +269,9 @@
     background-color: var(--color-accent);
     color: var(--color-canvas);        /* #0a0a0c, clears 6:1 on the accent */
   }
-  .btn-accent:hover { background-color: var(--color-accent-hi); }
+  @media (hover: hover) {
+    .btn-accent:hover { background-color: var(--color-accent-hi); }
+  }
 
   .btn-quiet:active,
   .btn-accent:active { transform: scale(0.99); }
@@ -268,12 +287,14 @@
        leaks into children, which is what makes a UI feel loose. */
     transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   }
-  .asset-card:hover {
-    /* Neutral on purpose. This used to pick up an accent-tinted 35px halo, so
-       every token card glowed violet on hover and the SELECTED one glowed at
-       rest — a ring of light around a card reads as a demo, not as a wallet. */
-    border-color: rgba(255, 255, 255, 0.16);
-    transform: translateY(-1px);
+  @media (hover: hover) {
+    .asset-card:hover {
+      /* Neutral on purpose. This used to pick up an accent-tinted 35px halo, so
+         every token card glowed violet on hover and the SELECTED one glowed at
+         rest — a ring of light around a card reads as a demo, not as a wallet. */
+      border-color: rgba(255, 255, 255, 0.16);
+      transform: translateY(-1px);
+    }
   }
 
   /* ── CARD ELEVATION ────────────────────────────────────────────────────

@@ -60,6 +60,25 @@ val hasReleaseSigning =
         webShellSigningStorePassword != null &&
         webShellSigningKeyAlias != null
 
+// FLAG_SECURE is a BUILD decision, never a user setting.
+//
+// The flag blocks screenshots, screen recording and the recents thumbnail for the
+// whole window. That is the right default for a wallet that puts a private
+// balance and a recipient address on screen — and it is the wrong one for the
+// build being used to shoot the demo video, where the recorder captures black
+// frames instead of the app.
+//
+// So: release ON, debug OFF, plus an explicit escape for a signed build that has
+// to be filmed:
+//     ./gradlew :app:assembleRelease -PWEB_SHELL_FLAG_SECURE=false
+// Nobody in the UI ever sees or touches this, which is the point.
+val flagSecureOverride: Boolean? =
+    (findProperty("WEB_SHELL_FLAG_SECURE") as String?)
+        ?.trim()
+        ?.lowercase()
+        ?.takeIf { it.isNotEmpty() }
+        ?.let { it == "true" || it == "1" || it == "yes" }
+
 android {
     namespace = "com.vanta.privacywallet"
     compileSdk {
@@ -99,6 +118,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            buildConfigField("boolean", "FLAG_SECURE", (flagSecureOverride ?: true).toString())
+        }
+        debug {
+            // Off by default: a debug build is exactly the one being screenshotted
+            // while something is being fixed.
+            buildConfigField("boolean", "FLAG_SECURE", (flagSecureOverride ?: false).toString())
         }
     }
     compileOptions {

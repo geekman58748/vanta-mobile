@@ -502,3 +502,31 @@ export function openReceiptFile(uri, mimeType = 'application/pdf') {
     return { ok: false, error: err?.message || String(err) }
   }
 }
+
+/**
+ * Send a receipt that `downloadReceiptPdf` just wrote to another app — mail, a
+ * chat app, a drive.
+ *
+ * This one has no browser fallback, and it cannot have one. The file lives in
+ * the shell's Downloads (or as a `data:` URL, in the browser build), and neither
+ * `navigator.share` nor an anchor can hand THOSE BYTES to another app: the Web
+ * API that would (`navigator.share({files})`) needs a `File` the page already
+ * owns, and the browser build only ever has a data URL. So in a plain browser
+ * this reports honestly that it cannot, rather than pretending.
+ *
+ * @returns {{ok: boolean, error?: string}}
+ */
+export function shareReceiptFile(uri, mimeType = 'application/pdf') {
+  const shell = nativeShell()
+  if (!shell || typeof shell.shareSavedFile !== 'function') {
+    return { ok: false, error: 'Sharing a receipt needs the Android app' }
+  }
+  if (!uri) return { ok: false, error: 'Nothing was saved to share' }
+  try {
+    const res = JSON.parse(shell.shareSavedFile(uri, mimeType) || '{}')
+    if (!res.ok) return { ok: false, error: res.error || 'no app on this device can share a file' }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err) }
+  }
+}

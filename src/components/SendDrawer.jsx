@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Drawer from './Drawer'
+import { confirmSpend } from '../lib/biometric'
 import { playHaptic } from '../lib/haptic'
 import { TOKENS } from '../lib/tokens'
 import { shortAddr } from '../lib/format'
@@ -155,6 +156,16 @@ export default function SendDrawer({
       return
     }
 
+    // Ask for the person before anything is signed. Deliberately ahead of
+    // `setSending(true)`, so a cancel leaves the sheet untouched rather than
+    // stuck on "Proving…".
+    const allowed = await confirmSpend({
+      title: `${isPrivateMode ? 'Shadow' : 'Ghost'} send ${amount} ${token.symbol}`,
+      subtitle: 'Confirm it is you before this is signed',
+      notify,
+    })
+    if (!allowed) return
+
     setSending(true)
     try {
       const sym = token.symbol
@@ -244,6 +255,17 @@ export default function SendDrawer({
   const confirmPending = async () => {
     if (!pending) return
     const { kind, to, amount } = pending
+    // Gated BEFORE the warning box is dismissed: a cancel has to leave the
+    // question on screen, not eat it and make the user start over.
+    const allowed = await confirmSpend({
+      title:
+        kind === 'public'
+          ? `Public send ${amount} SOL`
+          : `Ghost send ${amount} ${token.symbol}`,
+      subtitle: 'Confirm it is you before this is signed',
+      notify,
+    })
+    if (!allowed) return
     setPending(null)
     if (kind === 'public') {
       await sendPublicNow(to, amount)

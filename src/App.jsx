@@ -2137,6 +2137,7 @@ export default function App() {
         loading={loading}
         onRequestAirdrop={requestAirdrop}
         onShield={shieldNow}
+        notify={notify}
       />
 
       {/* ACTION CONFIRMED — the animated check that ends a Shield or a send */}

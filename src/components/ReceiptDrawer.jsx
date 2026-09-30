@@ -6,7 +6,7 @@ import { playHaptic } from '../lib/haptic'
 import { stampToDate, shortRef } from '../lib/format'
 import { MODE_HONESTY, explorerLink, PROOF } from '../lib/honesty'
 import { lookupProof } from '../lib/txHistory'
-import { downloadReceiptPdf, openReceiptFile } from '../lib/receiptPdf'
+import { downloadReceiptPdf, openReceiptFile, shareReceiptFile } from '../lib/receiptPdf'
 
 // ok = confirmed · warn = reported but not confirmed · mute = not checked.
 // Amber rather than danger for `warn`: the transaction is not broken, it is
@@ -99,6 +99,18 @@ export default function ReceiptDrawer({ open, onClose, txn, notify }) {
     if (!savedUri) return
     playHaptic('tap')
     const res = openReceiptFile(savedUri, 'application/pdf')
+    if (!res.ok) notify(res.error, '⚠️')
+  }
+
+  /**
+   * Send the receipt we just wrote to another app — mail, a chat app, a drive.
+   * Same bytes as Open; the system sheet is the only way a file can leave the
+   * WebView at all, so there is no browser fallback to fall back to.
+   */
+  const shareSaved = () => {
+    if (!savedUri) return
+    playHaptic('tap')
+    const res = shareReceiptFile(savedUri, 'application/pdf')
     if (!res.ok) notify(res.error, '⚠️')
   }
 
@@ -225,12 +237,18 @@ export default function ReceiptDrawer({ open, onClose, txn, notify }) {
             {exporting ? 'Building receipt…' : 'Download PDF receipt'}
           </button>
 
-          {/* Offered only once a file is genuinely on the device. It opens the
-              same bytes the button above just wrote — nothing is saved twice. */}
+          {/* Offered only once a file is genuinely on the device. Both read the
+              same bytes the button above just wrote — nothing is saved twice,
+              and they share one row so this costs no extra screen. */}
           {savedUri && (
-            <button onClick={openSaved} className="btn-quiet tap w-full">
-              Open receipt
-            </button>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={openSaved} className="btn-quiet tap">
+                Open receipt
+              </button>
+              <button onClick={shareSaved} className="btn-quiet tap">
+                Share receipt
+              </button>
+            </div>
           )}
 
           <div className="grid grid-cols-2 gap-3">

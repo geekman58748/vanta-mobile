@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Drawer from './Drawer'
 import { playHaptic } from '../lib/haptic'
+import { confirmSpend } from '../lib/biometric'
 import { TOKENS, SHIELD_FEE_RESERVE, maxShieldableSol } from '../lib/tokens'
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del']
@@ -34,6 +35,7 @@ export default function ShieldDrawer({
   loading,
   onRequestAirdrop,
   onShield,
+  notify,
 }) {
   const token = TOKENS[selectedToken]
   const presets = PRESETS[selectedToken] ?? []
@@ -93,6 +95,15 @@ export default function ShieldDrawer({
 
   const confirm = async () => {
     if (blocked) return
+    // Ask for the person before anything is signed. This runs BEFORE the button
+    // flips to "Shielding…", so a cancel or a failed prompt leaves the sheet
+    // exactly as it was and the amount still typed — nothing to re-enter.
+    const allowed = await confirmSpend({
+      title: `Shield ${value} ${token.symbol}`,
+      subtitle: 'Confirm it is you before this deposit is signed',
+      notify,
+    })
+    if (!allowed) return
     setShielding(true)
     try {
       // onShield owns the tx, the guard re-check and the history row.

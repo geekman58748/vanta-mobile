@@ -100,6 +100,52 @@ object FileSaver {
         }
     }
 
+    /**
+     * Hand a file this app just wrote to another app of the user's choosing.
+     *
+     * `openUri` answers "show me this PDF". This answers "send it to someone" —
+     * mail, a chat app, Drive, a tax folder. The WebView has no API that can leave
+     * the app with a file at all (a `data:` URL cannot be shared, there is no
+     * `navigator.share` in the shell, and a blob URL belongs to the page that made
+     * it), so this is a capability only the native layer can provide — the same
+     * shape as the MediaStore write above.
+     *
+     * The chooser is always shown, even when exactly one app can handle the
+     * intent. The system chooser is also where "Save to Files" and "Copy to…"
+     * live, and skipping it would pick a destination on the user's behalf.
+     *
+     * @return JSON `{"ok":true,"shared":true}` or `{"ok":false,"error":"…"}`.
+     */
+    fun shareUri(context: Context, uriString: String, mimeType: String): String {
+        if (uriString.isBlank()) return failure("there is no saved file to share yet")
+        val mime = mimeType.ifBlank { "application/octet-stream" }
+        return try {
+            val uri = android.net.Uri.parse(uriString)
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = mime
+                putExtra(Intent.EXTRA_STREAM, uri)
+                // Without this the receiving app is handed a uri it is not
+                // allowed to read, and every target fails at the same moment.
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            // A chooser resolves on every device, so probing IT proves nothing —
+            // the wrapped intent is what has to have a target. On API 30+ this
+            // only answers for apps listed in the manifest's <queries>.
+            if (send.resolveActivity(context.packageManager) == null) {
+                return failure("no app on this device can share a file")
+            }
+            // Same reason as openUri: the bridge is not an Activity, so the new
+            // task has to be asked for explicitly.
+            context.startActivity(
+                Intent.createChooser(send, "Share receipt").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+            success("shared", uriString)
+        } catch (err: Exception) {
+            Log.w(TAG, "share failed: ${err.message}", err)
+            failure(err.message ?: "could not share the file")
+        }
+    }
+
     private fun saveViaMediaStore(
         context: Context,
         name: String,

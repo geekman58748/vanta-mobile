@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceError
@@ -55,6 +56,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        // Screenshots, screen recording and the Recents thumbnail go black for the
+        // whole window. ON in release, OFF in debug, and overridable per build
+        // (see app/build.gradle.kts) so the demo video is not a black rectangle.
+        // This is the only place the decision is made: no user-facing switch.
+        if (BuildConfig.FLAG_SECURE) {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE,
+            )
+        }
         enableEdgeToEdge()
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
         setContent {
@@ -127,10 +138,28 @@ fun WebShellScreen() {
                 // background thread, but `pullToRefreshEnabled` is Compose state.
                 val mainHandler = Handler(Looper.getMainLooper())
                 val appContext = context.applicationContext
+                // Inside this `apply` block `this` IS the WebView. The bridge has to
+                // be able to call back INTO it — the biometric result arrives long
+                // after the call that started it has already returned — so the
+                // reference is captured here instead of reached for from inside.
+                val shellWebView: WebView = this
                 addJavascriptInterface(
-                    VantaShellBridge(appContext) { enabled ->
-                        mainHandler.post { pullToRefreshEnabled = enabled }
-                    },
+                    VantaShellBridge(
+                        appContext = appContext,
+                        activityContext = context,
+                        onPullToRefreshChanged = { enabled ->
+                            mainHandler.post { pullToRefreshEnabled = enabled }
+                        },
+                        onBiometricResult = { payload ->
+                            mainHandler.post {
+                                shellWebView.evaluateJavascript(
+                                    "window.__vantaBiometricResult && " +
+                                        "window.__vantaBiometricResult($payload);",
+                                    null,
+                                )
+                            }
+                        },
+                    ),
                     "VantaShell",
                 )
 
@@ -340,7 +369,7 @@ private fun normalizeHttpUrl(): String? {
 /**
  * JS → native channel exposed to the web app as `window.VantaShell`.
  *
- * Three jobs:
+ * Five jobs:
  *   · Let a mount/unmount of a web Drawer turn the native pull-to-refresh
  *     gesture off and on. Without it, the SwipeRefreshLayout steals a downward
  *     drag meant for the open sheet and reloads the entire WebView.
@@ -349,13 +378,22 @@ private fun normalizeHttpUrl(): String? {
  *     writes a file — see FileSaver.
  *   · Open that file again, so a receipt can be read in-app instead of being
  *     hunted for in the Downloads folder.
+ *   · Share that file to another app through the system sheet. There is no web
+ *     API that can take a file out of the WebView, so this is a capability the
+ *     native layer owns outright.
+ *   · Ask for the person, not the phone, before a spend is signed — see
+ *     BiometricGate. This one is the only call here that answers TWICE: the
+ *     return value says whether the prompt opened, and the outcome comes later
+ *     through `window.__vantaBiometricResult`.
  *
- * Both are called from the WebView's JS bridge thread, never the UI thread, so
+ * All are called from the WebView's JS bridge thread, never the UI thread, so
  * the synchronous file write in `saveBase64File` blocks only the bridge call.
  */
 private class VantaShellBridge(
     private val appContext: Context,
+    private val activityContext: Context,
     private val onPullToRefreshChanged: (Boolean) -> Unit,
+    private val onBiometricResult: (String) -> Unit,
 ) {
     @JavascriptInterface
     fun setPullToRefreshEnabled(enabled: Boolean) {
@@ -378,6 +416,32 @@ private class VantaShellBridge(
     @JavascriptInterface
     fun openSavedFile(uri: String, mimeType: String): String =
         FileSaver.openUri(appContext, uri, mimeType)
+
+    /**
+     * Share a file `saveBase64File` just wrote, through the system sheet.
+     * Nothing is copied or written again: the uri from the save is what travels.
+     */
+    @JavascriptInterface
+    fun shareSavedFile(uri: String, mimeType: String): String =
+        FileSaver.shareUri(appContext, uri, mimeType)
+
+    /**
+     * Show the system biometric prompt. Returns immediately with whether the
+     * prompt opened; the outcome is pushed back into the page as
+     * `window.__vantaBiometricResult({id, ok, cancelled, error})`.
+     *
+     * `activityContext`, not `appContext`: the prompt is a dialog and has to be
+     * attached to the Activity showing it.
+     */
+    @JavascriptInterface
+    fun requestBiometricAuth(requestId: String, title: String, subtitle: String): String =
+        BiometricGate.request(
+            activityContext = activityContext,
+            requestId = requestId,
+            title = title,
+            subtitle = subtitle,
+            onResult = onBiometricResult,
+        )
 }
 
 private const val TAG = "WebShell"
