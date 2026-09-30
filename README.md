@@ -101,13 +101,15 @@ reason the claims above can be specific.
 
 ## Try it
 
-The release APK is 4.4 MB and signed:
-
-```
-deploy/releases/vanta-1.0.0-ux12.apk
-```
+The release APK is 4.4 MB and signed. **Download: [Releases → latest](https://github.com/geekman58748/vanta-mobile/releases/latest)** — asset `vanta-1.0.0-ux12.apk`.
 
 Package `com.vanta.privacywallet`. Android 9 (API 28) and newer.
+
+> Release binaries are deliberately **not** committed to this repository: `.gitignore`
+> excludes `*.apk`, because a 4.4 MB binary in git history is permanent and the APK
+> rebuilds from source in one command. If the Releases page has no asset, build it
+> yourself ([Build from source](#build-from-source)) — the signed artifact lands in
+> `deploy/releases/`.
 
 Endpoints it talks to, both live and both public:
 
@@ -127,7 +129,8 @@ address. That is enough to Shield 0.05 or 0.1 SOL and pay the fee.
 
 ```bash
 # USB debugging on, phone unlocked, then:
-adb install deploy/releases/vanta-1.0.0-ux12.apk
+APK=vanta-1.0.0-ux12.apk      # from Releases, or your own build in deploy/releases/
+adb install "$APK"
 ```
 
 On Xiaomi / Redmi / POCO (HyperOS or MIUI), `adb install` is refused with
@@ -135,7 +138,8 @@ On Xiaomi / Redmi / POCO (HyperOS or MIUI), `adb install` is refused with
 Install via USB**, or push the file and tap it in Files:
 
 ```bash
-adb push deploy/releases/vanta-1.0.0-ux12.apk /sdcard/Download/
+APK=vanta-1.0.0-ux12.apk      # from Releases, or your own build in deploy/releases/
+adb push "$APK" /sdcard/Download/
 # then open Files > Downloads and tap the APK
 ```
 
@@ -191,6 +195,19 @@ Four design decisions worth calling out:
 spending identity lives in the app, not on the server. It is stored encrypted, as is your
 transaction history (`XChaCha20-Poly1305`, key derived from your seed). Backup and restore
 use `scrypt` then `XChaCha20-Poly1305` and produce a single portable line.
+
+There are **two different secrets at rest**, and only one of them is encrypted. Stated
+separately because the difference matters:
+
+| At rest | Where | Protection |
+|---|---|---|
+| Shielded spend identity, transaction history, backups | app storage | `XChaCha20-Poly1305`, key derived from your seed |
+| **The wallet's own Ed25519 `secretKey`** | `vanta-wallet` in WebView `localStorage` | **none — plaintext JSON** |
+
+The second row is the same trust model as any browser wallet that keeps a key in
+`localStorage`, and on this devnet build the key is not encrypted. It is called out in
+[Known limitations](#known-limitations) alongside `android:allowBackup`, which is what
+makes it recoverable from a device.
 
 ---
 
@@ -520,6 +537,14 @@ devnet RPC. Treat the key as public and rate limited, and bring your own for any
 beyond trying the app. The same applies to `VITE_RELAYER_TOKEN`, which is abuse
 deterrence, not authentication: history reads and writes are identity-signed precisely
 because that token is readable in the bundle.
+
+**The wallet key is plaintext in `localStorage`, and `allowBackup` is on.** The
+`vanta-wallet` entry holds the wallet's Ed25519 `secretKey` as unencrypted JSON in WebView
+`localStorage` (see [How it works](#how-it-works)). The manifest also sets
+`android:allowBackup="true"`, so `adb backup` can copy the WebView data directory off a
+device with USB debugging enabled and recover that key from it. On devnet this protects
+nothing worth taking; before this holds real funds the two fixes are Seed Vault custody
+and `allowBackup="false"`.
 
 **This is not audited and should not hold real funds.**
 
