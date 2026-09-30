@@ -1,8 +1,10 @@
 package com.vanta.privacywallet
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -18,6 +20,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -53,9 +56,20 @@ import com.vanta.privacywallet.ui.theme.WebShellTheme
 import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
+    /**
+     * POST_NOTIFICATIONS is a runtime grant from API 33 on. The launcher has to
+     * be registered before the Activity reaches STARTED, so it lives here; the
+     * web layer only chooses WHEN to ask.
+     */
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        // The channel must exist before the first post. Creating it at launch
+        // means the OS notification setting has a target from day one.
+        Notifications.ensureChannel(this)
         // Screenshots, screen recording and the Recents thumbnail go black for the
         // whole window. ON in release, OFF in debug, and overridable per build
         // (see app/build.gradle.kts) so the demo video is not a black rectangle.
@@ -73,6 +87,40 @@ class MainActivity : ComponentActivity() {
                 WebShellScreen()
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        isVisible = true
+    }
+
+    override fun onStop() {
+        super.onStop()
+        isVisible = false
+    }
+
+    /**
+     * Ask for the notification grant, once. Called from the web layer at the
+     * moment a notification would actually be useful — a permission dialog on
+     * a cold start, before the user has done anything, reads as a dark pattern
+     * in a wallet.
+     */
+    fun requestNotificationPermission() {
+        if (Notifications.hasPermission(this)) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        runCatching {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    companion object {
+        /**
+         * True while an Activity of this app is on screen. A notification for
+         * something the user is already watching is noise, so the bridge
+         * suppresses it instead of duplicating the in-app toast.
+         */
+        @Volatile
+        var isVisible: Boolean = false
     }
 }
 
@@ -158,6 +206,12 @@ fun WebShellScreen() {
                                     null,
                                 )
                             }
+                        },
+                        // Haptics are a View call, and the View is the WebView.
+                        // Hopping to the UI thread keeps the bounce off the
+                        // bridge thread that the JS call arrived on.
+                        onHaptic = { constant ->
+                            mainHandler.post { shellWebView.performHapticFeedback(constant) }
                         },
                     ),
                     "VantaShell",
@@ -369,7 +423,7 @@ private fun normalizeHttpUrl(): String? {
 /**
  * JS → native channel exposed to the web app as `window.VantaShell`.
  *
- * Five jobs:
+ * Seven jobs:
  *   · Let a mount/unmount of a web Drawer turn the native pull-to-refresh
  *     gesture off and on. Without it, the SwipeRefreshLayout steals a downward
  *     drag meant for the open sheet and reloads the entire WebView.
@@ -385,6 +439,11 @@ private fun normalizeHttpUrl(): String? {
  *     BiometricGate. This one is the only call here that answers TWICE: the
  *     return value says whether the prompt opened, and the outcome comes later
  *     through `window.__vantaBiometricResult`.
+ *   · Fire a real OS haptic effect, so a tap and a confirmed deposit do not
+ *     feel identical — see Haptics.
+ *   · Post a system notification for a deposit that lands while the app is off
+ *     screen, where the suspended page cannot speak for itself — see
+ *     Notifications.
  *
  * All are called from the WebView's JS bridge thread, never the UI thread, so
  * the synchronous file write in `saveBase64File` blocks only the bridge call.
@@ -394,6 +453,7 @@ private class VantaShellBridge(
     private val activityContext: Context,
     private val onPullToRefreshChanged: (Boolean) -> Unit,
     private val onBiometricResult: (String) -> Unit,
+    private val onHaptic: (Int) -> Unit,
 ) {
     @JavascriptInterface
     fun setPullToRefreshEnabled(enabled: Boolean) {
@@ -442,6 +502,35 @@ private class VantaShellBridge(
             subtitle = subtitle,
             onResult = onBiometricResult,
         )
+
+    /**
+     * Fire an OS haptic effect. Deliberately dumb: the web layer names the beat
+     * ("tap", "success", "error"), the platform decides how that feels.
+     */
+    @JavascriptInterface
+    fun haptic(kind: String) {
+        onHaptic(Haptics.constantFor(kind))
+    }
+
+    /**
+     * Show a system notification for something that completed off-screen.
+     * Suppressed while the app is visible, where the in-app toast already said
+     * it — two copies of one message is worse than none.
+     *
+     * @return `{"ok":true}` or `{"ok":false,"reason":...}`; the web layer must
+     *         not claim a notification the OS never showed.
+     */
+    @JavascriptInterface
+    fun notify(id: String, title: String, body: String): String {
+        if (MainActivity.isVisible) return """{"ok":false,"reason":"foreground"}"""
+        return Notifications.post(appContext, id, title, body)
+    }
+
+    /** Ask for the notification grant. No-op once it is held. */
+    @JavascriptInterface
+    fun ensureNotificationPermission() {
+        (activityContext as? MainActivity)?.requestNotificationPermission()
+    }
 }
 
 private const val TAG = "WebShell"

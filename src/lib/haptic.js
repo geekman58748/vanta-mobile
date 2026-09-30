@@ -1,6 +1,9 @@
 // Ported from gemini-code-1789825749253.html — the Web Audio "haptic" engine.
 // Three voices: tap (ui press), pop (open/major beat), success (confirmed tx).
-// Pairs every audio cue with the real navigator.vibrate motor where available.
+// Pairs every audio cue with a real motor buzz: the native haptic engine inside
+// the APK, or navigator.vibrate in a browser.
+import { nativeHaptic } from './native'
+
 let audioCtx = null
 
 export function playHaptic(type = 'tap') {
@@ -46,9 +49,13 @@ export function playHaptic(type = 'tap') {
       osc.stop(now + 0.04)
     }
 
-    // Chrome blocks vibrate before any user gesture and logs a console error
-    // every time it does. Asking first keeps the log clean instead of leaving a
-    // wall of "Blocked call to navigator.vibrate" for anyone reading the console.
+    // Native first. Inside the APK the platform haptic engine gives a tuned
+    // effect and honours the user's system haptics setting; navigator.vibrate
+    // is a flat buzz that ignores both. Only without a shell do we fall back to
+    // the WebView motor — and then only after a gesture, because Chrome blocks
+    // (and console-errors) vibrate before one, leaving a wall of "Blocked call
+    // to navigator.vibrate" for anyone reading the console.
+    if (nativeHaptic(type)) return
     const activation = navigator.userActivation
     const canVibrate = !activation || activation.hasBeenActive !== false
     if (canVibrate && typeof navigator.vibrate === 'function') {

@@ -104,7 +104,7 @@ reason the claims above can be specific.
 The release APK is 4.4 MB and signed:
 
 ```
-deploy/releases/vanta-1.0.0-ux10.apk
+deploy/releases/vanta-1.0.0-ux12.apk
 ```
 
 Package `com.vanta.privacywallet`. Android 9 (API 28) and newer.
@@ -127,7 +127,7 @@ address. That is enough to Shield 0.05 or 0.1 SOL and pay the fee.
 
 ```bash
 # USB debugging on, phone unlocked, then:
-adb install deploy/releases/vanta-1.0.0-ux10.apk
+adb install deploy/releases/vanta-1.0.0-ux12.apk
 ```
 
 On Xiaomi / Redmi / POCO (HyperOS or MIUI), `adb install` is refused with
@@ -135,7 +135,7 @@ On Xiaomi / Redmi / POCO (HyperOS or MIUI), `adb install` is refused with
 Install via USB**, or push the file and tap it in Files:
 
 ```bash
-adb push deploy/releases/vanta-1.0.0-ux10.apk /sdcard/Download/
+adb push deploy/releases/vanta-1.0.0-ux12.apk /sdcard/Download/
 # then open Files > Downloads and tap the APK
 ```
 
@@ -150,7 +150,10 @@ installs, and launches.
 Phone (Android)
   MainActivity.kt          webshell host, WebViewAssetLoader serves the bundle offline
   WebShellChrome/ViewClient  console relay, media, file chooser
-  FileSaver.kt             MediaStore bridge for PDF receipts
+  FileSaver.kt             MediaStore bridge for PDF receipts, open + share
+  BiometricGate.kt         fingerprint / device-credential prompt before a spend
+  Notifications.kt         system notifications for deposits that land off-screen
+  Haptics.kt               the platform haptic engine, not a WebView motor buzz
         |
         |  React 19 + Vite bundle (built here, bundled into the APK)
         |  Mobile Wallet Adapter over @solana-mobile/wallet-standard-mobile
@@ -167,7 +170,12 @@ Vanta relayer (Node + Express, Neon Postgres)
   allowlisted program, and stores no amount and no counterparty
 ```
 
-Three design decisions worth calling out:
+Four design decisions worth calling out:
+
+- **Every OS-level surface is native, not simulated.** The biometric prompt
+  (`BiometricGate.kt`), the receipt file and system share sheet (`FileSaver.kt`), system
+  notifications (`Notifications.kt`), haptics (`Haptics.kt`) and `FLAG_SECURE` all run in
+  Kotlin, because a WebView cannot reach any of them. The HTML is for layout velocity only.
 
 - **The relayer is not in the trust path for spends.** On the Mobile Wallet Adapter path
   your device wallet is both the depositor and the fee payer. The relayer only ever got
@@ -500,12 +508,18 @@ Agave 4.2. The stock `fakewallet` releases are legacy-only and cannot sign a Zol
 payload, so a v1-capable wallet must be built from source for testing. The app detects the
 failure and names it instead of hanging.
 
-**The Helius API key ships inside the APK.** This is deliberate. `VITE_HELIUS_API_KEY` is
-compiled into the bundle so that anyone who installs the release APK can run it against
-devnet without signing up for anything. Treat that key as public and rate limited, and
-bring your own key for anything beyond trying the app. The same applies to
-`VITE_RELAYER_TOKEN`, which is abuse deterrence, not authentication: history reads and
-writes are identity-signed precisely because that token is readable in the bundle.
+**The Helius API key ships inside the APK.** This is deliberate, and it is a devnet key.
+`VITE_HELIUS_API_KEY` is compiled into the bundle so that anyone who installs the release
+APK can run it against devnet without signing up for anything. The endpoint it feeds is
+`https://devnet.helius-rpc.com`, never mainnet, and devnet SOL has no value — so the key
+buys an attacker nothing but a read quota, and it is revocable if that quota is ever
+abused. It is not shared with any backend: the relayer runs its own RPC
+(`SOLANA_RPC_URL`, defaulting to the public devnet endpoint), so server traffic cannot
+burn it, and leaving the variable blank is also valid — the app falls back to the public
+devnet RPC. Treat the key as public and rate limited, and bring your own for anything
+beyond trying the app. The same applies to `VITE_RELAYER_TOKEN`, which is abuse
+deterrence, not authentication: history reads and writes are identity-signed precisely
+because that token is readable in the bundle.
 
 **This is not audited and should not hold real funds.**
 

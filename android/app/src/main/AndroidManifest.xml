@@ -8,6 +8,11 @@
          stored — the prompt is the whole permission. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
+    <!-- Told when a deposit into the private balance lands while the app is
+         off screen, where the suspended page cannot. Runtime grant from API 33;
+         below that it is implicit and this line is inert. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Package visibility: Android 11+ hides the apps that can handle an
          intent, so `resolveActivity` would always report "no app found" and the
          receipt's Open button would refuse to open anything. Both intents the

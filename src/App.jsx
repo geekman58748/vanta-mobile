@@ -19,6 +19,7 @@ import SuccessOverlay from './components/SuccessOverlay'
 // keeps it loadable from inside the APK's appassets sandbox.
 import vantaLogo from './assets/vanta-logo.png'
 import { playHaptic } from './lib/haptic'
+import { postNotification, ensureNotificationPermission } from './lib/native'
 import { copyText } from './lib/clipboard'
 import { shortAddr, splitLeadingGlyph } from './lib/format'
 import { TOKENS, SOL_MINT, SHIELD_FEE_RESERVE } from './lib/tokens'
@@ -1302,6 +1303,14 @@ export default function App() {
     setToast({ message, icon })
   }, [])
 
+  // Ask the OS for the notification grant once. It is an OS dialog, not an
+  // in-app setting, so there is nothing here for the user to configure — but
+  // without it a deposit that lands while the app is backgrounded can never
+  // reach them. A no-op in a browser.
+  useEffect(() => {
+    ensureNotificationPermission()
+  }, [])
+
   useEffect(() => {
     if (!toast) return
     const serious = /fail|error|unavailable|invalid/i.test(toast.message)
@@ -1403,6 +1412,14 @@ export default function App() {
           },
         )
         notify(`Your earlier Shield of ${pending.amount} ${pending.symbol} did land. Receipt restored.`, '🛡️')
+        // The user very likely left the app while this was in flight — that is
+        // exactly why it is being reconciled on the next launch. Native-side,
+        // this is suppressed if they happen to already be looking at it.
+        postNotification({
+          id: `shield-restored-${landed.signature}`,
+          title: 'Shield confirmed',
+          body: `Your ${pending.amount} ${pending.symbol} is now in your private balance.`,
+        })
         await recordSend({
           signature: landed.signature,
           mode: 'Shield',
@@ -1486,6 +1503,14 @@ export default function App() {
           incoming: true,
         })
         notify(`Received ${rounded} ${symbol} into your private balance`, '🎁')
+        // This is the headline case for a system notification: a payment that
+        // arrived while the app was off screen, which the suspended page could
+        // not announce at the time.
+        postNotification({
+          id: `incoming-${symbol}-${Date.now()}`,
+          title: 'Deposit received',
+          body: `+${rounded} ${symbol} into your private balance`,
+        })
       }
     }
   }, [privateBalances, addTxn, notify])
@@ -1633,6 +1658,13 @@ export default function App() {
         status: 'Confirmed',
       })
       setSuccess({ kind: 'shield', amount: amt, symbol, signature: sig, mode: 'Shield' })
+      // A Shield confirms well after the sheet closes, and often after the user
+      // has left the app. This is the notice that follows them out.
+      postNotification({
+        id: `shield-${sig}`,
+        title: 'Shield confirmed',
+        body: `${amt} ${symbol} is now in your private balance.`,
+      })
     } catch (err) {
       // Drop the reservation only when we know the deposit did not happen —
       // otherwise a real payment of the same size later would be swallowed as
@@ -1641,6 +1673,13 @@ export default function App() {
       // a receipt for a payment the user made to themselves.
       if (!err?.outcomeUnknown) dropPrivateCreditExpectation(symbol, amt)
       notify(shieldErrorMessage(err, symbol), '⚠️')
+      // Same reasoning as the success path: a failure that resolves after the
+      // user has left the app has to be able to reach them.
+      postNotification({
+        id: `shield-failed-${Date.now()}`,
+        title: 'Shield failed',
+        body: shieldErrorMessage(err, symbol),
+      })
       console.error(err)
     } finally {
       // Both belong to THIS attempt, on every path. Leaving `loading` set is why
