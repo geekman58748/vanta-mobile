@@ -9,7 +9,7 @@
 > This file was reconciled with the working tree on 2026-09-26 ~14:15 — if the tree is
 > ahead of this table again, trust `git status`, not this doc.
 >
-> 🔧 **2026-09-28:** the whole of `docs/AUDIT-2026-09-27.md` (C1→L5) was remediated.
+> 🔧 **2026-09-28:** the whole of `audits/AUDIT-2026-09-27.md` (C1→L5) was remediated.
 > The finding-by-finding table with device evidence is **PLAN.md §19**; §13 below is the
 > short version of what changed and what it means for the next agent.
 
@@ -472,7 +472,7 @@ names — use `aapt2 dump badging`, or grep for asset *content*.
 
 ## 13. UPDATE LOG — 2026-09-28: audit remediation
 
-`docs/AUDIT-2026-09-27.md` was an adversarial pass over the live app. **All of it was
+`audits/AUDIT-2026-09-27.md` was an adversarial pass over the live app. **All of it was
 worked.** Full table + device evidence: **`PLAN.md` §19**. The parts a next agent must know:
 
 ### 13.1 The trust boundary moved off the shared token
