@@ -235,14 +235,21 @@ So no, the gospel is not being preached — and the fix is **not** to sprinkle t
 UI. A technical judge clocks keyword stuffing instantly, and the repo's whole credibility rests on
 not overclaiming.
 
-The fix is framing, and the framing is already true: **Vanta's one disclosed weakness is the
-`localStorage` key, and Seed Vault is what deletes it.** That is a real argument for this device,
-it is worth up to 25% of the score, and it costs nothing to say because the README already
+The fix is framing, and the sharpest true frame is narrower than "we should use Seed Vault":
+
+- **The MWA path already bypasses our disclosed weakness.** On a Seeker, connecting Seed Vault
+  Wallet puts the signing key in the hardware vault, and Vanta holds nothing. That is shipped,
+  and it needs no Seed Vault code because that SDK is a wallet-provider API.
+- **The `localStorage` key belongs to the throwaway fallback wallet** — the path you take when no
+  wallet app is installed. So the honest line is "our fallback leaks, our primary path does not",
+  which is both accurate and a better argument than claiming an integration that does not exist.
+
+It is worth up to 25% of the score and it costs nothing to say, because the README already
 concedes the weakness.
 
 What would be dishonest, and should not be attempted before Oct 8:
 
-- **Claiming Seed Vault support.** It is the roadmap item and the README says so.
+- **Claiming Seed Vault *integration*.** There is none, deliberately: `seedvault-wallet-sdk` is a wallet-provider API and a dApp reaches it through MWA. What *is* true and worth saying precisely — connecting Seed Vault Wallet over MWA on a Seeker already puts the signing key in hardware with no code from us. Say it that way or don't say it.
 - **Gating anything on the Seeker Genesis Token** to appear Seeker-native. There is no SGT code,
   and one cannot be tested on an emulator — only the "not a Seeker" branch is reachable here.
 - **Forcing an SKR use case** for the $10k side prize. Forced integration is detectable, and this

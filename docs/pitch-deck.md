@@ -210,13 +210,13 @@
 > |---|---|
 > | **Signing never leaves the phone** | Full Mobile Wallet Adapter client — `solana-wallet:` handoff, v1 wire format, signed inside your wallet app. Vanta never holds the key. There is no desktop equivalent, which is the point. |
 > | **The shell is what keeps MWA working** | Solana Mobile's own docs recommend the WebView shell over a Trusted Web Activity: browsers' Local Network Access restrictions break wallet connections in Bubblewrap APKs, and the shell handles wallet intents natively. This is a platform requirement, not a shortcut. |
-> | **Seed Vault is the fix for our one real weakness** | The devnet build keeps the shielded key in `localStorage`. On a Seeker it belongs in the hardware Seed Vault, where it is not extractable. **The disclosed gap and the reason this belongs on this device are the same fact.** |
+> | **On a Seeker the key is already in hardware** | Connect **Seed Vault Wallet** over MWA and the key stays in the Seed Vault, used there and never handed to us. We wrote **no Seed Vault code, on purpose**: that SDK is a wallet-provider API, and a dApp is meant to come through MWA instead. The hardware custody is shipped. |
 > | **Distribution is the dApp Store** | The Seeker-native channel, and the reason winners are required to publish there. |
 >
 > **Scope note:** the MWA path is shipped and verified on devnet. Seed Vault custody is
 > the direction, not a feature — and the repository says so.
 
-**Speaker note:** "Ask yourself why this is a phone app and not a website. The key never enters our code — your wallet signs, on your device, through the Mobile Wallet Adapter. That only exists on Android. And the one weakness I'll show you later, the key sitting in localStorage, is a weakness that a Seeker deletes by existing: it goes in the Seed Vault instead. We haven't built that yet. But it's why we're here and not on the web."
+**Speaker note:** "Ask yourself why this is a phone app and not a website. The key never enters our code — your wallet signs, on your device, through the Mobile Wallet Adapter, and that path only exists on Android. On a Seeker, connect Seed Vault Wallet and that key is in the hardware vault. We wrote *zero* Seed Vault code to get that, and that is the correct architecture: that SDK belongs to wallet apps, and a dApp is supposed to arrive through MWA. Later I'll be honest about the one place a key does sit in our storage — the throwaway wallet you can generate when no wallet app is installed. That's the fallback, not the path."
 
 ---
 

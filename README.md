@@ -50,17 +50,25 @@ device.**
   Access restrictions break wallet connections in Bubblewrap/TWA APKs while the shell
   handles wallet intents natively. Vanta pins
   `@solana-mobile/wallet-standard-mobile@0.6.0`, above the `0.5.1` that doc requires.
-- **Seed Vault is the fix for our one real weakness.** The devnet build keeps the shielded
-  key in `localStorage` (see [Known limitations](#known-limitations)). On a Seeker it
-  belongs in the hardware Seed Vault, where it cannot be extracted at all. That is the
-  roadmap item — the disclosed gap and the reason this belongs on this device are the same
-  fact.
+- **On a Seeker the signing key is already in hardware, and we wrote no Seed Vault code to
+  get that.** Connect **Seed Vault Wallet** over the Mobile Wallet Adapter and the key lives
+  in the Seed Vault and is used there — Vanta never receives it. This is the correct shape,
+  not a shortcut: `com.solanamobile:seedvault-wallet-sdk` is a **wallet-provider** API, and
+  a dApp is meant to reach it through MWA rather than call it directly. Hardware custody on
+  a Seeker is therefore shipped today, with zero Seed Vault code in this repository.
+- **The `localStorage` key is the fallback wallet, not the MWA path.** The plaintext key in
+  [Known limitations](#known-limitations) belongs to the *throwaway in-app wallet* you can
+  generate when no wallet app is installed. On the MWA path there is no key of yours inside
+  Vanta at all. Removing the fallback — rather than adding Seed Vault code — is the roadmap
+  item.
 - **Distribution is the Seeker dApp Store**, the Seeker-native channel, and the reason
   winning teams are required to publish there.
 
-Scope, stated plainly because the rest of this file does not overclaim either: **the
-Mobile Wallet Adapter path is real today. Seed Vault custody, Seeker Genesis Token gating
-and SKR are not implemented** — there is no code for any of the three in this repository.
+Scope, stated plainly because the rest of this file does not overclaim either: **the Mobile
+Wallet Adapter path is real today, and it is what carries Seed Vault custody on a Seeker.**
+There is deliberately **no Seed Vault code in this repository** — calling that SDK from a
+dApp would be the wrong shape. **Seeker Genesis Token gating and SKR are not implemented**;
+there is no code for either.
 
 > One ecosystem detail that *is* shipped: `seeker`, `helius`, `solana`, `phantom` and
 > `solflare` are on the relayer's reserved `.vanta` handle list (`relayer/db.js`), so
@@ -557,6 +565,14 @@ Agave 4.2. The stock `fakewallet` releases are legacy-only and cannot sign a Zol
 payload, so a v1-capable wallet must be built from source for testing. The app detects the
 failure and names it instead of hanging.
 
+Solana Mobile's documented emulator target is the **Mock MWA Wallet**, which supports
+`authorize`, `signIn`, `signAndSendTransactions` and `signMessage`, does bottom-sheet
+approval with biometrics, and **simulates Seed Vault Wallet behaviour** — so the MWA path
+can be exercised without a Seeker. Two things to know before relying on it: it **requires a
+secure lock screen** (PIN, pattern or biometric; it keeps key material behind device
+authentication and fails without one), and **its v1 support has not been checked here**.
+That check is the first thing to do before treating it as a Zolana test target.
+
 **The Helius API key ships inside the APK.** This is deliberate, and it is a devnet key.
 `VITE_HELIUS_API_KEY` is compiled into the bundle so that anyone who installs the release
 APK can run it against devnet without signing up for anything. The endpoint it feeds is
@@ -575,8 +591,10 @@ because that token is readable in the bundle.
 `localStorage` (see [How it works](#how-it-works)). The manifest also sets
 `android:allowBackup="true"`, so `adb backup` can copy the WebView data directory off a
 device with USB debugging enabled and recover that key from it. On devnet this protects
-nothing worth taking; before this holds real funds the two fixes are Seed Vault custody
-and `allowBackup="false"`.
+nothing worth taking. Before this holds real funds the fixes are **not** to add Seed Vault
+code — the MWA path already routes to hardware on a Seeker — but to stop generating a
+fallback wallet whose key has to live somewhere untrusted, and to set
+`allowBackup="false"`.
 
 **This is not audited and should not hold real funds.**
 
