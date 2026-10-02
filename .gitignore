@@ -68,6 +68,11 @@ faucet/faucet-keypair.json
 *.aab
 deploy/apk-backup/
 
+# The one APK that IS committed — the landing site serves it at
+# /download/vanta.apk, the direct download link on the submission form.
+# Without this, a judge clicking that URL gets the SPA fallback HTML.
+!landing/public/download/*.apk
+
 # Android build output (the generated project itself IS committed)
 android/.gradle/
 android/build/
