@@ -13,6 +13,11 @@
 - **It is not a third-party audit.** No external firm reviewed Vanta's code or program. The README
   says so plainly (*"This is not audited and should not hold real funds"*), and nothing in this
   directory changes that. Do not cite it as an audit by a third party.
+- **It is** the project's **point-by-point reply to an external automated review** of 2 October
+  2026, which arrived unrequested and scanned commit `4477c06`. Report and answer:
+  [`RESPONSE-2026-10-02.md`](RESPONSE-2026-10-02.md). The review is a pattern scan and says so
+  itself; the response accepts what is real (one unfixable `bigint-buffer` advisory, two dependency
+  advisories, two hygiene items) and documents what is not, with the code location for each call.
 
 The findings below are the ones a security judge will look for first. Every one of them has since
 been **remediated** or **explicitly disclosed**; the remediation is recorded in

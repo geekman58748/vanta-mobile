@@ -14,6 +14,7 @@ devnet, deployed end to end.
 >   (`vanta-1.0.0-ux12.apk`, signed, Android 9+)
 > - 📊 **Pitch deck** — [`docs/pitch-deck.md`](docs/pitch-deck.md)
 > - 🔍 **Security self-audit** — [`audits/`](audits/), with finding-by-finding status
+> - 🛡️ **Reply to an external automated review** — [`audits/RESPONSE-2026-10-02.md`](audits/RESPONSE-2026-10-02.md), accepted-vs-disputed line by line
 > - 🔐 **Relayer / fee-payer findings** — [`docs/pitch-deck-relayer-fee-payer-section.md`](docs/pitch-deck-relayer-fee-payer-section.md)
 
 ---
