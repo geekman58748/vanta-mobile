@@ -10,19 +10,16 @@
  */
 export const APK_URL = ''
 
-/** Set to the repo that will be public at submission time. */
 /**
- * Waitlist destination.
+ * Waitlist signup.
  *
- * Wired but PLACEHOLDER: both placements (wallet section primary, mobile nav)
- * render now, and the link points at `#wallet`, so it scrolls to
- * the product instead of going nowhere or 404ing. Swap this one string when
- * the real signup exists, nothing else changes:
- *   · a hosted form  e.g. https://tally.so/r/xxxxx  or  https://formspree.io/f/xxxx
- *   · a list service e.g. https://buttondown.email/vanta  (its own signup page)
- *   · `mailto:you@domain?subject=Vanta waitlist`  (works today, collects nothing)
+ * Both placements open the on-page card (WaitlistModal.jsx) rather than leaving
+ * the site, so there is no destination URL any more. The card POSTs here, and
+ * the row lands in the relayer's Postgres alongside the tx history. Empty this
+ * and the card's submit surfaces the failure instead of silently dropping a
+ * signup.
  */
-export const WAITLIST_URL = '#wallet'
+export const WAITLIST_ENDPOINT = 'https://p01--vanta-mobile--9ymc8tqmdxvj.code.run/waitlist'
 
 export const GITHUB_URL = 'https://github.com/geekman58748/vanta-mobile'
 

@@ -8,6 +8,7 @@ import AppPreview from './components/AppPreview.jsx'
 import Faq from './components/Faq.jsx'
 import Contracts from './components/Contracts.jsx'
 import Footer from './components/Footer.jsx'
+import WaitlistModal from './components/WaitlistModal.jsx'
 
 /**
  * Vanta landing page.
@@ -41,6 +42,9 @@ export default function App() {
       </main>
 
       <Footer />
+
+      {/* Mounted once; raised by the `vanta:waitlist` event from any placement. */}
+      <WaitlistModal />
     </div>
   )
 }

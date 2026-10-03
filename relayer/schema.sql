@@ -104,6 +104,23 @@ ALTER TABLE vanta_names ADD CONSTRAINT vanta_names_format
 
 CREATE INDEX IF NOT EXISTS vanta_names_owner_idx ON vanta_names (owner_address);
 
+-- ── Landing-page waitlist ─────────────────────────────────────────────
+-- Signups from vanta-mobile.xyz. Kept deliberately small: an email and the
+-- three answers the card asks. Nothing here is linked to a wallet or an
+-- identity, and there is no send path yet — the row is the whole feature for
+-- now. `device`/`wants`/`note` are free text because the questions are the
+-- site's, not a schema's, and they will change.
+CREATE TABLE IF NOT EXISTS waitlist (
+  id         bigserial   PRIMARY KEY,
+  email      text        NOT NULL UNIQUE,
+  device     text,
+  wants      text,
+  note       text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS waitlist_created_idx ON waitlist (created_at DESC);
+
 -- Reserved so nobody can impersonate the project or squat obvious handles.
 -- Enforced in code as well (RESERVED_NAMES in db.js); this is the durable copy.
 CREATE TABLE IF NOT EXISTS reserved_names (

@@ -292,6 +292,40 @@ export async function namesByOwner(ownerAddress) {
   return rows
 }
 
+// ── Waitlist ──────────────────────────────────────────────────────────
+/**
+ * Record a landing-page waitlist signup.
+ *
+ * Idempotent on email: a repeat signup updates the answers instead of adding a
+ * row, so the table is a list of people rather than a list of clicks. Returns
+ * `{ ok: false, code: 'duplicate' }` for a re-signup so the caller can still
+ * thank the visitor without claiming a new seat.
+ */
+export async function recordWaitlistSignup({ email, device = null, wants = null, note = null }) {
+  const pool = getPool()
+  if (!pool) return { ok: false, error: 'No database configured' }
+
+  const normalized = String(email).trim().toLowerCase()
+  const { rows } = await pool.query(
+    `insert into waitlist (email, device, wants, note)
+     values ($1,$2,$3,$4)
+     on conflict (email) do update set
+       device = coalesce(excluded.device, waitlist.device),
+       wants  = coalesce(excluded.wants,  waitlist.wants),
+       note   = coalesce(excluded.note,   waitlist.note)
+     returning (xmax = 0) as inserted`,
+    [normalized, device, wants, note],
+  )
+  return { ok: true, duplicate: rows[0]?.inserted === false }
+}
+
+export async function countWaitlist() {
+  const pool = getPool()
+  if (!pool) return null
+  const { rows } = await pool.query('select count(*)::int as n from waitlist')
+  return rows[0]?.n ?? 0
+}
+
 export async function releaseName(name, ownerAddress) {
   const pool = getPool()
   if (!pool) return { ok: false, error: 'No database configured' }

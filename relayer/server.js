@@ -738,6 +738,62 @@ app.use((err, req, res, _next) => {
   res.status(500).json({ ok: false, error: 'Internal error' })
 })
 
+// ── Waitlist ──────────────────────────────────────────────────────────
+// Signups from the landing page (vanta-mobile.xyz). The site is static, so it
+// cannot write to Postgres itself — this is the endpoint its card posts to.
+// No token: a public marketing form has no secret to carry, and requiring one
+// would put the token in the bundle, which is the mistake C1 already fixed.
+// Abuse is bounded by the per-IP window below.
+//
+// The row is the whole feature today. There is no send path yet: an email reply
+// is a later job, and doing it here would mean holding a mail credential for a
+// form that is still just collecting addresses.
+
+const waitlistWindows = new Map()
+const WAITLIST_WINDOW_MS = 60 * 60 * 1000
+const MAX_WAITLIST_PER_WINDOW = 5
+
+// Deliberately loose: the address is stored, not used to route mail yet, so the
+// job here is to reject garbage rather than to decide deliverability.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+
+function takeWaitlistSlot(ip) {
+  const now = Date.now()
+  const hits = (waitlistWindows.get(ip) || []).filter((t) => now - t < WAITLIST_WINDOW_MS)
+  if (hits.length >= MAX_WAITLIST_PER_WINDOW) return false
+  hits.push(now)
+  waitlistWindows.set(ip, hits)
+  return true
+}
+
+app.post('/waitlist', async (req, res) => {
+  if (!db.isEnabled()) {
+    return res.status(503).json({ ok: false, error: 'Waitlist is not configured' })
+  }
+  const ip = req.ip || 'unknown'
+  if (!takeWaitlistSlot(ip)) {
+    return res.status(429).json({ ok: false, error: 'Too many signups from here. Try again later.' })
+  }
+  try {
+    const { email, device, wants, note } = req.body ?? {}
+    if (!email || !EMAIL_RE.test(String(email).trim())) {
+      return res.status(400).json({ ok: false, error: 'That email address does not look right' })
+    }
+    const clip = (v, n) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null)
+    const result = await db.recordWaitlistSignup({
+      email: String(email).trim(),
+      device: clip(device, 40),
+      wants: clip(wants, 40),
+      note: clip(note, 200),
+    })
+    if (!result.ok) return res.status(500).json({ ok: false, error: result.error })
+    res.json({ ok: true, already: Boolean(result.duplicate) })
+  } catch (err) {
+    console.error('waitlist error:', err.message)
+    res.status(500).json({ ok: false, error: 'Could not save that. Try again.' })
+  }
+})
+
 // Bootstrap the schema before accepting traffic. A failure here is logged but
 // not fatal — the relayer must still relay with Neon down.
 const schemaReady = db.isEnabled()
