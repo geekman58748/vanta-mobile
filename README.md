@@ -69,11 +69,6 @@ Balances are zero because the wallet is new.
 |---|---|---|---|
 | <img src="screenshots/07-shield.png" height="420" /> | <img src="screenshots/08-send.png" height="420" /> | <img src="screenshots/09-receive.png" height="420" /> | <img src="screenshots/10-profile.png" height="420" /> |
 
-### Send modes
-
-Shadow pays another Vanta user with the amount and counterparty hidden. Ghost pays any
-public wallet — *the payout comes from the pool, not from you* — but the amount is public.
-
 | Ghost mode | Ghost send |
 |---|---|
 | <img src="screenshots/11-ghost-mode-dashboard.png" height="420" /> | <img src="screenshots/12-ghost-send.png" height="420" /> |
