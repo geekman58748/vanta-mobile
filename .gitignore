@@ -93,3 +93,7 @@ android/.idea/
 video/node_modules/
 video/out/
 video/.remotion/
+
+# Internal process docs — handoffs, plan, GTM, monetization. Kept out of the
+# public repo; preserved in git history. Working copies live here.
+internal/

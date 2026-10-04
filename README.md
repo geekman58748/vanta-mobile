@@ -559,7 +559,7 @@ Scripts in `scripts/` that produce the harder evidence:
 | `e2e-zolana.mjs` | Full shield, shadow, ghost cycle against devnet with fresh identities |
 | `linkability-report.mjs` | What a Shadow transaction exposes to an observer |
 | `forensic-x.mjs` | Traces the spend identity across sends, which is how residual 2 was found |
-| `test2-anonymity.mjs` | The controlled two-identity A/B in the table in `PLAN.md` |
+| `test2-anonymity.mjs` | The controlled two-identity A/B of a Shadow send, both keys held |
 | `pdf-receipt-check.mjs` | Renders a receipt PDF and probes the pixels |
 | `backup-check.mjs`, `history-store-check.mjs` | Encrypted backup round trip and history at rest |
 | `mwa-v1-e2e.sh` | Mobile Wallet Adapter end to end on a device, including v1 signing |
