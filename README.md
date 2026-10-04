@@ -65,13 +65,13 @@ Balances are zero because the wallet is new.
 
 ### The flows
 
-| Shield | Shadow send | Receive | Profile |
-|---|---|---|---|
-| <img src="screenshots/07-shield.png" height="420" /> | <img src="screenshots/08-send.png" height="420" /> | <img src="screenshots/09-receive.png" height="420" /> | <img src="screenshots/10-profile.png" height="420" /> |
+| Shield | Shadow send | Receive |
+|---|---|---|
+| <img src="screenshots/07-shield.png" height="420" /> | <img src="screenshots/08-send.png" height="420" /> | <img src="screenshots/09-receive.png" height="420" /> |
 
-| Ghost mode | Ghost send |
-|---|---|
-| <img src="screenshots/11-ghost-mode-dashboard.png" height="420" /> | <img src="screenshots/12-ghost-send.png" height="420" /> |
+| Ghost mode | Ghost send | Profile |
+|---|---|---|
+| <img src="screenshots/11-ghost-mode-dashboard.png" height="420" /> | <img src="screenshots/12-ghost-send.png" height="420" /> | <img src="screenshots/10-profile.png" height="420" /> |
 
 ---
 
