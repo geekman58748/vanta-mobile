@@ -46,6 +46,31 @@ have confirmed on devnet. Nothing here is a roadmap item dressed up as a feature
 
 ---
 
+## Screenshots
+
+Captured from the devnet build on a fresh install (Android emulator, 1080×2400).
+Balances are zero because the wallet is new.
+
+### First run
+
+| Onboarding 1 | Onboarding 2 | Onboarding 3 |
+|---|---|---|
+| <img src="screenshots/01-onboarding-step-1.png" height="420" /> | <img src="screenshots/02-onboarding-step-2.png" height="420" /> | <img src="screenshots/03-onboarding-step-3.png" height="420" /> |
+
+### Connect and the wallet
+
+| Connect a wallet | Wallet | What leaks |
+|---|---|---|
+| <img src="screenshots/04-after-onboarding.png" height="420" /> | <img src="screenshots/05-wallet-dashboard.png" height="420" /> | <img src="screenshots/06-what-leaks-sheet.png" height="420" /> |
+
+### The flows
+
+| Shield | Shadow send | Receive | Profile |
+|---|---|---|---|
+| <img src="screenshots/07-shield.png" height="420" /> | <img src="screenshots/08-send.png" height="420" /> | <img src="screenshots/09-receive.png" height="420" /> | <img src="screenshots/10-profile.png" height="420" /> |
+
+---
+
 ## Built for Seeker
 
 Vanta is a Seeker app in the sense that matters: **the custody story closes on that
