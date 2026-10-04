@@ -7,13 +7,26 @@
 // secrets out of *git*, not out of the shipped app — anyone can read the built
 // JS. Treat the relayer token as abuse-deterrence, not authentication.
 
-// Privacy relayer. Local dev: http://localhost:3001
-// Production: the public HTTPS URL, e.g. https://vanta-relayer.fly.dev
-// On a phone `localhost` is the phone itself. Must be HTTPS — the bundled app
-// origin is https and mixed content is blocked.
+// Privacy relayer. Local dev talks to a relayer on this machine; a *built* app
+// must reach the deployed one. On a phone `localhost` is the phone itself, so
+// silently defaulting to it in a production build renders fine and then cannot
+// Shield — never a silent failure. Must be HTTPS: the bundled app origin is
+// https and mixed content is blocked. Override with VITE_RELAYER_URL.
+const DEPLOYED_RELAYER_URL = 'https://p01--vanta-mobile--9ymc8tqmdxvj.code.run'
+const DEFAULT_RELAYER_URL = import.meta.env.DEV
+  ? 'http://localhost:3001'
+  : DEPLOYED_RELAYER_URL
+
 export const RELAYER_URL = (
-  import.meta.env.VITE_RELAYER_URL || 'http://localhost:3001'
+  import.meta.env.VITE_RELAYER_URL || DEFAULT_RELAYER_URL
 ).replace(/\/+$/, '')
+
+if (import.meta.env.PROD && !import.meta.env.VITE_RELAYER_URL) {
+  console.warn(
+    '[vanta] VITE_RELAYER_URL is unset in this production build — defaulting to ' +
+      `the deployed devnet relayer (${DEPLOYED_RELAYER_URL}). Set it to point elsewhere.`,
+  )
+}
 
 export const RELAYER_TOKEN = import.meta.env.VITE_RELAYER_TOKEN ?? ''
 
