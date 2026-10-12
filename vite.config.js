@@ -15,7 +15,12 @@ export default defineConfig({
   base: './',
   resolve: {
     alias: {
-      // Polyfill for snarkjs in browser
+      // Node's `crypto` in the browser. The zolana SDK's TEE attestation path
+      // (@phala/dcap-qvl) is CommonJS and does `require('crypto')`; its own
+      // `browser` field maps crypto to `false`, but this alias wins over that,
+      // so the polyfill has to be a real installed package — it was declared
+      // nowhere until the 0.4.0-alpha SDK pulled dcap-qvl in and the build
+      // failed with UNLOADABLE_DEPENDENCY. Declared in devDependencies.
       'crypto': 'crypto-browserify',
     }
   },

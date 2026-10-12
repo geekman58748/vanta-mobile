@@ -15,7 +15,7 @@
     "faucet": "node faucet/server.js"
   },
   "dependencies": {
-    "@heliuslabs/zolana": "file:./vendor/heliuslabs-zolana-0.3.0-alpha.tgz",
+    "@heliuslabs/zolana": "file:./vendor/heliuslabs-zolana-0.4.0-alpha.tgz",
     "@noble/ciphers": "^2.4.0",
     "@noble/curves": "^2.4.0",
     "@noble/hashes": "^2.4.0",
@@ -37,6 +37,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
+    "crypto-browserify": "^3.12.1",
     "oxlint": "^1.81.0",
     "tailwindcss": "^4.3.3",
     "vite": "^8.3.0"

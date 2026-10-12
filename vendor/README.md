@@ -3,7 +3,7 @@
 Third-party artifacts committed so the repository is self-contained. Nothing here
 is ours; each entry names its upstream, its license, and how to regenerate it.
 
-## `heliuslabs-zolana-0.3.0-alpha.tgz`
+## `heliuslabs-zolana-0.4.0-alpha.tgz`
 
 The **`@heliuslabs/zolana`** TypeScript SDK — the Zolana "Privacy Rings" client
 that backs Shield / Shadow / Ghost.
@@ -11,12 +11,33 @@ that backs Shield / Shadow / Ghost.
 | | |
 |---|---|
 | Upstream | <https://github.com/helius-labs/zolana> |
-| Version | `0.3.0-alpha` (tag `v0.3.0-alpha`) |
-| Commit | `efed2ff` — *chore(release): pin the v0.3.0-alpha localnet artifacts* |
+| Version | `0.4.0-alpha` (tag `v0.4.0-alpha`) |
+| Commit | `0fde5f1` — *chore(release): date the TypeScript SDK 0.4.0-alpha release* |
 | Package inside a monorepo | `sdk-libs/ts` |
 | License | **Apache-2.0** (see `dist/LICENSE` inside the tarball, and `LICENSE.zolana.txt` beside it) |
-| sha256 | `ac435d0c7e6b5e27857dd5cb13e11632cc3ff65db1d2280437d32d34062cf67d` |
-| Size | 371 KB |
+| sha256 | `6d091b2c15240139ca05343608637f068ac7e5e2cc939d8dcdd11bcc294c4c49` |
+| Size | 416 KB |
+
+### Why 0.4.0 and not 0.3.0
+
+0.3.0-alpha pinned **49** proving keys. The hosted prover this app talks to
+(`VITE_PROVER_URL`, `d21ni15goiip6l.cloudfront.net`) has since rotated its key
+set: **22 of those 49 keys are no longer served at all, and 22 more come back
+with a different sha256**. A proof request built on the old table is rejected by
+the prover with a non-2xx status, which surfaces to the user as
+`CLIENT_PROVER_HTTP` on Shield, Shadow and Ghost alike — the SDK's own error
+translation has no message for it, so the code reaches the screen verbatim.
+
+0.4.0-alpha pins **130** keys and matches the live prover **exactly** (0 missing,
+0 digest mismatches), which is the property to re-check before every release:
+
+```bash
+node scripts/zolana-prover-keys-check.mjs
+```
+
+Program IDs and the `ZolanaClientConfig` shape are unchanged between the two
+versions, so this is a drop-in swap and the relayer's `RELAYER_ALLOWED_PROGRAMS`
+list stays valid.
 
 ### Why it is vendored instead of referenced
 
@@ -46,14 +67,18 @@ the tarball and is also copied to `LICENSE.zolana.txt` here.
 
 ### Regenerating
 
-Pack the published artifact **without** running the upstream build (`prepack`
-invokes a full `tsc` build, which we do not want to depend on):
+`v0.4.0-alpha` does **not** commit `dist/` — the tag holds `src/` and `test/`
+only, and `prepack` builds the package before it is published. So unlike
+0.3.0-alpha (whose tag pinned its build output, and which was packed from the tag
+with `--ignore-scripts`), this artifact is taken from the **published** package,
+which is the same bytes upstream's release CI built and signed:
 
 ```bash
-git clone --depth 1 --branch v0.3.0-alpha https://github.com/helius-labs/zolana.git /tmp/zolana
-COPYFILE_DISABLE=1 npm pack /tmp/zolana/sdk-libs/ts --ignore-scripts \
-  --pack-destination ./vendor
+COPYFILE_DISABLE=1 npm pack @heliuslabs/zolana@0.4.0-alpha --pack-destination ./vendor
 ```
 
-`COPYFILE_DISABLE=1` stops macOS resource forks from being packed. Confirm the
-sha256 still matches the table above before committing a replacement.
+`COPYFILE_DISABLE=1` stops macOS resource forks from being packed. A re-pack of
+the 0.3.0-alpha tag was byte-identical in *content* to its registry tarball
+(`diff -rq` clean; only gzip metadata differs), so the registry artifact is a
+faithful stand-in for the tag build. Confirm the sha256 still matches the table
+above before committing a replacement.
