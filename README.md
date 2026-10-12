@@ -10,8 +10,8 @@ Built for the Solana Mobile stack. Android APK, Mobile Wallet Adapter custody, l
 devnet, deployed end to end.
 
 > **Submission artifacts**
-> - 📱 **APK** — [Releases → latest](https://github.com/geekman58748/vanta-mobile/releases/latest)
->   (`vanta-1.0.0-ux12.apk`, signed, Android 9+)
+> - 📱 **APK** — [vanta-mobile.xyz/download/vanta.apk](https://vanta-mobile.xyz/download/vanta.apk)
+>   (`vanta-1.0.0-zolana-0.4.0.apk`, signed, Android 9+)
 > - 📊 **Pitch deck** — [`docs/pitch-deck.md`](docs/pitch-deck.md)
 > - 🔍 **Security self-audit** — [`audits/`](audits/), with finding-by-finding status
 > - 🛡️ **Reply to an external automated review** — [`audits/RESPONSE-2026-10-02.md`](audits/RESPONSE-2026-10-02.md), accepted-vs-disputed line by line
@@ -180,15 +180,15 @@ reason the claims above can be specific.
 
 ## Try it
 
-The release APK is 4.4 MB and signed. **Download: [Releases → latest](https://github.com/geekman58748/vanta-mobile/releases/latest)** — asset `vanta-1.0.0-ux12.apk`.
+The release APK is 4.6 MB and signed. **Download: [vanta-mobile.xyz/download/vanta.apk](https://vanta-mobile.xyz/download/vanta.apk)** — `vanta-1.0.0-zolana-0.4.0.apk`, the same bytes the landing site serves and the ones installed on the device this README was last verified against.
 
 Package `com.vanta.privacywallet`. Android 9 (API 28) and newer.
 
-> Release binaries are deliberately **not** committed to this repository: `.gitignore`
-> excludes `*.apk`, because a 4.4 MB binary in git history is permanent and the APK
-> rebuilds from source in one command. If the Releases page has no asset, build it
-> yourself ([Build from source](#build-from-source)) — the signed artifact lands in
-> `deploy/releases/`.
+> Exactly one binary is committed, on purpose: `landing/public/download/vanta.apk`, so
+> the direct download link is live the moment a deploy finishes. Every other `*.apk` is
+> ignored (`.gitignore`) — a 4.6 MB artifact in git history is permanent — and the APK
+> rebuilds from source in one command ([Build from source](#build-from-source)), with the
+> signed result landing in `deploy/releases/`.
 
 Endpoints it talks to, both live and both public:
 
@@ -208,7 +208,7 @@ address. That is enough to Shield 0.05 or 0.1 SOL and pay the fee.
 
 ```bash
 # USB debugging on, phone unlocked, then:
-APK=vanta-1.0.0-ux12.apk      # from Releases, or your own build in deploy/releases/
+APK=vanta-1.0.0-zolana-0.4.0.apk  # from the download link, or your own build in deploy/releases/
 adb install "$APK"
 ```
 
@@ -217,7 +217,7 @@ On Xiaomi / Redmi / POCO (HyperOS or MIUI), `adb install` is refused with
 Install via USB**, or push the file and tap it in Files:
 
 ```bash
-APK=vanta-1.0.0-ux12.apk      # from Releases, or your own build in deploy/releases/
+APK=vanta-1.0.0-zolana-0.4.0.apk  # from the download link, or your own build in deploy/releases/
 adb push "$APK" /sdcard/Download/
 # then open Files > Downloads and tap the APK
 ```

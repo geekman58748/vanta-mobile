@@ -1,12 +1,13 @@
 /**
  * Single source of truth for every outbound link on the landing page.
  *
- * ⚠️ APK_URL is empty on purpose, and no longer because there is no build. The
- * release APK is built and signed (deploy/releases/vanta-1.0.0-ux12.apk); the
- * repository does not commit binaries, so it is distributed as a GitHub Release
- * asset and, later, through the dApp Store. It is deliberately not served from
- * this site. When the Release is published, set this to the asset URL and the
- * store badge becomes a real link with no other change.
+ * ⚠️ APK_URL is empty on purpose, and it points at the **dApp Store listing**,
+ * not at the APK. The two are easy to confuse: the APK *is* served from this
+ * site — `public/download/vanta.apk`, the direct download link on the
+ * submission form, replaced and re-committed with every release — while Vanta
+ * is not listed in the dApp Store yet, which is the only thing this badge
+ * waits on. Set this to the store listing when it exists and the badge becomes
+ * a real link (see StoreBadge.jsx) with no other change.
  */
 export const APK_URL = ''
 
