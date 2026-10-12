@@ -33,7 +33,7 @@ const FAQS = [
   },
   {
     q: 'How do I run it today?',
-    a: 'Clone the repo, build @heliuslabs/zolana from the v0.3.0-alpha git tag (the published npm package does not work against the current devnet programs), run the local relayer, and point the app at devnet. The full steps are in the repository README.',
+    a: 'Clone the repo and run the documented build — the @heliuslabs/zolana version that matches the live prover is vendored, so pnpm install is enough. Then run the local relayer and point the app at devnet. One thing to know before you start: the privacy rails are Helius\'s zolana alpha service on devnet, and the prover can move out from under a working build without anything changing in the repo. The README tracks every version shift so far and how to check for the next one.',
   },
 ]
 
