@@ -17,6 +17,32 @@
     <style>
       body { background: #060509; margin: 0; }
     </style>
+    <!-- Node's `process`, for the browser bundle.
+
+         The Zolana SDK's TEE attestation path (@phala/dcap-qvl) is CommonJS and pulls
+         in crypto-browserify, whose modules read `process.browser`, `process.versions`
+         and `process.nextTick` — and one of those reads (`!process.browser && …`) sits at
+         MODULE SCOPE, so it is evaluated the moment the chunk loads, not inside a
+         `typeof process !== 'undefined'` guard. Vite's `define` only rewrites
+         `process.env`; a bare `process` needs the real global to exist or the WebView
+         throws `ReferenceError: process is not defined` while the SDK chunk evaluates.
+         When that happens the privacy engine never initialises, the app reports
+         "Privacy init failed", and Shield/Ghost are dead — with nothing in the UI saying
+         why. `browser: true` and an empty `versions` keep the Node-detection branches in
+         the Solana libraries on their browser paths (no `versions.node`, so `isNode`
+         stays false). -->
+    <script>
+      window.process =
+        window.process ||
+        {
+          browser: true,
+          env: {},
+          version: '',
+          versions: {},
+          platform: 'browser',
+          nextTick: (fn, ...args) => queueMicrotask(() => fn(...args)),
+        }
+    </script>
   </head>
   <body class="bg-ink">
     <div id="root"></div>
