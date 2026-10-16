@@ -49,7 +49,8 @@ const PUBLIC_FAUCET_URL = 'https://p01--vanta-faucet--9ymc8tqmdxvj.code.run'
 const runtimeEnvironment = {
   NODE_ENV: 'production',
   RELAYER_PORT: '3001',
-  CORS_ORIGINS: 'https://appassets.androidplatform.net',
+  CORS_ORIGINS:
+    'https://appassets.androidplatform.net,https://vanta-mobile.xyz,https://www.vanta-mobile.xyz',
   RELAYER_TOKEN: token,
   RELAYER_KEYPAIR: JSON.stringify(secretArr),
   DATABASE_URL: local.DATABASE_URL,
