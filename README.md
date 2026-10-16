@@ -10,12 +10,11 @@ Built for the Solana Mobile stack. Android APK, Mobile Wallet Adapter custody, l
 devnet, deployed end to end.
 
 > **Submission artifacts**
-> - 📱 **APK** — [vanta-mobile.xyz/download/vanta.apk](https://vanta-mobile.xyz/download/vanta.apk)
+> - 📱 **APK**: [vanta-mobile.xyz/download/vanta.apk](https://vanta-mobile.xyz/download/vanta.apk)
 >   (`vanta-1.0.0-zolana-0.4.0.apk`, signed, Android 9+)
-> - 📊 **Pitch deck** — [`docs/pitch-deck.md`](docs/pitch-deck.md)
-> - 🔍 **Security self-audit** — [`audits/`](audits/), with finding-by-finding status
-> - 🛡️ **Reply to an external automated review** — [`audits/RESPONSE-2026-10-02.md`](audits/RESPONSE-2026-10-02.md), accepted-vs-disputed line by line
-> - 🔐 **Relayer / fee-payer findings** — [`docs/pitch-deck-relayer-fee-payer-section.md`](docs/pitch-deck-relayer-fee-payer-section.md)
+> - 🔍 **Security self-audit**: [`audits/`](audits/), with finding-by-finding status
+> - 🛡️ **Reply to an external automated review**: [`audits/RESPONSE-2026-10-02.md`](audits/RESPONSE-2026-10-02.md), accepted-vs-disputed line by line
+> - 🔐 **Relayer / fee-payer findings**: [`docs/pitch-deck-relayer-fee-payer-section.md`](docs/pitch-deck-relayer-fee-payer-section.md)
 
 ---
 
@@ -38,7 +37,7 @@ have confirmed on devnet. Nothing here is a roadmap item dressed up as a feature
 - Not anonymous. It never claims to be, and `src/lib/honesty.js` exists to stop it.
 - Not mainnet. Devnet only, and the app says `DEVNET` on the dashboard.
 - **Not third-party audited.** An adversarial self-audit was run and every finding is remediated
-  or disclosed — see [`audits/`](audits/). The custody model is disclosed in
+  or disclosed, see [`audits/`](audits/). The custody model is disclosed in
   [Known limitations](#known-limitations).
 - Not a PWA. It is a React bundle inside the official **Solana Mobile webshell**, with a
   native Kotlin layer for the things a WebView cannot do. Details in
@@ -91,21 +90,21 @@ device.**
   `@solana-mobile/wallet-standard-mobile@0.6.0`, above the `0.5.1` that doc requires.
 - **On a Seeker the signing key is already in hardware, and we wrote no Seed Vault code to
   get that.** Connect **Seed Vault Wallet** over the Mobile Wallet Adapter and the key lives
-  in the Seed Vault and is used there — Vanta never receives it. This is the correct shape,
+  in the Seed Vault and is used there. Vanta never receives it. This is the correct shape,
   not a shortcut: `com.solanamobile:seedvault-wallet-sdk` is a **wallet-provider** API, and
   a dApp is meant to reach it through MWA rather than call it directly. Hardware custody on
   a Seeker is therefore shipped today, with zero Seed Vault code in this repository.
 - **The `localStorage` key is the fallback wallet, not the MWA path.** The plaintext key in
   [Known limitations](#known-limitations) belongs to the *throwaway in-app wallet* you can
   generate when no wallet app is installed. On the MWA path there is no key of yours inside
-  Vanta at all. Removing the fallback — rather than adding Seed Vault code — is the roadmap
+  Vanta at all. Removing the fallback, rather than adding Seed Vault code, is the roadmap
   item.
 - **Distribution is the Seeker dApp Store**, the Seeker-native channel, and the reason
   winning teams are required to publish there.
 
 Scope, stated plainly because the rest of this file does not overclaim either: **the Mobile
 Wallet Adapter path is real today, and it is what carries Seed Vault custody on a Seeker.**
-There is deliberately **no Seed Vault code in this repository** — calling that SDK from a
+There is deliberately **no Seed Vault code in this repository**; calling that SDK from a
 dApp would be the wrong shape. **Seeker Genesis Token gating and SKR are not implemented**;
 there is no code for either.
 
@@ -180,13 +179,13 @@ reason the claims above can be specific.
 
 ## Try it
 
-The release APK is 4.6 MB and signed. **Download: [vanta-mobile.xyz/download/vanta.apk](https://vanta-mobile.xyz/download/vanta.apk)** — `vanta-1.0.0-zolana-0.4.0.apk`, the same bytes the landing site serves and the ones installed on the device this README was last verified against.
+The release APK is 4.6 MB and signed. **Download: [vanta-mobile.xyz/download/vanta.apk](https://vanta-mobile.xyz/download/vanta.apk)**: `vanta-1.0.0-zolana-0.4.0.apk`, the same bytes the landing site serves and the ones installed on the device this README was last verified against.
 
 Package `com.vanta.privacywallet`. Android 9 (API 28) and newer.
 
 > Exactly one binary is committed, on purpose: `landing/public/download/vanta.apk`, so
 > the direct download link is live the moment a deploy finishes. Every other `*.apk` is
-> ignored (`.gitignore`) — a 4.6 MB artifact in git history is permanent — and the APK
+> ignored (`.gitignore`), a 4.6 MB artifact in git history is permanent, and the APK
 > rebuilds from source in one command ([Build from source](#build-from-source)), with the
 > signed result landing in `deploy/releases/`.
 
@@ -254,7 +253,7 @@ Vanta relayer (Node + Express, Neon Postgres)
 ```
 
 **What we build on, and what we add.** The shielded pool, the ZK circuits, the
-prover and the indexer are **Helius Zolana** (Privacy Rings) — we did not write
+prover and the indexer are **Helius Zolana** (Privacy Rings). We did not write
 the cryptography, and we don't claim to. What Vanta adds is the client: a mobile
 wallet where privacy is a mode rather than a setting, custody that stays in the
 Mobile Wallet Adapter, and a receipt that names what each send still leaks. The
@@ -289,7 +288,7 @@ separately because the difference matters:
 | At rest | Where | Protection |
 |---|---|---|
 | Shielded spend identity, transaction history, backups | app storage | `XChaCha20-Poly1305`, key derived from your seed |
-| **The wallet's own Ed25519 `secretKey`** | `vanta-wallet` in WebView `localStorage` | **none — plaintext JSON** |
+| **The wallet's own Ed25519 `secretKey`** | `vanta-wallet` in WebView `localStorage` | **none, plaintext JSON** |
 
 The second row is the same trust model as any browser wallet that keeps a key in
 `localStorage`, and on this devnet build the key is not encrypted. It is called out in
@@ -614,7 +613,7 @@ failure and names it instead of hanging.
 
 Solana Mobile's documented emulator target is the **Mock MWA Wallet**, which supports
 `authorize`, `signIn`, `signAndSendTransactions` and `signMessage`, does bottom-sheet
-approval with biometrics, and **simulates Seed Vault Wallet behaviour** — so the MWA path
+approval with biometrics, and **simulates Seed Vault Wallet behaviour**, so the MWA path
 can be exercised without a Seeker. Two things to know before relying on it: it **requires a
 secure lock screen** (PIN, pattern or biometric; it keeps key material behind device
 authentication and fails without one), and **its v1 support has not been checked here**.
@@ -623,11 +622,11 @@ That check is the first thing to do before treating it as a Zolana test target.
 **The Helius API key ships inside the APK.** This is deliberate, and it is a devnet key.
 `VITE_HELIUS_API_KEY` is compiled into the bundle so that anyone who installs the release
 APK can run it against devnet without signing up for anything. The endpoint it feeds is
-`https://devnet.helius-rpc.com`, never mainnet, and devnet SOL has no value — so the key
+`https://devnet.helius-rpc.com`, never mainnet, and devnet SOL has no value, so the key
 buys an attacker nothing but a read quota, and it is revocable if that quota is ever
 abused. It is not shared with any backend: the relayer runs its own RPC
 (`SOLANA_RPC_URL`, defaulting to the public devnet endpoint), so server traffic cannot
-burn it, and leaving the variable blank is also valid — the app falls back to the public
+burn it, and leaving the variable blank is also valid: the app falls back to the public
 devnet RPC. Treat the key as public and rate limited, and bring your own for anything
 beyond trying the app. The same applies to `VITE_RELAYER_TOKEN`, which is abuse
 deterrence, not authentication: history reads and writes are identity-signed precisely
@@ -639,7 +638,7 @@ because that token is readable in the bundle.
 `android:allowBackup="true"`, so `adb backup` can copy the WebView data directory off a
 device with USB debugging enabled and recover that key from it. On devnet this protects
 nothing worth taking. Before this holds real funds the fixes are **not** to add Seed Vault
-code — the MWA path already routes to hardware on a Seeker — but to stop generating a
+code, the MWA path already routes to hardware on a Seeker, but to stop generating a
 fallback wallet whose key has to live somewhere untrusted, and to set
 `allowBackup="false"`.
 
@@ -684,7 +683,7 @@ they explain what the product claims and why it is allowed to claim it.
 Built on **Helius Zolana** Privacy Rings, and on the **Solana Mobile** webshell and Mobile
 Wallet Adapter. The Zolana SDK is vendored in `vendor/` under Apache-2.0, with its license
 and third-party notices alongside it, because this SDK has to match a hosted prover
-exactly and the registry moves on Helius's schedule rather than ours — a fresh clone
+exactly and the registry moves on Helius's schedule rather than ours. A fresh clone
 should not be how anyone finds that out. `vendor/README.md` records the exact provenance,
 why this version, and how to regenerate it; the
 [disclaimer](#disclaimer-the-privacy-rails-are-heliuss-alpha-service-and-we-are-only-a-client)
@@ -737,10 +736,10 @@ release notes named the cause precisely enough that we fixed the first one in a 
 
 | Helius zolana | Date | What moved | What it cost us |
 |---|---|---|---|
-| `0.2.0-alpha` | 2026-09-21 | — | the last SDK that matched the pre-September programs; deposits landed with it that day |
-| `0.3.0-alpha` — **programs** | 2026-09-24 | devnet programs redeployed **in place**: *"clients built against `v0.2.0-alpha` no longer work against devnet: instruction data, account lists and proving keys changed"* | every flow broke. Deposits failed with `InvalidInstructionData … TrailingBytes`, registration with `NotEnoughAccountKeys`. The matching SDK was **not on npm yet**, so the fix was building it from the `v0.3.0-alpha` git tag |
-| `0.3.0-alpha` / `0.3.1-alpha` — **npm** | 2026-09-29 | the matching TypeScript SDK finally published, five days after the programs | we vendored the tarball so a fresh clone installs and builds without a source tag |
-| `0.4.0-alpha` | 2026-10-07 | proving keys **rotated** — 22 retired, 22 re-keyed under the same names; transfer shapes replaced by a 38-shape grid (1–49 inputs × 2/4/8/16 outputs); merges at 24/54; ring and TEE-attestation paths added | nothing changed here and the app still broke. The prover moved to the new key set, our retired key names came back `404 unknown_proving_key`, and the SDK surfaced that as `CLIENT_PROVER_HTTP` on Shield, Shadow and Ghost |
+| `0.2.0-alpha` | 2026-09-21 | n/a | the last SDK that matched the pre-September programs; deposits landed with it that day |
+| `0.3.0-alpha` (programs) | 2026-09-24 | devnet programs redeployed **in place**: *"clients built against `v0.2.0-alpha` no longer work against devnet: instruction data, account lists and proving keys changed"* | every flow broke. Deposits failed with `InvalidInstructionData … TrailingBytes`, registration with `NotEnoughAccountKeys`. The matching SDK was **not on npm yet**, so the fix was building it from the `v0.3.0-alpha` git tag |
+| `0.3.0-alpha` / `0.3.1-alpha` (npm) | 2026-09-29 | the matching TypeScript SDK finally published, five days after the programs | we vendored the tarball so a fresh clone installs and builds without a source tag |
+| `0.4.0-alpha` | 2026-10-07 | proving keys **rotated**: 22 retired, 22 re-keyed under the same names; transfer shapes replaced by a 38-shape grid (1–49 inputs × 2/4/8/16 outputs); merges at 24/54; ring and TEE-attestation paths added | nothing changed here and the app still broke. The prover moved to the new key set, our retired key names came back `404 unknown_proving_key`, and the SDK surfaced that as `CLIENT_PROVER_HTTP` on Shield, Shadow and Ghost |
 
 One detail worth knowing if you are pinning a version yourself: `0.3.1-alpha` shipped the
 same proving-key set as `0.3.0-alpha`. Against the prover as it stands today it is still 22
@@ -748,7 +747,7 @@ keys short, so `0.4.0-alpha` is the only published version that matches.
 
 ### Where that leaves this build
 
-What is in this repository — the web build, and the APK published with it — is pinned to
+What is in this repository (the web build, and the APK published with it) is pinned to
 `0.4.0-alpha`, which is the version the live prover serves today. The two key sets match
 exactly, 130 pinned to 130 served, and `scripts/zolana-prover-keys-check.mjs` re-checks
 that against the live deployment in about a second, using the SDK's own comparison. So the
@@ -764,8 +763,8 @@ Assuming the app is broken is the wrong first guess, and we have made it ourselv
 
 ### And it is all devnet
 
-Separate from the above: the zolana programs run on **devnet**, which anyone — Helius, the
-Solana team, a stray test script — can redeploy, reset or wipe at any time. Devnet SOL has
+Separate from the above: the zolana programs run on **devnet**, which anyone (Helius, the
+Solana team, a stray test script) can redeploy, reset or wipe at any time. Devnet SOL has
 no value, and none of this is audited. Do not put real funds into it. The custody model
 and the anonymity limits are in [Known limitations](#known-limitations) and matter more
 than anything on this page.
