@@ -722,22 +722,6 @@ app.post('/names/claim', requireToken, async (req, res) => {
   }
 })
 
-// Unknown paths answer JSON, not Express's HTML `Cannot GET /x` page
-// (AUDIT-2026-09-27 L4). Two reasons it matters: every other surface of this
-// service is JSON, so a client that parses the body should never have to special
-// case one response shape; and an HTML error page leaks the framework and the
-// fact that path normalisation — not auth — is what rejected the request.
-app.use((req, res) => {
-  res.status(404).json({ ok: false, error: `Not found: ${req.method} ${req.path}` })
-})
-
-// Last-resort handler: a thrown route error must still be JSON, never the
-// default Express stack page.
-app.use((err, req, res, _next) => {
-  console.error('unhandled route error:', err?.message ?? err)
-  res.status(500).json({ ok: false, error: 'Internal error' })
-})
-
 // ── Waitlist ──────────────────────────────────────────────────────────
 // Signups from the landing page (vanta-mobile.xyz). The site is static, so it
 // cannot write to Postgres itself — this is the endpoint its card posts to.
@@ -792,6 +776,27 @@ app.post('/waitlist', async (req, res) => {
     console.error('waitlist error:', err.message)
     res.status(500).json({ ok: false, error: 'Could not save that. Try again.' })
   }
+})
+
+// Unknown paths answer JSON, not Express's HTML `Cannot GET /x` page
+// (AUDIT-2026-09-27 L4). Two reasons it matters: every other surface of this
+// service is JSON, so a client that parses the body should never have to special
+// case one response shape; and an HTML error page leaks the framework and the
+// fact that path normalisation — not auth — is what rejected the request.
+//
+// MUST stay registered after every route. Express matches in registration
+// order, so a catch-all placed any earlier swallows the routes declared below
+// it — which is exactly what made POST /waitlist unreachable while /healthz,
+// /status and the rest (declared above) kept working.
+app.use((req, res) => {
+  res.status(404).json({ ok: false, error: `Not found: ${req.method} ${req.path}` })
+})
+
+// Last-resort handler: a thrown route error must still be JSON, never the
+// default Express stack page. Also last, for the same ordering reason.
+app.use((err, req, res, _next) => {
+  console.error('unhandled route error:', err?.message ?? err)
+  res.status(500).json({ ok: false, error: 'Internal error' })
 })
 
 // Bootstrap the schema before accepting traffic. A failure here is logged but
