@@ -126,9 +126,9 @@ a receipt cannot claim something the disclosure sheet contradicts.
 
 | Mode | Verdict | Amount | Recipient | Initiator | Link to where it lands |
 |---|---|---|---|---|---|
-| **Shield** | Public by design | public | n/a, it is you | your wallet, on chain | not revealed |
-| **Shadow** | Confidential, not anonymous | hidden | hidden | visible (fee payer) | severed |
-| **Ghost** | Link severed, amount public | public | public | visible (fee payer) | severed |
+| **Shield** | Public by design | public | your private wallet | your wallet, on chain | not revealed |
+| **Shadow** | Confidential, not anonymous | hidden | hidden | your private wallet, visible as the fee payer | severed |
+| **Ghost** | Link severed, amount public | public | public | your private wallet, visible as the fee payer | severed |
 | **Public** | Fully public | public | public | public | visible |
 
 Receipts export to a real PDF through a native `MediaStore` bridge
