@@ -36,6 +36,9 @@ have confirmed on devnet. Nothing here is a roadmap item dressed up as a feature
 
 - Not anonymous. It never claims to be, and `src/lib/honesty.js` exists to stop it.
 - Not mainnet. Devnet only, and the app says `DEVNET` on the dashboard.
+- **Not the custom ring — yet.** The published APK spends on Helius's default ring. The
+  Vanta-operated custom ring is deployed and in test phase
+  ([below](#custom-ring-v2--shipped-in-test-phase)).
 - **Not third-party audited.** An adversarial self-audit was run and every finding is remediated
   or disclosed, see [`audits/`](audits/). The custody model is disclosed in
   [Known limitations](#known-limitations).
@@ -164,8 +167,9 @@ reason the claims above can be specific.
    deposits over time is what blurs that link, and the crowd is what makes it strong.
 2. **The spend identity is reused.** On every Shadow and Ghost send, the spend identity is
    `account[0]` and pays the fee. It is visible, and anyone you have paid can count and
-   time your sends. This is an SDK invariant: the fee payer is also the shielded owner, so
-   the relayer cannot pay for a spend.
+   time your sends. This is an SDK invariant of the **default ring**: the fee payer is
+   also the shielded owner, so the relayer cannot pay for a spend. The custom ring below
+   exists precisely to break this invariant — in test phase, off by default.
 3. **A small pool makes amount and timing correlatable.** Pool depth is the fix, and
    fabricating that depth with bots would be lying to users. We do not.
 4. **A single fresh-wallet hop is not privacy.** Sending main wallet, then burner, then
@@ -174,6 +178,50 @@ reason the claims above can be specific.
    balance is an encrypted bearer claim. Lose the seed and you lose the funds.
 6. **On the Mobile Wallet Adapter path, your device wallet is the public depositor.**
    Your real address is on chain, linked to your shielding.
+
+---
+
+## Custom ring v2 — shipped, in test phase
+
+Vanta now operates its **own ring** on devnet instead of only spending on Helius's
+default one. The ring (`8aMW8MPHBn4oGsss2NuB4QNvFx6iBSB8RHHkMAHrZduU`) is deployed,
+configured audit-only, and exercised end to end — ring deposits, Shadow and Ghost from
+the APK, and the same sends through the app's `/relay` wire, all confirmed with
+`err: null` on devnet. `docs/ring-v2.md` is the full write-up, signatures included.
+
+What it changes when a build enables it:
+
+| | v1 default ring | v2 custom ring |
+|---|---|---|
+| Fee payer on a spend | your wallet — visible, reused | **the relayer**, your wallet co-signing |
+| Reusable on-chain spend identity | yes, `account[0]` | **no** |
+| Does the user need SOL to spend? | yes (the `/fund` float exists for this) | **no** |
+
+Why this is a test phase and not a feature announcement, stated the way the rest of
+this file states things:
+
+- **Off by default.** The client path ships behind `VITE_RING_PROGRAM_ID` and the
+  relayer behind `RELAYER_RING_PROGRAM`; with both unset the app is the v1 build above,
+  behaviour for behaviour. The published APK is a v1 build.
+- **Devnet only, single-key authority.** The timelocked multisig the v2 roadmap
+  requires is not done, and the ring authority is one live key.
+- **Unaudited.** The ring binary is Helius's released artifact; this integration has
+  had no third-party audit, and an audited ring is the gate on mainnet.
+- **The ring auditor can open every transfer on the ring.** That is how the ring
+  program works, not a policy we left switched off. The current auditor key belongs to
+  the hosted ring RPC, and the receipts and the "what leaks" sheet say so.
+- **Tested on an emulator, not a phone.** Deposit, cold-launch sync, Shadow and Ghost
+  ran from the APK on an Android emulator. The physical-phone run is the next check.
+- **The relayer's program allowlist fails open on the ring path.** Known gap,
+  documented in `docs/ring-v2.md`; fixing it to fail closed is its own change, not
+  smuggled in.
+
+What ships in the repo with it: `rings/vanta-v2/ring.toml` (operator config — public
+values only; keypairs stay out of git), the vendored program binary
+(`vendor/ring/custom-ring-program-v0.4.0-alpha.so`), and two harnesses:
+`scripts/ring-check.mjs` re-verifies the deployed program against the vendored bytes
+and the config, and `scripts/who-signs-*.mjs` prints what every account key of six
+reference transactions actually exposes.
 
 ---
 
@@ -589,6 +637,8 @@ Scripts in `scripts/` that produce the harder evidence:
 | `forensic-x.mjs` | Traces the spend identity across sends, which is how residual 2 was found |
 | `test2-anonymity.mjs` | The controlled two-identity A/B of a Shadow send, both keys held |
 | `pdf-receipt-check.mjs` | Renders a receipt PDF and probes the pixels |
+| `ring-check.mjs` | Re-verifies the deployed custom ring: program bytes, config, auditor pin |
+| `who-signs-*.mjs` | Every account key of six reference transactions — what each actually exposes |
 | `backup-check.mjs`, `history-store-check.mjs` | Encrypted backup round trip and history at rest |
 | `mwa-v1-e2e.sh` | Mobile Wallet Adapter end to end on a device, including v1 signing |
 
@@ -665,7 +715,8 @@ relayer/              Node relayer service, its own Dockerfile
 faucet/               devnet faucet service, its own Dockerfile and wallet
 android/              Solana Mobile webshell host, Kotlin
 landing/              the marketing site
-vendor/               vendored @heliuslabs/zolana tarball. See vendor/README.md
+vendor/               vendored @heliuslabs/zolana tarball and the custom ring binary
+rings/                operator config for the vanta-v2 custom ring (public values only)
 scripts/              verification harnesses, listed above
 licenses/             GPL-3.0 and LGPL-3.0 texts, required by a bundled dependency
 NOTICE                attribution for everything third-party. Read this if you fork.
