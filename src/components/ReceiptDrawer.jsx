@@ -4,7 +4,7 @@ import HonestyRows from './HonestyRows'
 import { copyText } from '../lib/clipboard'
 import { playHaptic } from '../lib/haptic'
 import { stampToDate, shortRef } from '../lib/format'
-import { MODE_HONESTY, explorerLink, PROOF } from '../lib/honesty'
+import { honestyFor, explorerLink, PROOF } from '../lib/honesty'
 import { lookupProof } from '../lib/txHistory'
 import { downloadReceiptPdf, openReceiptFile, shareReceiptFile } from '../lib/receiptPdf'
 
@@ -42,9 +42,13 @@ export default function ReceiptDrawer({ open, onClose, txn, notify }) {
   const [savedUri, setSavedUri] = useState(null)
   const income = txn?.type === 'income'
   const mode = txn?.mode
-  const known = Boolean(MODE_HONESTY[mode])
-  const link = explorerLink(mode, txn?.signature)
-  const onChain = known ? MODE_HONESTY[mode].onChain : null
+  // Stored on the row by the send that made it. A ring build can still have
+  // sent over the default ring, and the receipt must describe the rail that ran.
+  const ring = Boolean(txn?.ring)
+  const entry = honestyFor(mode, { ring })
+  const known = Boolean(entry)
+  const link = explorerLink(mode, txn?.signature, { ring })
+  const onChain = entry?.onChain ?? null
 
   const badge = MODE_COPY[mode] ?? {
     label: txn?.isPrivate ? 'Private' : 'Public',
@@ -152,7 +156,7 @@ export default function ReceiptDrawer({ open, onClose, txn, notify }) {
 
           {/* Per-leg honesty — shared with the what-leaks sheet. */}
           {known ? (
-            <HonestyRows mode={mode} compact />
+            <HonestyRows mode={mode} compact ring={ring} />
           ) : (
             <div className="rounded-2xl bg-white/5 border border-hair px-4 py-3 text-[12px] text-muted">
               No privacy profile recorded for this transaction type.

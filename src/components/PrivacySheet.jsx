@@ -1,6 +1,7 @@
 import Drawer from './Drawer'
 import HonestyRows from './HonestyRows'
-import { RESIDUALS } from '../lib/honesty'
+import { residualsFor } from '../lib/honesty'
+import { RING_ENABLED } from '../lib/config'
 
 /**
  * The "what leaks" sheet — Vanta's whole thesis, stated out loud.
@@ -21,7 +22,7 @@ export default function PrivacySheet({ open, onClose }) {
     >
       <div className="flex flex-col gap-3">
         {ORDER.map((mode) => (
-          <HonestyRows key={mode} mode={mode} />
+          <HonestyRows key={mode} mode={mode} ring={RING_ENABLED} />
         ))}
       </div>
 
@@ -30,7 +31,7 @@ export default function PrivacySheet({ open, onClose }) {
           Residuals we will not hide from you
         </span>
         <ul className="mt-1.5 flex flex-col gap-1.5 text-[11px] text-muted leading-snug list-disc pl-4">
-          {RESIDUALS.map((line) => (
+          {residualsFor({ ring: RING_ENABLED }).map((line) => (
             <li key={line}>{line}</li>
           ))}
         </ul>

@@ -43,10 +43,12 @@
  *    token is a capped faucet drain (see the /fund caps), not a privacy breach.
  *  - Rate limits are per-process and in-memory: they reset on redeploy and do
  *    not coordinate across machines. Run one machine.
- *  - Program-ID validation parses the v1 message's static account keys. If the
- *    parse fails we log and allow, because a parser bug would otherwise brick
- *    the demo. A crafted malformed message is therefore *not* rejected here.
- *    Disable the whole check with RELAYER_ENFORCE_PROGRAMS=0.
+ *  - Program-ID validation parses the v1 message's static account keys, and when
+ *    a ring is configured it also resolves address-table lookups, because a ring
+ *    transfer loads its program ids from tables. If the parse fails we log and
+ *    allow, because a parser bug would otherwise brick the demo. A crafted
+ *    malformed message is therefore *not* rejected here. Disable the whole check
+ *    with RELAYER_ENFORCE_PROGRAMS=0.
  */
 
 // NOTE: must come first. ESM evaluates imports in source order, and db.js reads
@@ -76,6 +78,10 @@ const ENFORCE_PROGRAMS = process.env.RELAYER_ENFORCE_PROGRAMS !== '0'
 // flow of a relayed tx: registration touches the registry, a shield does not.
 const POOL_PROGRAM = 'sppU489D7A4U1exNo1oeMGZtLEofq3a6o2fR7UeoWB6'
 const REGISTRY_PROGRAM = 'regyS5rkAcw2YzDJCmTwCTHs2s246FXxbmuRZ42u2PD'
+// Optional: the custom ring this relayer sponsors (v2). Unset keeps the v1
+// allowlist exactly as it was, so a default deployment cannot relay for a ring
+// it was never configured to pay for.
+const RING_PROGRAM = (process.env.RELAYER_RING_PROGRAM || '').trim()
 
 // Signed-data proof prefixes. MUST match src/lib/identityProof.js — these strings
 // are the whole wire contract between the app and this verification.
@@ -89,6 +95,7 @@ const ALLOWED_PROGRAMS = (
   [
     POOL_PROGRAM, // shieldz shielded-pool
     REGISTRY_PROGRAM, // user registry
+    ...(RING_PROGRAM ? [RING_PROGRAM] : []), // custom ring (v2), when configured
     '11111111111111111111111111111111', // system program (rent / transfers)
     'ComputeBudget111111111111111111111111111111',
     'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', // spl-token
@@ -210,6 +217,75 @@ function staticAccountKeysFromV1Message(msg) {
   return keys
 }
 
+/**
+ * The address-table lookups of a v1 message.
+ *
+ * A ring transfer is large enough that its program ids come from lookup tables:
+ * the 2552-byte message this app builds for a ring spend contains neither the
+ * ring nor the pool program in its static keys or its raw bytes. Checking only
+ * the static list therefore refuses every ring send as "no allowed program".
+ *
+ * Parses header -> static keys -> blockhash -> instructions -> lookups, all
+ * little-endian compact-u16, and throws on anything unexpected so the caller
+ * keeps its fail-open behaviour rather than rejecting a valid transaction.
+ */
+function v1MessageLookups(msg) {
+  const version = msg[0]
+  if (version !== 0x81) throw new Error(`not a v1 message (first byte 0x${version?.toString(16)})`)
+  let off = 1 + 3
+  const keys = readCompactU16(msg, off)
+  off = keys.offset
+  if (keys.value === 0 || keys.value > 64) throw new Error(`implausible static key count ${keys.value}`)
+  off += keys.value * 32
+  off += 32 // recent blockhash
+  if (off > msg.length) throw new Error('message too short for static keys and blockhash')
+
+  const ixs = readCompactU16(msg, off)
+  off = ixs.offset
+  for (let i = 0; i < ixs.value; i++) {
+    off += 1 // program id index
+    const accounts = readCompactU16(msg, off)
+    off = accounts.offset + accounts.value
+    const data = readCompactU16(msg, off)
+    off = data.offset + data.value
+    if (off > msg.length) throw new Error('message too short for its instructions')
+  }
+
+  const count = readCompactU16(msg, off)
+  off = count.offset
+  const lookups = []
+  for (let i = 0; i < count.value; i++) {
+    if (off + 32 > msg.length) throw new Error('message too short for a lookup table')
+    const table = new PublicKey(msg.subarray(off, off + 32)).toBase58()
+    off += 32
+    const writable = readCompactU16(msg, off)
+    off = writable.offset
+    const writableIndexes = Array.from(msg.subarray(off, off + writable.value))
+    off += writable.value
+    const readonly = readCompactU16(msg, off)
+    off = readonly.offset
+    const readonlyIndexes = Array.from(msg.subarray(off, off + readonly.value))
+    off += readonly.value
+    if (off > msg.length) throw new Error('message too short for lookup indexes')
+    lookups.push({ table, indexes: [...writableIndexes, ...readonlyIndexes] })
+  }
+  return lookups
+}
+
+/** Resolve lookup-table indexes to the addresses they load, best-effort. */
+async function resolvedLookupAddresses(msg) {
+  const found = []
+  for (const { table, indexes } of v1MessageLookups(msg)) {
+    const { value } = await connection.getAddressLookupTable(new PublicKey(table))
+    const addresses = value?.state?.addresses ?? []
+    for (const index of indexes) {
+      const address = addresses[index]?.toBase58()
+      if (address) found.push(address)
+    }
+  }
+  return found
+}
+
 // ── Per-identity proofs ───────────────────────────────────────────
 /**
  * True when `signature` (base58, 64 bytes) is a valid Ed25519 signature of
@@ -329,7 +405,12 @@ app.post('/relay', requireToken, async (req, res) => {
     }
 
     const msgBytes = new Uint8Array(Buffer.from(message, 'base64'))
-    if (msgBytes.length === 0 || msgBytes.length > 1400) {
+    // A default-ring message is ~300 bytes; a custom-ring transfer carries two
+    // proofs and lands around 2.7 KB. The ceiling is the size the devnet RPC
+    // accepted for a landed ring transfer, not the legacy 1232-byte packet bound,
+    // and it only rises when this relayer actually sponsors a ring.
+    const maxMessageBytes = RING_PROGRAM ? 4096 : 1400
+    if (msgBytes.length === 0 || msgBytes.length > maxMessageBytes) {
       return res.status(400).json({ ok: false, error: 'Message size out of range' })
     }
 
@@ -345,6 +426,13 @@ app.post('/relay', requireToken, async (req, res) => {
       try {
         const keys = staticAccountKeysFromV1Message(msgBytes)
         touchedPrograms = keys.filter((k) => allowedProgramSet.has(k))
+        // Ring transfers load their program ids from address lookup tables, so a
+        // static-only check refuses every one of them. Resolve the lookups before
+        // giving up, and only when the static list came up empty.
+        if (touchedPrograms.length === 0 && RING_PROGRAM) {
+          const loaded = await resolvedLookupAddresses(msgBytes)
+          touchedPrograms = loaded.filter((k) => allowedProgramSet.has(k))
+        }
         if (touchedPrograms.length === 0) {
           console.warn(`  ✗ refused: no allowlisted program among ${keys.length} static keys`)
           return res.status(400).json({ ok: false, error: 'Transaction does not touch an allowed program' })
@@ -599,7 +687,13 @@ app.post('/tx/report', async (req, res) => {
     // already proved it holds X's key, the transaction provably touches the pool
     // program, and the row stores no amount and no recipient. A false claim
     // could only pollute the claimant's own book.
-    const isShieldDeposit = flow === 'shield' && onChain.accounts.includes(POOL_PROGRAM)
+    // A ring deposit has the same shape as a v1 deposit: the public wallet funds
+    // it, and X (the shielded owner) is not a static account. Recognise the ring
+    // program too, or every v2 Shield receipt is refused as someone else's tx.
+    const isShieldDeposit =
+      flow === 'shield' &&
+      (onChain.accounts.includes(POOL_PROGRAM) ||
+        (RING_PROGRAM !== '' && onChain.accounts.includes(RING_PROGRAM)))
     if (onChain && !onChain.accounts.includes(actor) && !isShieldDeposit) {
       return res.status(403).json({ ok: false, error: 'That transaction does not involve the reporting address' })
     }

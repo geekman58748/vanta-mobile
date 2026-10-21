@@ -41,10 +41,10 @@ const MAX_AGE_MS = 10 * 60 * 1000
 export const POOL_PROGRAM = 'sppU489D7A4U1exNo1oeMGZtLEofq3a6o2fR7UeoWB6'
 
 /** Write the record. Call this BEFORE the wallet is asked to sign anything. */
-export function savePendingShield({ amount, symbol, depositor, sinceSlot = null }) {
+export function savePendingShield({ amount, symbol, depositor, sinceSlot = null, program = null }) {
   try {
     localStorage.setItem(PENDING_KEY, JSON.stringify({
-      amount, symbol, depositor, sinceSlot, at: Date.now(),
+      amount, symbol, depositor, sinceSlot, program, at: Date.now(),
     }))
   } catch (err) {
     // A private-mode localStorage must not stop a Shield; it only costs us the

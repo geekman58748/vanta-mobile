@@ -1,0 +1,18 @@
+name = "vanta-v2"
+target = "devnet"
+program_id = "8aMW8MPHBn4oGsss2NuB4QNvFx6iBSB8RHHkMAHrZduU"
+authority_keypair = "~/.config/solana/id.json"
+deposit_audit = false
+
+[localnet]
+rpc = "http://127.0.0.1:8899"
+indexer = "http://127.0.0.1:8784"
+prover = "http://127.0.0.1:3001"
+ring_rpc = "http://127.0.0.1:8785"
+
+[devnet]
+rpc = "https://api.devnet.solana.com"
+indexer = "https://d2xah7tnhdhcom.cloudfront.net"
+prover = "https://d21ni15goiip6l.cloudfront.net"
+ring_rpc = "https://d24brah9h1i4q9.cloudfront.net"
+ring_rpc_pubkey = "C8TeRCdueRdXj3y4uFDtNywYThc3qeiH2ZGfcbYZzVSs"

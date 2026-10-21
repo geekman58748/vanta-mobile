@@ -172,11 +172,17 @@ export default function SendDrawer({
       let sig
       let mode
       let title
+      // Which rail actually carried this send. A ring build can still fall back
+      // to the default ring for a pre-ring balance, and the receipt has to say
+      // which one happened rather than which one is configured.
+      let ring = false
 
       const to = sendTo()
       if (isPrivateMode) {
         try {
-          sig = await shadowSend(to, amount, selectedToken)
+          const result = await shadowSend(to, amount, selectedToken)
+          sig = result.signature
+          ring = result.ring
           mode = 'Shadow'
           title = `Shadow to ${shortAddr(to)}`
           notify('Shadow send complete. Amount and counterparty hidden.', '🕳️')
@@ -191,7 +197,9 @@ export default function SendDrawer({
           throw err
         }
       } else {
-        sig = await ghostSend(to, amount, selectedToken)
+        const result = await ghostSend(to, amount, selectedToken)
+        sig = result.signature
+        ring = result.ring
         mode = 'Ghost'
         title = `Ghost to ${shortAddr(to)}`
         notify('Ghost send complete. Recipient sees the pool, not you.', '👻')
@@ -199,6 +207,7 @@ export default function SendDrawer({
 
       addTxn(title, `-${amount} ${sym}`, 'expense', true, {
         mode,
+        ring,
         symbol: sym,
         value: amount,
         signature: sig,
@@ -273,9 +282,10 @@ export default function SendDrawer({
     }
     setSending(true)
     try {
-      const sig = await ghostSend(to, amount, selectedToken)
+      const { signature: sig, ring } = await ghostSend(to, amount, selectedToken)
       addTxn(`Ghost to ${shortAddr(to)}`, `-${amount} ${token.symbol}`, 'expense', true, {
         mode: 'Ghost',
+        ring,
         symbol: token.symbol,
         value: amount,
         signature: sig,

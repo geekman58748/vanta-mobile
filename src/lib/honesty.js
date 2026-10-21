@@ -88,6 +88,96 @@ export const MODE_HONESTY = {
 }
 
 /**
+ * Ring (v2) variants of the same three modes.
+ *
+ * A custom ring changes two facts and adds a third, and all three have to be on
+ * the receipt or the copy is worse than v1's:
+ *
+ *   · The relayer is the fee payer, so there is no per-user spend identity.
+ *   · Every custom ring has an auditor key that can OPEN its transfers. That is
+ *     the trade for a ring Helius will deploy, and it is not optional per ring.
+ *   · A Shield into the ring is still a public on-ramp that names the wallet.
+ *
+ * Never say "anonymous" here either. The spend identity is gone; the deposit
+ * edge is not.
+ */
+const RING_MODE_HONESTY = {
+  Shield: {
+    verdict: 'Public deposit, ring-audited',
+    rows: [
+      ['Amount', 'public', 'warn'],
+      ['Who deposited it', 'your wallet, on chain', 'warn'],
+      ['Who receives it', 'nobody, it is you', 'mute'],
+      ['Where it goes next', 'not revealed', 'ok'],
+      ['Ring auditor', 'can open this note', 'warn'],
+    ],
+    onChain: {
+      linkable: true,
+      note: 'The explorer shows your wallet, the amount, and the ring program. This is the deposit, and it is meant to be visible. The ring auditor holds a key that can open the note it created.',
+    },
+  },
+
+  Shadow: {
+    verdict: 'Confidential, relayer-paid',
+    tone: 'ok',
+    sub: 'private balance to another Vanta user, inside the ring',
+    rows: [
+      ['Amount', 'hidden', 'ok'],
+      ['Recipient', 'hidden', 'ok'],
+      ['Spend identity', 'none, the relayer paid', 'ok'],
+      ['Ring auditor', 'can open this transfer', 'warn'],
+      ['Link to where it lands', 'severed', 'ok'],
+    ],
+    onChain: {
+      linkable: true,
+      note: 'The explorer shows a fee paid by the shared relayer and the ring program. No per-user spend address appears, and neither the amount nor the recipient does. The ring auditor can open the transfer with its viewing key.',
+    },
+  },
+
+  Ghost: {
+    verdict: 'Link severed, amount public',
+    tone: 'ok',
+    sub: 'private balance into any wallet, out of the ring',
+    rows: [
+      ['Amount', 'public', 'warn'],
+      ['Recipient', 'public', 'warn'],
+      ['Fee payer', 'the shared relayer', 'ok'],
+      ['Ring auditor', 'can open this transfer', 'warn'],
+      ['Link sender to receiver', 'severed', 'ok'],
+    ],
+    onChain: {
+      linkable: true,
+      note: 'The explorer shows the ring paying the recipient, and the amount. The shared relayer paid the fee, so no per-user spend identity is on this leg. The ring auditor can open the transfer.',
+    },
+  },
+}
+
+/**
+ * The honesty block for a mode, on whichever rail actually carried it.
+ *
+ * `ring` comes from the stored transaction, not from the build config: a ring
+ * build still sends over the default ring when the wallet only holds pre-ring
+ * notes, and a receipt may not claim the rail it merely preferred.
+ */
+export function honestyFor(mode, { ring = false } = {}) {
+  const base = MODE_HONESTY[mode]
+  if (!base) return null
+  return ring && RING_MODE_HONESTY[mode]
+    ? { ...base, ...RING_MODE_HONESTY[mode] }
+    : base
+}
+
+/** Residuals for one receipt's rail. Same list, with the ring's own trade added. */
+export function residualsFor({ ring = false } = {}) {
+  if (!ring) return RESIDUALS
+  return [
+    ...RESIDUALS,
+    'The ring auditor holds a viewing key. Every transfer on the ring can be opened with it, and this receipt says so.',
+    'The relayer submits and pays for every private send. That is what removes the per-user spend identity, and it puts the relayer in the liveness path.',
+  ]
+}
+
+/**
  * Verification state of a transaction, for the receipt and the PDF.
  *
  * Kept HERE rather than in `lib/txHistory.js` because `receiptPdf.js` imports
@@ -153,8 +243,8 @@ export function onChainNote(mode, { counterparty, wallet } = {}) {
 }
 
 /** Explorer link for a devnet signature, or null when a link would be misleading. */
-export function explorerLink(mode, signature) {
+export function explorerLink(mode, signature, { ring = false } = {}) {
   if (!signature) return null
-  if (!MODE_HONESTY[mode]?.onChain?.linkable) return null
+  if (!honestyFor(mode, { ring })?.onChain?.linkable) return null
   return `https://explorer.solana.com/tx/${signature}?cluster=devnet`
 }

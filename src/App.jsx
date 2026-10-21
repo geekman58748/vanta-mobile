@@ -23,7 +23,7 @@ import { postNotification, ensureNotificationPermission } from './lib/native'
 import { copyText } from './lib/clipboard'
 import { shortAddr, splitLeadingGlyph } from './lib/format'
 import { TOKENS, SOL_MINT, SHIELD_FEE_RESERVE } from './lib/tokens'
-import { relayerFetch, faucetFetch, FAUCET_URL } from './lib/config'
+import { relayerFetch, faucetFetch, FAUCET_URL, RING_ENABLED, RING_PROGRAM_ID } from './lib/config'
 import { recordSend, lookupProof, checkProof } from './lib/txHistory'
 import {
   clearPendingShield, findLandedDeposit, loadPendingShield, readSlot, savePendingShield,
@@ -163,7 +163,7 @@ function unknownOutcomeError(cause) {
 const CHAIN_WATCH_INTERVAL_MS = 2_000
 const CHAIN_WATCH_TIMEOUT_MS = 90_000
 
-async function raceWalletReply(walletReply, { depositor, sinceSlot }) {
+async function raceWalletReply(walletReply, { depositor, sinceSlot, poolProgram }) {
   let done = false
   const watch = (async () => {
     const deadline = Date.now() + CHAIN_WATCH_TIMEOUT_MS
@@ -173,6 +173,7 @@ async function raceWalletReply(walletReply, { depositor, sinceSlot }) {
         depositor,
         sinceSlot,
         notBeforeMs: Date.now() - 120_000,
+        ...(poolProgram ? { poolProgram } : {}),
       })
       if (done) return null
       if (landed) return landed.signature
@@ -278,6 +279,10 @@ export default function App() {
   const keysRef = useRef(null)
   const walletRef = useRef(null) // zolana Wallet (UTXO state)
   const signerRef = useRef(null)
+
+  // X's 32-byte seed. `signerRef` is a kit signer, and the ring paths hand raw
+  // seeds to relayTx, so the seed has to travel beside it.
+  const xSeedRef = useRef(null)
   const shieldedKeypairRef = useRef(null)
   const relayerAddressRef = useRef(null) // relayer fee payer address
   const solMintRef = useRef(SOL_MINT)     // set from zk.SOL_MINT at init
@@ -394,18 +399,45 @@ export default function App() {
     return kit.getSignatureFromTransaction(signed)
   }, [])
 
+  // True when the wallet holds an unspent note bound to the configured ring.
+  // The ring rail is chosen only when it can actually fund the spend, so a
+  // balance that predates the ring keeps working through the v1 path instead of
+  // failing on an empty ring.
+  const hasRingNotes = useCallback(() => {
+    const w = walletRef.current
+    if (!RING_ENABLED || !w) return false
+    // `utxos()` returns copies without the ring binding, so it can never answer
+    // this question. `ringBalances()` lists unspent notes per ring, which is the
+    // only public surface that carries `ringProgramId`.
+    return w.ringBalances().some((r) => String(r.ringProgramId) === RING_PROGRAM_ID)
+  }, [])
+
   const refreshPrivateBalances = useCallback(() => {
     try {
       const w = walletRef.current
       if (!w) return
-      const bals = w.balances().map(b => {
+      // `wallet.balances()` deliberately excludes ring-bound notes: they are not
+      // selectable by the default spend path. On a ring build that reads as a
+      // zero balance right after a successful deposit, which then blocks every
+      // send on the amount guard. Add the configured ring's assets back, summed
+      // per mint with the default ones, because a ring Shadow may spend both.
+      const ringAssets = RING_ENABLED
+        ? w.ringBalances()
+            .filter((r) => r.ringProgramId === RING_PROGRAM_ID)
+            .flatMap((r) => r.assets)
+        : []
+      const totals = new Map()
+      for (const b of [...w.balances(), ...ringAssets]) {
         // Normalize the SDK's native-SOL sentinel onto this app's SOL key.
         const mint = b.mint === solMintRef.current ? SOL_MINT : b.mint
+        totals.set(mint, (totals.get(mint) ?? 0n) + b.amount)
+      }
+      const bals = [...totals].map(([mint, amount]) => {
         const meta = Object.values(TOKENS).find(t => t.mint === mint)
         return {
           mint,
           symbol: meta?.symbol ?? (mint === SOL_MINT ? 'SOL' : 'token'),
-          amount: Number(b.amount) / 10 ** (meta?.decimals ?? 9),
+          amount: Number(amount) / 10 ** (meta?.decimals ?? 9),
         }
       })
       console.log('[vanta] private balances', bals, '· unspent utxos',
@@ -427,8 +459,22 @@ export default function App() {
       if (!client || !walletRef.current || !keysRef.current) return null
       setStatus('Syncing private balance…')
       let report = null
+      let lastError = null
       for (let attempt = 1; attempt <= 6; attempt++) {
-        report = await zk.syncWallet({ client, wallet: walletRef.current, keys: keysRef.current })
+        try {
+          report = await zk.syncWallet({ client, wallet: walletRef.current, keys: keysRef.current })
+          lastError = null
+        } catch (err) {
+          // The indexer is a remote service and a single attempt can fail at the
+          // transport layer (connect stall, reset) while the next one succeeds.
+          // Treat that like an empty poll instead of aborting the whole load —
+          // otherwise a blip leaves the user looking at a zero balance over notes
+          // that are already on chain.
+          lastError = err
+          console.warn(`[vanta] sync #${attempt} failed:`, err?.message || err)
+          if (attempt < 6) await new Promise(r => setTimeout(r, attempt * 2000))
+          continue
+        }
         const utxoCount = walletRef.current.utxos().length
         console.log(`[vanta] sync #${attempt}`, {
           storedUtxos: report?.storedUtxos,
@@ -441,6 +487,8 @@ export default function App() {
         if (utxoCount > 0 || (report?.storedUtxos ?? 0) > 0) break
         if (attempt < 6) await new Promise(r => setTimeout(r, 3000))
       }
+      // Every attempt failing is a real outage, not a slow index — say so.
+      if (lastError && !report) throw lastError
       await zk.syncPersistedWallet({
         client, wallet: walletRef.current, keys: keysRef.current, store: lzStore,
         cipher: zk.walletSnapshotCipher(shieldedKeypairRef.current),
@@ -450,7 +498,7 @@ export default function App() {
       // sync, so the notes this sync just loaded become the baseline rather than
       // a receipt.
       incomingWatchRef.current.synced = true
-      const found = walletRef.current.balances().length
+      const found = walletRef.current.balances().length + (RING_ENABLED ? walletRef.current.ringBalances().length : 0)
       setStatus(found ? 'Private balance synced ✓' : 'Synced, no private notes found')
       setTimeout(() => setStatus(''), 3500)
       return report
@@ -533,6 +581,7 @@ export default function App() {
         new Uint8Array(xData.secretKey.slice(0, 32)),
       )
       signerRef.current = signer
+      xSeedRef.current = xSeed
       setVantaAddress(signer.address) // registered owner address (private receive)
 
       // Relayer still pays deposit on-ramp gas
@@ -884,9 +933,15 @@ export default function App() {
         .map((b) => `${b.mint}:${b.amount}`)
         .sort()
         .join(',')
+      // Ring notes are not in `balances()`; without them a ring-only wallet looks
+      // unchanged after a spend, and the post-send poll would never see it land.
+      const ring = (w.ringBalances?.() ?? [])
+        .flatMap((r) => r.assets.map((b) => `${r.ringProgramId}:${b.mint}:${b.amount}`))
+        .sort()
+        .join(',')
       // Total, unspent and per-mint totals cover every direction: a deposit adds
       // a note; a spend marks inputs spent and adds a change note.
-      return `${utxos.length}|${unspent.length}|${balances}`
+      return `${utxos.length}|${unspent.length}|${balances}|${ring}`
     } catch (err) {
       console.warn('private state signature failed:', err)
       return ''
@@ -907,11 +962,22 @@ export default function App() {
     const RETRY_MS = 1500
     let report = null
     let caughtUp = false
+    let lastError = null
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      report = await zk.syncWallet({
-        client: clientRef.current, wallet, keys, config: { requireSlot: slot },
-      })
+      try {
+        report = await zk.syncWallet({
+          client: clientRef.current, wallet, keys, config: { requireSlot: slot },
+        })
+        lastError = null
+      } catch (err) {
+        // The send already landed; a transport failure here must not surface as
+        // a failed payment. Retry within the same bounded window instead.
+        lastError = err
+        console.warn(`[vanta] post-send sync #${attempt} failed:`, err?.message || err)
+        if (attempt < MAX_ATTEMPTS) await new Promise((r) => setTimeout(r, RETRY_MS))
+        continue
+      }
       if (before && privateStateSignature() !== before) {
         caughtUp = true
         break
@@ -922,6 +988,7 @@ export default function App() {
       if (attempt < MAX_ATTEMPTS) await new Promise((r) => setTimeout(r, RETRY_MS))
     }
     if (!caughtUp) console.warn(`[vanta] balance still stale after ${MAX_ATTEMPTS} syncs (slot ${slot})`)
+    if (lastError && !report) throw lastError
 
     await zk.syncPersistedWallet({
       client: clientRef.current, wallet, keys, store: lzStore,
@@ -990,14 +1057,24 @@ export default function App() {
       depositParams.splTokenAccount = ata.toBase58()
     }
 
-    const deposit = await zk.buildDepositTransaction(depositParams)
+    // Same deposit either way; the ring build tags the note with the ring so it
+    // can be spent by the relayer-paid path later. A ring deposit still names
+    // the depositor and the amount: this leg is public by design.
+    const deposit = RING_ENABLED
+      ? await zk.buildRingDepositTransaction({ ...depositParams, ringProgramId: RING_PROGRAM_ID })
+      : await zk.buildDepositTransaction(depositParams)
 
     // Written down BEFORE anything is broadcast and cleared only once the outcome
     // is known. If the wallet's reply is lost — or the page does not survive it —
     // this is what lets the deposit be found on chain instead of reported as a
     // failure it never was. See lib/pendingShield.js.
     const sinceSlot = await readSlot(PUBLIC_RPC)
-    savePendingShield({ amount, symbol: tokenInfo.symbol, depositor: wallet.publicKey, sinceSlot })
+    // The program is part of the record: a ring deposit is recovered by looking
+    // for the ring program, not the default pool, or reconciliation would miss it.
+    savePendingShield({
+      amount, symbol: tokenInfo.symbol, depositor: wallet.publicKey, sinceSlot,
+      program: RING_ENABLED ? RING_PROGRAM_ID : null,
+    })
 
     let sig
     try {
@@ -1010,7 +1087,11 @@ export default function App() {
         // landing on chain. See raceWalletReply.
         sig = await raceWalletReply(
           signAndSendTransactionWithMwa(bytes).then(bytesToBase58),
-          { depositor: wallet.publicKey, sinceSlot },
+          {
+            depositor: wallet.publicKey,
+            sinceSlot,
+            poolProgram: RING_ENABLED ? RING_PROGRAM_ID : undefined,
+          },
         )
       } else {
         sig = await relayTx(kit, client, deposit, [
@@ -1028,6 +1109,7 @@ export default function App() {
           depositor: wallet.publicKey,
           sinceSlot,
           notBeforeMs: Date.now() - 120_000,
+          poolProgram: RING_ENABLED ? RING_PROGRAM_ID : undefined,
         })
       } catch (lookupErr) {
         // The lookup failed, which tells us nothing either way. Leave the record
@@ -1101,23 +1183,37 @@ export default function App() {
     const decimals = tokenInfo.decimals
     setStatus('🕳️ Building shadow transfer (ZK proof)...')
     const before = privateStateSignature()
-    await ensureXFloat()
+    const ringSend = hasRingNotes()
+    // v1: X owns the UTXOs and pays, which is the visible spend identity.
+    // v2: the relayer pays and X only co-signs, so X needs no SOL float.
+    if (!ringSend) await ensureXFloat()
     const transferParams = {
       client,
       wallet: walletRef.current,
       keys: keysRef.current,
-      feePayer: signerRef.current.address, // X owns the UTXOs and pays — SDK invariant
+      feePayer: ringSend ? relayerAddressRef.current : signerRef.current.address,
       recipient, // plain Solana address; SDK resolves via on-chain registry
       amount: BigInt(Math.round(amount * 10 ** decimals)),
     }
     if (token !== 'SOL') transferParams.asset = tokenInfo.mint
-    const transfer = await zk.buildTransferTransaction(transferParams)
-    const sig = await xSubmit(kit, client, transfer)
+    const transfer = ringSend
+      ? await zk.buildRingTransferTransaction({
+          ...transferParams,
+          ringProgramId: RING_PROGRAM_ID,
+          // Both pools: a note that predates the ring migrates in instead of
+          // being stranded by the switch.
+          inputs: 'ring-or-default',
+        })
+      : await zk.buildTransferTransaction(transferParams)
+    const sig = ringSend
+      ? await relayTx(kit, client, transfer, [{ address: signerRef.current.address, seed: xSeedRef.current }])
+      : await xSubmit(kit, client, transfer)
     const slot = await client.confirmTransaction(sig)
     await syncAfterSend(slot, zk, before)
-    // The relayer never sees a Shadow (X pays its own fee), so this report is the
-    // only route its signature takes into the history — and the only way a
-    // receipt can say "confirmed" instead of "your device says so".
+    // On the default ring the relayer never sees a Shadow (X pays its own fee),
+    // so this report is the only route its signature takes into the history. On
+    // the ring the relayer did pay, but its own row is guessed from programs, so
+    // this report is still what files the right flow.
     // No amount, no recipient: the relayer is told a signature exists and asked
     // whether it landed, nothing more. Those two facts stay on this device.
     await recordSend({
@@ -1126,8 +1222,8 @@ export default function App() {
       actor: signerRef.current.address,
       addresses: [signerRef.current.address],
     })
-    return sig
-  }, [refreshPrivateBalances, privateStateSignature, syncAfterSend])
+    return { signature: sig, ring: ringSend }
+  }, [refreshPrivateBalances, privateStateSignature, syncAfterSend, hasRingNotes])
 
   // ============================================================
   // GHOST SEND — private → any public wallet (Vanta to anyone)
@@ -1142,30 +1238,42 @@ export default function App() {
     const decimals = tokenInfo.decimals
     setStatus('👻 Building ghost withdrawal (ZK proof)...')
     const before = privateStateSignature()
-    await ensureXFloat()
+    const ringSend = hasRingNotes()
+    if (!ringSend) await ensureXFloat()
     const withdrawalParams = {
       client,
       wallet: walletRef.current,
       keys: keysRef.current,
-      feePayer: signerRef.current.address, // X owns the UTXOs and pays — SDK invariant
+      feePayer: ringSend ? relayerAddressRef.current : signerRef.current.address,
       recipient,
       amount: BigInt(Math.round(amount * 10 ** decimals)),
     }
     if (token !== 'SOL') withdrawalParams.asset = tokenInfo.mint
-    const withdrawal = await zk.buildWithdrawalTransaction(withdrawalParams)
-    const sig = await xSubmit(kit, client, withdrawal)
+    const withdrawal = ringSend
+      ? await zk.buildRingWithdrawalTransaction({
+          ...withdrawalParams,
+          ringProgramId: RING_PROGRAM_ID,
+          // SPL settlement needs the token program named explicitly; SOL does not.
+          ...(token !== 'SOL'
+            ? { splTokenProgram: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' }
+            : {}),
+        })
+      : await zk.buildWithdrawalTransaction(withdrawalParams)
+    const sig = ringSend
+      ? await relayTx(kit, client, withdrawal, [{ address: signerRef.current.address, seed: xSeedRef.current }])
+      : await xSubmit(kit, client, withdrawal)
     const slot = await client.confirmTransaction(sig)
     await syncAfterSend(slot, zk, before)
-    // Same story as Shadow: the relayer is not in this transaction, so report it
-    // or it never reaches the history at all.
+    // Same story as Shadow: report it so the row exists with the right flow,
+    // whether X paid (v1) or the relayer did (ring).
     await recordSend({
       signature: sig,
       mode: 'Ghost',
       actor: signerRef.current.address,
       addresses: [signerRef.current.address],
     })
-    return sig
-  }, [refreshPrivateBalances, privateStateSignature, syncAfterSend])
+    return { signature: sig, ring: ringSend }
+  }, [refreshPrivateBalances, privateStateSignature, syncAfterSend, hasRingNotes])
 
   // ============================================================
   // PLAIN SEND — public SOL transfer
@@ -1384,6 +1492,7 @@ export default function App() {
           rpcUrl: PUBLIC_RPC,
           depositor: pending.depositor,
           sinceSlot: pending.sinceSlot,
+          poolProgram: pending.program || undefined,
           // A minute of slack on the record's own timestamp: the deposit is sent
           // after it is written, so its block time is always later.
           notBeforeMs: (pending.at ?? 0) - 60_000,
@@ -1652,6 +1761,7 @@ export default function App() {
       const sig = await shield(amt, selectedToken)
       addTxn(`Shielded ${amt} ${symbol}`, `+${amt} ${symbol}`, 'income', true, {
         mode: 'Shield',
+        ring: RING_ENABLED,
         symbol,
         value: amt,
         signature: sig,

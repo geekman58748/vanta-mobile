@@ -3,9 +3,10 @@
 > **Why this file exists.** `docs/pmf-narrative.md` holds the argument, `docs/vanta-privacy-architecture.md`
 > holds the mechanics, `docs/pitch-deck-native-android-slide.md` holds the one slide that answers the
 > "WebView wrapper" objection and `docs/pitch-deck-relayer-fee-payer-section.md` holds the one that
-> answers "why does the fee payer expose the sender?" with SDK receipts. Nothing assembled them into a
-> deck. This is that assembly — twelve slides, paste-ready into Slides/Canva/Figma, in the order they
-> should be presented.
+> answers "why does the fee payer expose the sender?" with SDK receipts. `docs/pitch-deck-monetization.md`
+> holds slide **9b (how Vanta makes money)**, which is the one slide that is entirely direction.
+> Nothing assembled them into a deck. This is that assembly — thirteen slides, paste-ready into
+> Slides/Canva/Figma, in the order they should be presented.
 >
 > **Claims discipline.** Every number and hash below is either code in this repository or a transaction
 > confirmed on devnet. Nothing here is a roadmap item presented as shipped; §11 labels direction as
@@ -27,12 +28,14 @@
 | 7 | Not a wrapper | Kill the PWA objection | 45s |
 | 8 | How it works | Credibility | 30s |
 | 9 | Who it's for / why they return | PMF: discovery evidence + the cold start | 40s |
+| 9b | **How Vanta pays for itself** | The business model, priced — `pitch-deck-monetization.md` | 30s |
 | 10 | Why this is a Seeker app | The PMF criterion, answered | 35s |
 | 11 | What we don't hide | Trust through disclosure | 30s |
 | 12 | Roadmap | Honest direction | 20s |
 | 13 | Close | The ask | 15s |
 
-**Total: ~6:15.** For a 3-minute slot cut slides 8 and 12 and compress 7 to 25 seconds.
+**Total: ~6:45.** For a 3-minute slot cut slides 8 and 12 and compress 7 to 25 seconds; keep 9b as
+one spoken sentence over slide 9 (see `pitch-deck-monetization.md` §7).
 
 ---
 
@@ -259,6 +262,9 @@ ask it."
 > - **Pool depth** — real seeded demo volume, never synthetic
 > - **Handle release/transfer + a second campaign flow** — makes the two-party loop a demo instead of a plan
 > - **Production cluster** — devnet is deliberate for this submission; `DEVNET` is printed on the dashboard
+>
+> This is the 5-item submission cut. The full v2 plan — custom ring, custody, provider
+> independence, and the product surface — is `docs/vanta-v2-roadmap.md`.
 
 ---
 

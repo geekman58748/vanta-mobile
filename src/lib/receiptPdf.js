@@ -1,4 +1,4 @@
-import { MODE_HONESTY, RESIDUALS, PROOF, explorerLink } from './honesty.js'
+import { honestyFor, residualsFor, PROOF, explorerLink } from './honesty.js'
 
 /**
  * PDF receipt export.
@@ -183,6 +183,8 @@ async function loadDisplay(doc) {
  */
 export async function buildReceiptPdf(txn, network = 'devnet') {
   const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
+  // The rail that actually carried this transaction, as stored by the send.
+  const ring = Boolean(txn?.ring)
 
   const doc = await PDFDocument.create()
   doc.setTitle(`Vanta receipt ${ascii(txn?.signature || '')}`.slice(0, 120))
@@ -283,7 +285,7 @@ export async function buildReceiptPdf(txn, network = 'devnet') {
 
   // ── Meta rows ────────────────────────────────────────────────────────────
   const meta = [
-    ['Mode', MODE_HONESTY[txn?.mode] ? txn.mode : txn?.mode || 'Unknown'],
+    ['Mode', honestyFor(txn?.mode, { ring }) ? txn.mode : txn?.mode || 'Unknown'],
     ['Direction', income ? 'Incoming' : 'Outgoing'],
     ['When', txn?.at ? new Date(txn.at).toLocaleString() : txn?.time ?? ''],
     ['Status', txn?.status || 'Confirmed'],
@@ -336,7 +338,7 @@ export async function buildReceiptPdf(txn, network = 'devnet') {
   }
 
   // ── Per-leg honesty ──────────────────────────────────────────────────────
-  const honesty = MODE_HONESTY[txn?.mode]
+  const honesty = honestyFor(txn?.mode, { ring })
   if (honesty) {
     rule(12)
     page.drawText('WHAT THIS REVEALS ON CHAIN', {
@@ -365,7 +367,7 @@ export async function buildReceiptPdf(txn, network = 'devnet') {
     y -= 4
     text(honesty.onChain.note, { size: 9, color: rgb(...WHITE) })
 
-    const link = explorerLink(txn?.mode, txn?.signature)
+    const link = explorerLink(txn?.mode, txn?.signature, { ring })
     if (link) {
       y -= 4
       // Label on its own line, URL wrapped beneath it. Inline after the label,
@@ -391,7 +393,7 @@ export async function buildReceiptPdf(txn, network = 'devnet') {
     color: rgb(...ROSE),
   })
   y -= 14
-  for (const line of RESIDUALS) {
+  for (const line of residualsFor({ ring })) {
     // Stop on available room, not on a line budget: the footer is anchored at a
     // fixed baseline, so anything drawn below this guard collides with it.
     if (y < M + 76) break

@@ -1,0 +1,35 @@
+HOW VANTA MAKES MONEY
+Model, not shipped. Devnet today, no fee taken.
+
+THE CONSTRAINT IS THE BUSINESS MODEL
+Zolana forbids a relayer from paying for a private spend. So we pay for
+onboarding and deposits, and the user's own spend identity pays 5,000
+lamports per send.
+
+Onboarding costs us 0.0014 SOL per user — about 25 cents, once.
+5,000 users costs about $1,400.
+Break-even is roughly 20 private payments a day.
+
+THREE WAYS WE EARN
+- 0.5% on private sends, collected as a private fee note. Paid by the sender.
+- Campaign plan: $49 + $1 per onboarded member. Paid by DAOs, grants, fundraisers.
+- Relayer-as-a-service: $0.002 per call. Paid by other Seeker apps.
+
+THE FEE IS PRIVATE TOO
+The fee is split inside the same proof as the payment, so taking a cut can't
+rebuild the graph the pool hides. Treasury exits are merged and swept, not
+per user.
+
+
+--- SAY THIS (30 sec) ---
+
+Most privacy apps have a gas problem. A paymaster bleeds priority fees and a
+backend swaps stablecoins back to SOL to stay alive. We don't, and it isn't
+clever engineering, it's the SDK. The same guard that makes our spend identity
+visible also means nobody can spend our money for us. So onboarding costs a
+quarter, once, and everything after that is the user's own five thousand
+lamports. We break even at about twenty private payments a day.
+
+When we do charge, the fee rides the same proof the payment does. One note for
+the recipient, one for us. We can't take a cut and stay honest about the graph
+if that cut is a public transfer, so it isn't one.

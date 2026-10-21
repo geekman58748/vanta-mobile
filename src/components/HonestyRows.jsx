@@ -1,4 +1,4 @@
-import { MODE_HONESTY } from '../lib/honesty'
+import { honestyFor } from '../lib/honesty'
 
 const ROW_TONE = {
   ok: 'text-accent',
@@ -16,8 +16,8 @@ const MARK = { ok: '✓', warn: '⚠', mute: '·' }
  * mode that was actually sent). Both go through lib/honesty.js, so a receipt can
  * never claim something the what-leaks sheet doesn't.
  */
-export default function HonestyRows({ mode, compact = false }) {
-  const entry = MODE_HONESTY[mode]
+export default function HonestyRows({ mode, compact = false, ring = false }) {
+  const entry = honestyFor(mode, { ring })
   // An unknown mode still needs to render: history rows can arrive with a mode
   // we have no table for (an imported row, or a future flow).
   if (!entry) return null

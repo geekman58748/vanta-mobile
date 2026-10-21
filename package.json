@@ -12,6 +12,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "relayer": "node relayer/server.js",
+    "ring:check": "node scripts/ring-check.mjs",
     "faucet": "node faucet/server.js"
   },
   "dependencies": {

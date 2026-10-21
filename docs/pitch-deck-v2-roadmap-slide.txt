@@ -1,0 +1,57 @@
+VANTA v2 — WHERE THIS GOES
+(all direction. Nothing here is shipped.)
+
+THE UNLOCK: A CUSTOM RING
+Today Zolana makes the note owner sign and pay for every spend. That is why our
+spend identity is visible, and why the user needs SOL.
+A custom Ring is Helius's supported extension point — the relayer becomes the
+fee payer.
+
+  · The spend identity disappears from the chain
+  · The user never needs to hold SOL
+  · And it ships with burner-funded deposits — otherwise we have only moved the leak
+
+THEN, IN ORDER
+
+  Custody              timelocked multisig authority · delete the localStorage
+                       wallet · independent audit before mainnet
+
+  Provider             local or fallback prover · RPC failover · push-based
+  independence         note indexing (retires a whole bug class)
+
+  Product              batch payout runs (a DAO pays 30 contributors privately) ·
+                       payment links · receipts an auditor verifies without the app
+
+  Sellable surface     an auditor-key compliance ring — so a DAO can buy privacy
+                       and still answer its auditor
+
+RULE
+v2.0 is mainnet readiness with no new program. The ring is v2.1.
+An unaudited program is a worse story than a working client.
+
+
+--- SPEAKER NOTES (20 sec) ---
+
+The honest version of our roadmap starts with the constraint we showed you.
+Every spend today carries a reusable identity, because the SDK makes the note
+owner pay. A custom Ring is Helius's own extension point — it lets our relayer
+be the fee payer, and that identity goes away entirely.
+
+But we won't ship it alone. Without a burner-funded deposit, relayer-paid spends
+just move the leak from the spend to the on-ramp. Those two ship together or we
+don't claim it. And an unaudited pool is a worse story than a working client, so
+v2.0 is mainnet readiness with no new program, and the ring is v2.1.
+
+
+--- IF ASKED ---
+
+"Who pays for v2?"    Grants, then the Campaign plan (see the monetization slide).
+
+"Why not build your own pool?"  Rings owns that surface. A custom Ring is the
+                      supported extension point; writing our own circuits is a
+                      multi-month unaudited build and a worse story, not a bolder one.
+
+"What about Helius going down?"  Right now their prover and indexer are in the
+                      liveness path — if they're down you can't see or spend your
+                      notes. We say that out loud, and a fallback prover is on
+                      this roadmap because of it.

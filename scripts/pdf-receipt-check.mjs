@@ -70,6 +70,23 @@ const CASES = [
       status: 'Confirmed',
     },
   },
+  {
+    // The ring table is taller (the auditor row) and adds two residuals, so it
+    // gets its own page rather than riding on the v1 cases. Real devnet ring
+    // deposit, so the reference resolves.
+    label: 'ring-shield',
+    txn: {
+      title: 'Shield deposit into the custom ring',
+      amount: '+0.020 SOL',
+      mode: 'Shield',
+      ring: true,
+      type: 'income',
+      at: Date.parse('2026-10-19T23:56:00Z'),
+      signature:
+        '4hnT78rV579tHQ3urepQbEpuX2jK5LK1nhTVxdp4vHMmcEFzN3zqiPciAhmBve1mFgM871ePSdXRveHoMpBnPDAC',
+      status: 'Confirmed',
+    },
+  },
 ]
 
 mkdirSync(OUT, { recursive: true })

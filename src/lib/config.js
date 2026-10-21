@@ -53,6 +53,17 @@ export function faucetFetch(path, init = {}) {
 }
 
 // ── .vanta handles ───────────────────────────────────────────────────
+// ── Custom ring (v2) ──────────────────────────────────────────────────
+// The ring program Vanta deposits and spends through. Empty means the app runs
+// on the default SPP ring exactly as v1 did: every branch that reads this is a
+// strict superset, so an unset value cannot change existing behaviour.
+//
+// Setting it is a build decision, not a runtime toggle: the ring is where the
+// shielded notes live, so a user who deposited into one build cannot spend that
+// balance from a build pointed at another.
+export const RING_PROGRAM_ID = (import.meta.env.VITE_RING_PROGRAM_ID || '').trim()
+export const RING_ENABLED = RING_PROGRAM_ID.length > 0
+
 export const VANTA_NAME_SUFFIX = '.vanta'
 
 /**

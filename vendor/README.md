@@ -82,3 +82,41 @@ the 0.3.0-alpha tag was byte-identical in *content* to its registry tarball
 (`diff -rq` clean; only gzip metadata differs), so the registry artifact is a
 faithful stand-in for the tag build. Confirm the sha256 still matches the table
 above before committing a replacement.
+
+## `ring/custom-ring-program-v0.4.0-alpha.so`
+
+The **custom ring program** deployed at `8aMW8MPHBn4oGsss2NuB4QNvFx6iBSB8RHHkMAHrZduU`
+on devnet. It is upstream's release artifact, not a local build: the ring circuits,
+prover and CLI are Helius's, and rebuilding the program would only make the
+binary differ from the audited one.
+
+| | |
+|---|---|
+| Upstream | <https://github.com/helius-labs/zolana> |
+| Release | `v0.4.0-alpha` |
+| Asset | `custom-ring-program-v0.4.0-alpha.so` |
+| Size | 429,304 bytes |
+| sha256 | `46a890a2b001a92baf269f161a7819e02e6de89d5dd0df873799615ffaa78c6e` |
+| License | Apache-2.0 (same upstream, see `LICENSE.zolana.txt`) |
+
+Why it is committed: `scripts/ring-check.mjs` verifies the **deployed** program
+against these exact bytes (`verifyRingProgram` checks the loader's deployed hash),
+so the check needs the artifact beside the code that trusts it. The operator
+config for the deployed ring is in `rings/vanta-v2/ring.toml`; its keypairs are
+not in git.
+
+### Regenerating
+
+The release publishes no `SHA256SUMS` for this asset, so the digest above is the
+one this repository measured from the downloaded release asset. If upstream
+republishes the tag, re-download and compare before replacing:
+
+```bash
+curl -L -o vendor/ring/custom-ring-program-v0.4.0-alpha.so \
+  https://github.com/helius-labs/zolana/releases/download/v0.4.0-alpha/custom-ring-program-v0.4.0-alpha.so
+shasum -a 256 vendor/ring/custom-ring-program-v0.4.0-alpha.so
+```
+
+A changed digest is not automatically a bad build, but it is a different program:
+publish a new ring program id and re-run `scripts/ring-check.mjs` rather than
+upgrading an existing ring in place without saying so.
