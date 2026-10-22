@@ -9,6 +9,26 @@ import Faq from './components/Faq.jsx'
 import Contracts from './components/Contracts.jsx'
 import Footer from './components/Footer.jsx'
 import WaitlistModal from './components/WaitlistModal.jsx'
+import Legal from './components/Legal.jsx'
+import { TERMS } from './data/terms.js'
+import { PRIVACY } from './data/privacy.js'
+
+/**
+ * Path-routed pages, chosen off `location.pathname` with no router dependency.
+ *
+ * The host already serves index.html for any path (verified live: an unknown
+ * route returns the shell), so `/terms` and `/privacy` resolve as real URLs,
+ * are linkable, and need no rewrite config.
+ */
+const PAGES = {
+  '/terms': { ...TERMS, related: { label: 'Privacy Policy', href: '/privacy' } },
+  '/privacy': { ...PRIVACY, related: { label: 'Terms of Use', href: '/terms' } },
+}
+
+const currentPage = () => {
+  const path = window.location.pathname.replace(/\/+$/, '') || '/'
+  return PAGES[path] || null
+}
 
 /**
  * Vanta landing page.
@@ -19,6 +39,9 @@ import WaitlistModal from './components/WaitlistModal.jsx'
  * footer.
  */
 export default function App() {
+  const page = currentPage()
+  if (page) return <Legal {...page} />
+
   return (
     <div className="min-h-screen bg-canvas">
       <a

@@ -108,10 +108,10 @@ const COLUMNS = [
   {
     title: 'Product',
     links: [
-      { label: 'How it works', href: '#how' },
-      { label: 'The receipt', href: '#receipt' },
-      { label: 'Contracts', href: '#contracts' },
-      { label: 'FAQ', href: '#faq' },
+      { label: 'How it works', href: '/#how' },
+      { label: 'The receipt', href: '/#receipt' },
+      { label: 'Contracts', href: '/#contracts' },
+      { label: 'FAQ', href: '/#faq' },
     ],
   },
   {
@@ -125,9 +125,16 @@ const COLUMNS = [
   {
     title: 'Status',
     links: [
-      { label: 'Devnet only', href: '#faq' },
-      { label: 'Not audited', href: '#faq' },
+      { label: 'Devnet only', href: '/#faq' },
+      { label: 'Not audited', href: '/#faq' },
       { label: 'Report a bug', href: GITHUB_URL, external: true },
+    ],
+  },
+  {
+    title: 'Legal',
+    links: [
+      { label: 'Terms of Use', href: '/terms' },
+      { label: 'Privacy Policy', href: '/privacy' },
     ],
   },
 ]
@@ -281,7 +288,7 @@ export default function Footer() {
               </div>
 
               {/* Link columns */}
-              <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 lg:col-span-7">
+              <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 lg:grid-cols-4 lg:col-span-7">
                 {COLUMNS.map((col) => (
                   <div key={col.title}>
                     <h3 className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-subtle">
@@ -308,7 +315,23 @@ export default function Footer() {
 
           <div className="mt-14 border-t border-hairline pt-7">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-[12px] text-ink-subtle">© {new Date().getFullYear()} Vanta.</p>
+              {/* Legal links sit beside the copyright, which is where a reader
+                  looks for them. Same size, same tone as the © line. */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <p className="text-[12px] text-ink-subtle">© {new Date().getFullYear()} Vanta.</p>
+                <a
+                  href="/terms"
+                  className="text-[12px] text-ink-subtle transition-colors hover:text-ink-strong"
+                >
+                  Terms of Use
+                </a>
+                <a
+                  href="/privacy"
+                  className="text-[12px] text-ink-subtle transition-colors hover:text-ink-strong"
+                >
+                  Privacy Policy
+                </a>
+              </div>
               <div className="flex flex-wrap items-center gap-3">
                 <span className="inline-flex items-center gap-2 text-ink-subtle">
                   <SolanaMark size={12} />
