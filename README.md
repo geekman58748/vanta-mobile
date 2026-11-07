@@ -539,7 +539,7 @@ without it, a sheet whose content ran past the fold read as a sheet that had end
 ### 1. Install and configure
 
 ```bash
-git clone https://github.com/geekman58748/vanta-mobile.git
+git clone https://github.com/maxxexee/vanta-mobile.git
 cd vanta-mobile
 pnpm install
 cp .env.example .env.local
