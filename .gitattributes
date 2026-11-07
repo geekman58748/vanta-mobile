@@ -1,0 +1,4 @@
+# Committed build output and third-party binaries. Excluded from language
+# stats; the JavaScript in src/ and landing/ is hand-written and still counts.
+android/app/build/** linguist-generated
+vendor/** linguist-vendored
